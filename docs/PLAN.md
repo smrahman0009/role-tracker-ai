@@ -184,4 +184,95 @@ role_tracker_ai/
 - **CI/CD:** push to `main` → image built, pushed, ACA Job updated, next scheduled run uses it.
 
 ## Estimated effort
+
+### Phase 1–10 (personal pipeline)
 ~8–10 hours focused work across sessions. Phases 1–7 (local) ≈ 5–6h (Phase 4 agent adds ~1–2h over a single-shot prompt). Phases 8–10 (Docker + Azure + CI/CD) ≈ 3–4h.
+
+### SaaS expansion (all phases below)
+~40–55 hours additional work across sessions. See breakdown in the SaaS section below.
+
+---
+
+## Future: SaaS Expansion
+
+Once the personal pipeline is stable and well-understood, the project will be expanded into a multi-user product where anyone can sign up, set their preferences, and receive daily tailored job digests.
+
+### Product vision
+- Users create an account and set their job search preferences (role types, locations, keywords).
+- Each user uploads their own resume.
+- The pipeline runs per-user daily, fetching jobs matched to their preferences, tailoring cover letters, and sending a personalized digest.
+- A web dashboard lets users view past digests, update preferences, and manage their account.
+
+### Architecture
+
+```
+User's browser
+      ↕
+React app  →  Azure Static Web Apps     (HTML/JS/CSS, no server, CI/CD from GitHub)
+      ↕  REST API (HTTPS)
+FastAPI app  →  Azure Container Apps    (Python backend, one container — monolithic v1)
+      ↕
+PostgreSQL  →  Azure Database for PostgreSQL Flexible Server   (per-user rows)
+Blob Storage →  Azure Blob Storage      (per-user resume files)
+Auth  →  Auth0 or Azure AD B2C          (JWT-based, do not roll custom auth)
+```
+
+### Tech stack additions
+| Concern | Choice |
+|---|---|
+| Frontend | React (TypeScript) |
+| Frontend hosting | Azure Static Web Apps |
+| Backend framework | FastAPI (extends existing Python codebase) |
+| Backend hosting | Azure Container Apps (same as personal pipeline) |
+| Database | Azure PostgreSQL Flexible Server |
+| Auth | Auth0 or Azure AD B2C |
+| Per-user file storage | Azure Blob Storage (existing) |
+
+### Why monolithic backend first (not microservices)
+Starting with a single FastAPI container on ACA keeps deployment simple and identical to the personal pipeline you already know. Split into microservices only when there is a concrete scaling reason (e.g. the matching service needs independent scaling). Premature splitting adds operational cost with no benefit at v1.
+
+### SaaS build phases
+
+#### Phase S1 — Backend API skeleton
+- FastAPI app with health check, project structure, Dockerfile.
+- PostgreSQL schema: `users`, `preferences`, `sent_jobs` tables.
+- Local dev with Docker Compose (API + Postgres).
+- **Done when:** `GET /health` returns 200; migrations run cleanly.
+
+#### Phase S2 — Auth
+- Integrate Auth0 (or Azure AD B2C): sign-up, login, JWT validation middleware.
+- `/me` endpoint returns authenticated user profile.
+- **Done when:** protected routes reject unauthenticated requests.
+
+#### Phase S3 — User preferences + resume upload
+- `PUT /preferences` — store job filters (roles, locations, keywords) per user.
+- `POST /resume` — upload PDF to Azure Blob, store reference in PostgreSQL.
+- **Done when:** user can upload a resume and save preferences via API.
+
+#### Phase S4 — Per-user pipeline execution
+- Refactor personal pipeline to accept a `user_id` and pull config from PostgreSQL instead of `config.yaml`.
+- ACA scheduled job loops over all active users and runs the pipeline per user.
+- **Done when:** two test users each receive their own personalized digest.
+
+#### Phase S5 — React frontend
+- Pages: sign-up/login, preferences form, resume upload, digest history.
+- Calls the FastAPI REST API with Auth0 JWT.
+- Deploy to Azure Static Web Apps.
+- **Done when:** end-to-end user journey works in the browser.
+
+#### Phase S6 — Multi-tenant Azure infra + CI/CD
+- Separate resource group for SaaS infra.
+- Extend GitHub Actions to build and deploy both the API container and the React app.
+- **Done when:** push to `main` ships both frontend and backend automatically.
+
+### SaaS estimated effort
+| Phase | Effort |
+|---|---|
+| S1 — API skeleton + DB schema | 3–4h |
+| S2 — Auth integration | 4–6h |
+| S3 — Preferences + resume upload | 3–4h |
+| S4 — Per-user pipeline refactor | 4–6h |
+| S5 — React frontend | 12–16h |
+| S6 — Multi-tenant infra + CI/CD | 5–8h |
+| Buffer (debugging, integration) | 8–10h |
+| **Total** | **~40–55h** |
