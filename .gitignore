@@ -1,28 +1,47 @@
-# macOS
-.DS_Store
-
-# Logs
-*.log
-logs/
-
-# Environment and local secrets
+# Environment
 .env
 .env.*
 !.env.example
 
-# Dependencies
-node_modules/
-.venv/
-venv/
+# Local data (resumes, cover letters, dedupe store — never commit)
+data/
+
+# Python
 __pycache__/
 *.py[cod]
-
-# Build output
+*.pyo
+*.pyd
+.Python
+*.egg-info/
 dist/
 build/
-coverage/
 
-# Editors/IDEs
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ruff / Black cache
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# IDEs
 .vscode/
 .idea/
-*.swp
+
+# Docker
+*.tar
+
+# Azure / secrets
+*.pem
+*.pfx

@@ -57,9 +57,39 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 | Secrets | Azure Key Vault + managed identity (local: `.env`) |
 | CI/CD | GitHub Actions with OIDC federated credential to Azure |
 | Registry | Azure Container Registry (ACR) |
-| Tests | pytest |
-| Lint / format | ruff + black |
+| Package / venv manager | `uv` |
+| Tests | `pytest` |
+| Lint + format | `ruff` (replaces black + flake8 + isort) |
+| Data models | `pydantic` v2 (+ `pydantic-settings` for config) |
 | Config | `pydantic-settings` reading `.env` + a `config.yaml` for filters |
+
+## Development practices (locked in)
+These are the modern practices the project will follow from day one. They are explicitly chosen to balance professional quality with fast, unblocked progress — nothing here should create debugging-hell.
+
+### Tooling
+- **`uv`** — replaces `pip` + `venv` + `pyenv`. Same commands as pip but 10–100× faster. If it ever breaks, fall back to `pip` in seconds.
+- **`ruff`** — replaces `black` + `flake8` + `isort`. One tool for linting AND formatting. Run on save / in CI.
+- **`pyproject.toml`** — single source of truth for dependencies, project metadata, and tool config. No `requirements.txt`, no `setup.py`, no `setup.cfg`.
+
+### Code style
+- **`src/` layout** — already in the repo structure. Prevents common import bugs.
+- **Type hints everywhere** — every function signature gets types. No `mypy` strict mode yet (adds friction); types are for readability + IDE autocomplete.
+- **Pydantic v2 models** for all structured data: config, job postings, agent step inputs/outputs, email payloads. No raw dicts flying around.
+- **Dependency injection** — pass clients (OpenAI, Adzuna, email sender) into functions as arguments. Never import them as module-level singletons. Makes testing trivial and keeps modules decoupled.
+- **Protocols / ABCs** for swappable implementations (e.g., `SentJobsStore` with `JsonFileStore` + `AzureTableStore`).
+
+### LLM / agent practices
+- **Structured outputs** via Pydantic + OpenAI `response_format=json_schema`. Never parse free-text JSON from the model.
+- **Prompts as versioned files** in `tailoring/prompts/*.md` — not hardcoded strings. Easier to iterate, diff, and review.
+- **LLM call logging** — every LLM call (prompt, response, model, tokens, cost, latency) appended to a local JSONL file (`data/llm_calls.jsonl`). Essential for debugging agent behavior and tracking spend.
+
+### Secrets & config
+- **`.env` for local** (git-ignored), **Azure Key Vault + managed identity for prod**.
+- **`.env.example`** committed as documentation of every required variable.
+- **`pydantic-settings`** to load and validate config at startup — fail fast if anything is missing.
+
+### Tools deliberately deferred (add only when needed)
+`mypy`/`pyright` strict typing · `pre-commit` hooks · `VCR.py` test recording · `tenacity` retries · Dependabot/Renovate · async/await. Each of these is good practice but adds friction. Add them when there's a concrete reason, not upfront.
 
 ## Build phases (local-first, deploy-last)
 
