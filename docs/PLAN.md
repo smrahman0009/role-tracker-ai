@@ -1,7 +1,7 @@
 # Role Tracker AI — Project Plan
 
 ## Context
-The user is job-hunting for data science, ML, AI engineer, and software developer roles in Canada. Manually searching Adzuna every day, scoring each posting against his resume, tailoring a cover letter per job, and tracking which jobs he has already applied to is repetitive and slow.
+The user is job-hunting for data science, ML, AI engineer, and software developer and other roles in Canada or anywhere in the world. Manually searching Adzuna every day, scoring each posting against his resume, tailoring a cover letter per job, and tracking which jobs he has already applied to is repetitive and slow.
 
 **Goal:** a daily automated pipeline that:
 1. Fetches fresh Canadian jobs from the Adzuna API using user-defined filters.
@@ -45,7 +45,7 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 ## Tech stack (decided)
 | Concern | Choice |
 |---|---|
-| Language / runtime | Python 3.11 |
+| Language / runtime | Python 3.12 |
 | Job API | Adzuna (Canada) |
 | LLM / embeddings | OpenAI (`text-embedding-3-small`, `gpt-4o-mini` or similar) |
 | Matching | Cosine similarity over resume + job embeddings |
@@ -78,9 +78,39 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 - Cache resume embedding locally.
 - **Done when:** top 5 output looks genuinely relevant.
 
-### Phase 4 — Cover letter tailoring
-- `tailoring/cover_letter.py` + well-engineered prompt (~300 words, user's voice, 2–3 job-specific points).
-- **Done when:** output reads as send-worthy.
+### Phase 4 — Cover letter tailoring (LLM agent)
+Built as a multi-step agent, not a single prompt, so the project doubles as a hands-on LLM-agent learning exercise.
+
+**Agent steps (each step = its own LLM call with a focused role):**
+1. **Extract** — parse the job description into structured JSON: must-have skills, nice-to-haves, responsibilities, company signals.
+2. **Match** — compare that JSON against the resume; pick the 2–3 strongest evidence points (real projects/experience, no filler).
+3. **Draft** — write the cover letter (~300 words) in the user's voice, using only the matched evidence + base cover letter template.
+4. **Critique** — score the draft against a rubric: addresses top requirements? sounds like the user? any generic filler or hallucinated claims?
+5. **Revise** — rewrite based on the critique. Loop at most 1–2 times.
+
+**Agent building blocks to implement:**
+- Tool use: a `search_resume(query)` tool so the agent retrieves relevant resume chunks on demand instead of seeing the whole resume every call.
+- Structured outputs (JSON schemas) between steps — not free text.
+- A small orchestration layer (`tailoring/agent.py`) that runs the extract → match → draft → critique → revise loop with a max-iterations guard.
+- Per-step prompts kept in `tailoring/prompts/` as separate files (easier to iterate and diff).
+
+**Module layout:**
+```
+tailoring/
+├── agent.py           # orchestrator (the loop)
+├── steps/
+│   ├── extract.py
+│   ├── match.py
+│   ├── draft.py
+│   └── critique.py
+├── tools/
+│   └── resume_search.py
+└── prompts/*.md
+```
+
+**Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
+
+**Tradeoff accepted:** ~5–8× OpenAI cost per letter vs. single-shot, in exchange for learning real agent patterns (tool use, multi-step orchestration, self-critique) that transfer to LangGraph / OpenAI Agents SDK / etc.
 
 ### Phase 5 — Email digest
 - `email/sender.py` (Gmail SMTP) + Jinja2 HTML template.
@@ -122,7 +152,7 @@ role_tracker_ai/
 │   ├── jobs/adzuna.py
 │   ├── resume/parser.py
 │   ├── matching/{embeddings,scorer}.py
-│   ├── tailoring/cover_letter.py
+│   ├── tailoring/               # agent.py, steps/, tools/, prompts/
 │   ├── email/{sender,templates/}
 │   └── storage/{sent_jobs,blob}.py
 ├── scripts/
@@ -154,4 +184,4 @@ role_tracker_ai/
 - **CI/CD:** push to `main` → image built, pushed, ACA Job updated, next scheduled run uses it.
 
 ## Estimated effort
-~6–8 hours focused work across sessions. Phases 1–7 (local) ≈ 4h. Phases 8–10 (Docker + Azure + CI/CD) ≈ 3–4h.
+~8–10 hours focused work across sessions. Phases 1–7 (local) ≈ 5–6h (Phase 4 agent adds ~1–2h over a single-shot prompt). Phases 8–10 (Docker + Azure + CI/CD) ≈ 3–4h.
