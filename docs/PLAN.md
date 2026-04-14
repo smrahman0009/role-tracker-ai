@@ -94,8 +94,9 @@ These are the modern practices the project will follow from day one. They are ex
 ## Build phases (local-first, deploy-last)
 
 ### Phase 1 — Project scaffolding
-- Python package skeleton, `.gitignore`, `.env.example`, `requirements.txt`, `pyproject.toml`, `README.md`.
-- ruff, black, pytest configs.
+- Python package skeleton (`src/role_tracker/__init__.py`), `.gitignore`, `.env.example`, `pyproject.toml`, `README.md`.
+- `uv`-managed virtual environment.
+- `ruff` + `pytest` configuration inside `pyproject.toml`.
 - **Done when:** `python -c "import role_tracker"` works; `pytest` runs cleanly.
 
 ### Phase 2 — Adzuna client
@@ -195,7 +196,6 @@ role_tracker_ai/
 ├── .dockerignore
 ├── Dockerfile
 ├── pyproject.toml
-├── requirements.txt
 └── README.md
 ```
 
