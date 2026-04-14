@@ -45,6 +45,13 @@ def parse_args() -> argparse.Namespace:
         default="canada",
         help='Location to search in (default: "canada").',
     )
+    parser.add_argument(
+        "--limit",
+        metavar="N",
+        type=int,
+        default=None,
+        help="Max results per query (default: value from config.yaml).",
+    )
     return parser.parse_args()
 
 
@@ -99,7 +106,10 @@ def main() -> None:
         # Fall back to config.yaml queries
         queries = filters.queries
 
-    print_jobs(client, queries, country=filters.country, results_per_page=filters.results_per_page)
+    # --limit overrides config.yaml; config.yaml is the fallback
+    results_per_page = args.limit if args.limit is not None else filters.results_per_page
+
+    print_jobs(client, queries, country=filters.country, results_per_page=results_per_page)
 
 
 if __name__ == "__main__":

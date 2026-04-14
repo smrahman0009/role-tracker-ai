@@ -29,28 +29,35 @@ fmt:  ## Auto-fix formatting with ruff
 	.venv/bin/ruff check --fix . && .venv/bin/ruff format .
 
 # ── Job fetching ──────────────────────────────────────────────────────────────
+# Pass limit=N to override results per query, e.g.: make fetch-ds limit=50
+
+limit ?=  # empty by default — script falls back to config.yaml value
+LIMIT_ARG = $(if $(limit),--limit $(limit),)
 
 .PHONY: fetch
-fetch:  ## Fetch all roles defined in config.yaml
-	$(PYTHON) scripts/run_fetch.py
+fetch:  ## Fetch all roles defined in config.yaml  [limit=N]
+	$(PYTHON) scripts/run_fetch.py $(LIMIT_ARG)
 
 .PHONY: fetch-ds
-fetch-ds:  ## Fetch data science roles
+fetch-ds:  ## Fetch data science roles  [limit=N]
 	$(PYTHON) scripts/run_fetch.py \
 		--what "data scientist" \
 		--what "machine learning engineer" \
-		--what "AI engineer"
+		--what "AI engineer" \
+		$(LIMIT_ARG)
 
 .PHONY: fetch-swe
-fetch-swe:  ## Fetch software developer roles
+fetch-swe:  ## Fetch software developer roles  [limit=N]
 	$(PYTHON) scripts/run_fetch.py \
 		--what "software developer" \
 		--what "backend developer" \
-		--what "python developer"
+		--what "python developer" \
+		$(LIMIT_ARG)
 
 .PHONY: fetch-ml
-fetch-ml:  ## Fetch ML/AI engineering roles
+fetch-ml:  ## Fetch ML/AI engineering roles  [limit=N]
 	$(PYTHON) scripts/run_fetch.py \
 		--what "ML engineer" \
 		--what "MLOps engineer" \
-		--what "AI researcher"
+		--what "AI researcher" \
+		$(LIMIT_ARG)
