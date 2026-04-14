@@ -111,7 +111,20 @@ These are the modern practices the project will follow from day one. They are ex
 - **Done when:** top 5 output looks genuinely relevant.
 
 ### Phase 4 — Cover letter tailoring (LLM agent)
-Built as a multi-step agent, not a single prompt, so the project doubles as a hands-on LLM-agent learning exercise.
+
+**Why agent, not deterministic pipeline**
+
+The alternative to an agent is a deterministic pipeline: a fixed sequence of rules and templates that processes every job the same way. For a narrow, well-defined role that approach can work. It doesn't work here.
+
+The roles being applied to — data scientist, ML engineer, software developer, AI engineer — share a label but not a job. Two "Senior Data Scientist" postings at similar-looking companies can require completely different cover letter angles: one is building a recommendation system (the letter should emphasize ML systems, embeddings, real-time serving), another is building an experimentation platform (the letter should emphasize A/B testing, causal inference, statistical rigor). A startup DS role wants evidence of business impact and moving fast. A research role wants depth and methodological rigour. The same pattern repeats across software developer roles: backend API work, data engineering, infrastructure, and systems programming all carry the same title but need different positioning.
+
+A deterministic pipeline handles this in one of two ways, both bad: it either writes a generic letter that fits no specific role well, or it requires manually coding a branching rule tree ("if job mentions recommendation systems, highlight X; if job mentions experimentation, highlight Y") that grows indefinitely and still misses combinations it wasn't programmed for.
+
+An agent solves this differently. It reads each job description, reasons about what that specific role is actually asking for, retrieves the strongest matching evidence from the resume on demand, and writes a letter calibrated to those signals — all without pre-programmed category rules. The adaptation happens at inference time, driven by the content of the job itself. Jobs within the same category can be different enough that this reasoning step is the difference between a letter that resonates and one that sounds copy-pasted.
+
+The tradeoffs are real and accepted: higher token cost per letter (~5–8× vs. single-shot), less byte-for-byte predictable output, harder to debug when quality varies. The alternative — a rule tree that never fully covers the variation in real job postings and requires manual updates as new role types appear — has worse tradeoffs for this use case.
+
+This phase also doubles as a hands-on learning exercise for real LLM-agent patterns: tool use, multi-step orchestration, structured outputs between steps, and self-critique loops — patterns that transfer directly to LangGraph, the Anthropic Agents SDK, and any future agent work.
 
 **Agent steps (each step = its own LLM call with a focused role):**
 1. **Extract** — parse the job description into structured JSON: must-have skills, nice-to-haves, responsibilities, company signals.
@@ -152,7 +165,7 @@ tailoring/
 
 **Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
 
-**Tradeoff accepted:** ~5–8× API cost per letter vs. single-shot, in exchange for learning real agent patterns (tool use, multi-step orchestration, self-critique) that transfer to LangGraph, the Anthropic Agents SDK, etc.
+**Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
 
 ### Phase 5 — Email digest
 - `email/sender.py` (Gmail SMTP) + Jinja2 HTML template.
