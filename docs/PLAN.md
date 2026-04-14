@@ -6,7 +6,7 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 **Goal:** a daily automated pipeline that:
 1. Fetches fresh Canadian jobs from the Adzuna API using user-defined filters.
 2. Scores each job against the user's resume using OpenAI embeddings.
-3. Picks the top N matches, tailors the user's base cover letter to each using an OpenAI chat model.
+3. Picks the top N matches, tailors the user's base cover letter to each using a Claude agent (Anthropic API).
 4. Emails the user a daily digest containing each top job's description, tailored cover letter, resume, and apply link.
 5. Remembers jobs it has already sent so the user never gets duplicates.
 6. Runs automatically every morning on Azure, deployed via Docker + GitHub Actions CI/CD.
@@ -26,7 +26,7 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 │  │  1. Fetch jobs (Adzuna API)                               │ │
 │  │  2. Embed + score vs resume (OpenAI embeddings)           │ │
 │  │  3. Filter out already-sent (Azure Table Storage)         │ │
-│  │  4. Tailor cover letter for top N (OpenAI chat)           │ │
+│  │  4. Tailor cover letter for top N (Claude agent)          │ │
 │  │  5. Send email digest (Gmail SMTP)                        │ │
 │  │  6. Mark jobs as sent (Azure Table Storage)               │ │
 │  └───────────────────────────────────────────────────────────┘ │
@@ -47,7 +47,8 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 |---|---|
 | Language / runtime | Python 3.12 |
 | Job API | Adzuna (Canada) |
-| LLM / embeddings | OpenAI (`text-embedding-3-small`, `gpt-4o-mini` or similar) |
+| Embeddings | OpenAI (`text-embedding-3-small`) |
+| Cover letter agent | Anthropic Claude (`claude-sonnet-4-6`; extended thinking off initially) |
 | Matching | Cosine similarity over resume + job embeddings |
 | Dedupe store | Azure Table Storage (local: JSON file) |
 | Resume / cover letter storage | Azure Blob Storage (local: `data/` folder) |
@@ -79,7 +80,7 @@ These are the modern practices the project will follow from day one. They are ex
 - **Protocols / ABCs** for swappable implementations (e.g., `SentJobsStore` with `JsonFileStore` + `AzureTableStore`).
 
 ### LLM / agent practices
-- **Structured outputs** via Pydantic + OpenAI `response_format=json_schema`. Never parse free-text JSON from the model.
+- **Structured outputs** — OpenAI steps use `response_format=json_schema`; Claude steps use tool use with Pydantic-defined input schemas to force structured JSON responses. Never parse free-text JSON from either model.
 - **Prompts as versioned files** in `tailoring/prompts/*.md` — not hardcoded strings. Easier to iterate, diff, and review.
 - **LLM call logging** — every LLM call (prompt, response, model, tokens, cost, latency) appended to a local JSONL file (`data/llm_calls.jsonl`). Essential for debugging agent behavior and tracking spend.
 
@@ -110,7 +111,20 @@ These are the modern practices the project will follow from day one. They are ex
 - **Done when:** top 5 output looks genuinely relevant.
 
 ### Phase 4 — Cover letter tailoring (LLM agent)
-Built as a multi-step agent, not a single prompt, so the project doubles as a hands-on LLM-agent learning exercise.
+
+**Why agent, not deterministic pipeline**
+
+The alternative to an agent is a deterministic pipeline: a fixed sequence of rules and templates that processes every job the same way. For a narrow, well-defined role that approach can work. It doesn't work here.
+
+The roles being applied to — data scientist, ML engineer, software developer, AI engineer — share a label but not a job. Two "Senior Data Scientist" postings at similar-looking companies can require completely different cover letter angles: one is building a recommendation system (the letter should emphasize ML systems, embeddings, real-time serving), another is building an experimentation platform (the letter should emphasize A/B testing, causal inference, statistical rigor). A startup DS role wants evidence of business impact and moving fast. A research role wants depth and methodological rigour. The same pattern repeats across software developer roles: backend API work, data engineering, infrastructure, and systems programming all carry the same title but need different positioning.
+
+A deterministic pipeline handles this in one of two ways, both bad: it either writes a generic letter that fits no specific role well, or it requires manually coding a branching rule tree ("if job mentions recommendation systems, highlight X; if job mentions experimentation, highlight Y") that grows indefinitely and still misses combinations it wasn't programmed for.
+
+An agent solves this differently. It reads each job description, reasons about what that specific role is actually asking for, retrieves the strongest matching evidence from the resume on demand, and writes a letter calibrated to those signals — all without pre-programmed category rules. The adaptation happens at inference time, driven by the content of the job itself. Jobs within the same category can be different enough that this reasoning step is the difference between a letter that resonates and one that sounds copy-pasted.
+
+The tradeoffs are real and accepted: higher token cost per letter (~5–8× vs. single-shot), less byte-for-byte predictable output, harder to debug when quality varies. The alternative — a rule tree that never fully covers the variation in real job postings and requires manual updates as new role types appear — has worse tradeoffs for this use case.
+
+This phase also doubles as a hands-on learning exercise for real LLM-agent patterns: tool use, multi-step orchestration, structured outputs between steps, and self-critique loops — patterns that transfer directly to LangGraph, the Anthropic Agents SDK, and any future agent work.
 
 **Agent steps (each step = its own LLM call with a focused role):**
 1. **Extract** — parse the job description into structured JSON: must-have skills, nice-to-haves, responsibilities, company signals.
@@ -119,11 +133,14 @@ Built as a multi-step agent, not a single prompt, so the project doubles as a ha
 4. **Critique** — score the draft against a rubric: addresses top requirements? sounds like the user? any generic filler or hallucinated claims?
 5. **Revise** — rewrite based on the critique. Loop at most 1–2 times.
 
-**Agent building blocks to implement:**
-- Tool use: a `search_resume(query)` tool so the agent retrieves relevant resume chunks on demand instead of seeing the whole resume every call.
-- Structured outputs (JSON schemas) between steps — not free text.
-- A small orchestration layer (`tailoring/agent.py`) that runs the extract → match → draft → critique → revise loop with a max-iterations guard.
-- Per-step prompts kept in `tailoring/prompts/` as separate files (easier to iterate and diff).
+**Implementation: Claude API (Anthropic SDK)**
+- Model: `claude-sonnet-4-6`. Extended thinking disabled initially; enable only if critique/revise quality is insufficient.
+- Each step is a separate `client.messages.create()` call — no orchestration framework, just Python.
+- `search_resume(query)` is implemented as a Claude tool (defined via the Anthropic SDK's `tools=` parameter). The agent calls it to retrieve relevant resume chunks on demand rather than seeing the whole resume every step.
+- Structured outputs between steps are enforced by defining each tool's `input_schema` as a Pydantic model's JSON schema — Claude must populate that schema to "call" the tool, giving us typed, validated data at each step boundary.
+- Per-step prompts stored in `tailoring/prompts/*.md` — not hardcoded strings.
+- `tailoring/agent.py` is the orchestrator: calls each step in order, passes structured output forward, enforces the max-iterations guard on the critique→revise loop.
+- Every Claude call (prompt, response, model, input tokens, output tokens, latency) logged to `data/llm_calls.jsonl`.
 
 **Module layout:**
 ```
@@ -136,12 +153,19 @@ tailoring/
 │   └── critique.py
 ├── tools/
 │   └── resume_search.py
-└── prompts/*.md
+└── prompts/
+    ├── extract.md
+    ├── match.md
+    ├── draft.md
+    ├── critique.md
+    └── revise.md
 ```
+
+**Dependencies:** `anthropic` SDK added to `pyproject.toml`. OpenAI SDK is still present for Phase 3 embeddings (`text-embedding-3-small`) — only the tailoring agent uses Claude.
 
 **Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
 
-**Tradeoff accepted:** ~5–8× OpenAI cost per letter vs. single-shot, in exchange for learning real agent patterns (tool use, multi-step orchestration, self-critique) that transfer to LangGraph / OpenAI Agents SDK / etc.
+**Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
 
 ### Phase 5 — Email digest
 - `email/sender.py` (Gmail SMTP) + Jinja2 HTML template.
