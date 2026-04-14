@@ -6,7 +6,7 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 **Goal:** a daily automated pipeline that:
 1. Fetches fresh Canadian jobs from the Adzuna API using user-defined filters.
 2. Scores each job against the user's resume using OpenAI embeddings.
-3. Picks the top N matches, tailors the user's base cover letter to each using an OpenAI chat model.
+3. Picks the top N matches, tailors the user's base cover letter to each using a Claude agent (Anthropic API).
 4. Emails the user a daily digest containing each top job's description, tailored cover letter, resume, and apply link.
 5. Remembers jobs it has already sent so the user never gets duplicates.
 6. Runs automatically every morning on Azure, deployed via Docker + GitHub Actions CI/CD.
@@ -26,7 +26,7 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 │  │  1. Fetch jobs (Adzuna API)                               │ │
 │  │  2. Embed + score vs resume (OpenAI embeddings)           │ │
 │  │  3. Filter out already-sent (Azure Table Storage)         │ │
-│  │  4. Tailor cover letter for top N (OpenAI chat)           │ │
+│  │  4. Tailor cover letter for top N (Claude agent)          │ │
 │  │  5. Send email digest (Gmail SMTP)                        │ │
 │  │  6. Mark jobs as sent (Azure Table Storage)               │ │
 │  └───────────────────────────────────────────────────────────┘ │
@@ -47,7 +47,8 @@ The user is job-hunting for data science, ML, AI engineer, and software develope
 |---|---|
 | Language / runtime | Python 3.12 |
 | Job API | Adzuna (Canada) |
-| LLM / embeddings | OpenAI (`text-embedding-3-small`, `gpt-4o-mini` or similar) |
+| Embeddings | OpenAI (`text-embedding-3-small`) |
+| Cover letter agent | Anthropic Claude (`claude-sonnet-4-6`; extended thinking off initially) |
 | Matching | Cosine similarity over resume + job embeddings |
 | Dedupe store | Azure Table Storage (local: JSON file) |
 | Resume / cover letter storage | Azure Blob Storage (local: `data/` folder) |
@@ -79,7 +80,7 @@ These are the modern practices the project will follow from day one. They are ex
 - **Protocols / ABCs** for swappable implementations (e.g., `SentJobsStore` with `JsonFileStore` + `AzureTableStore`).
 
 ### LLM / agent practices
-- **Structured outputs** via Pydantic + OpenAI `response_format=json_schema`. Never parse free-text JSON from the model.
+- **Structured outputs** — OpenAI steps use `response_format=json_schema`; Claude steps use tool use with Pydantic-defined input schemas to force structured JSON responses. Never parse free-text JSON from either model.
 - **Prompts as versioned files** in `tailoring/prompts/*.md` — not hardcoded strings. Easier to iterate, diff, and review.
 - **LLM call logging** — every LLM call (prompt, response, model, tokens, cost, latency) appended to a local JSONL file (`data/llm_calls.jsonl`). Essential for debugging agent behavior and tracking spend.
 
@@ -119,11 +120,14 @@ Built as a multi-step agent, not a single prompt, so the project doubles as a ha
 4. **Critique** — score the draft against a rubric: addresses top requirements? sounds like the user? any generic filler or hallucinated claims?
 5. **Revise** — rewrite based on the critique. Loop at most 1–2 times.
 
-**Agent building blocks to implement:**
-- Tool use: a `search_resume(query)` tool so the agent retrieves relevant resume chunks on demand instead of seeing the whole resume every call.
-- Structured outputs (JSON schemas) between steps — not free text.
-- A small orchestration layer (`tailoring/agent.py`) that runs the extract → match → draft → critique → revise loop with a max-iterations guard.
-- Per-step prompts kept in `tailoring/prompts/` as separate files (easier to iterate and diff).
+**Implementation: Claude API (Anthropic SDK)**
+- Model: `claude-sonnet-4-6`. Extended thinking disabled initially; enable only if critique/revise quality is insufficient.
+- Each step is a separate `client.messages.create()` call — no orchestration framework, just Python.
+- `search_resume(query)` is implemented as a Claude tool (defined via the Anthropic SDK's `tools=` parameter). The agent calls it to retrieve relevant resume chunks on demand rather than seeing the whole resume every step.
+- Structured outputs between steps are enforced by defining each tool's `input_schema` as a Pydantic model's JSON schema — Claude must populate that schema to "call" the tool, giving us typed, validated data at each step boundary.
+- Per-step prompts stored in `tailoring/prompts/*.md` — not hardcoded strings.
+- `tailoring/agent.py` is the orchestrator: calls each step in order, passes structured output forward, enforces the max-iterations guard on the critique→revise loop.
+- Every Claude call (prompt, response, model, input tokens, output tokens, latency) logged to `data/llm_calls.jsonl`.
 
 **Module layout:**
 ```
@@ -136,12 +140,19 @@ tailoring/
 │   └── critique.py
 ├── tools/
 │   └── resume_search.py
-└── prompts/*.md
+└── prompts/
+    ├── extract.md
+    ├── match.md
+    ├── draft.md
+    ├── critique.md
+    └── revise.md
 ```
+
+**Dependencies:** `anthropic` SDK added to `pyproject.toml`. OpenAI SDK is still present for Phase 3 embeddings (`text-embedding-3-small`) — only the tailoring agent uses Claude.
 
 **Done when:** output reads as send-worthy AND the agent's intermediate JSON (extracted requirements, matched evidence, critique notes) is inspectable in logs for debugging.
 
-**Tradeoff accepted:** ~5–8× OpenAI cost per letter vs. single-shot, in exchange for learning real agent patterns (tool use, multi-step orchestration, self-critique) that transfer to LangGraph / OpenAI Agents SDK / etc.
+**Tradeoff accepted:** ~5–8× API cost per letter vs. single-shot, in exchange for learning real agent patterns (tool use, multi-step orchestration, self-critique) that transfer to LangGraph, the Anthropic Agents SDK, etc.
 
 ### Phase 5 — Email digest
 - `email/sender.py` (Gmail SMTP) + Jinja2 HTML template.
