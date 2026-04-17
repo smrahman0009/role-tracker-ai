@@ -1,0 +1,14 @@
+adzuna:
+  country: ca          # ISO country code — "ca" = Canada
+  results_per_page: 20 # max per query per run
+
+  # Add or remove queries freely. Each becomes a separate API call.
+  queries:
+    - what: "data scientist"
+      where: "canada"
+    - what: "machine learning engineer"
+      where: "canada"
+    - what: "software developer"
+      where: "canada"
+    - what: "AI engineer"
+      where: "canada"

@@ -45,3 +45,6 @@ htmlcov/
 # Azure / secrets
 *.pem
 *.pfx
+
+# Personal File
+.shaikh_commands
