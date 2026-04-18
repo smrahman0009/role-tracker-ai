@@ -1,0 +1,69 @@
+id: smrah
+name: "Mushfikur Rahman"
+email: "smrahman0009@gmail.com"
+resume_path: "data/resumes/smrah.pdf"
+top_n_jobs: 5
+
+# Each query becomes a separate JSearch call.
+queries:
+  - what: "data scientist"
+    where: "canada"
+  - what: "machine learning engineer"
+    where: "canada"
+  - what: "software developer"
+    where: "canada"
+  - what: "AI engineer"
+    where: "canada"
+
+# Case-insensitive substring match on employer_name.
+# A job is dropped if the company name contains ANY of these.
+exclude_companies:
+  - bank
+  - rbc
+  - cibc
+  - bmo
+  - scotiabank
+  - desjardins
+  - manulife
+  - sun life
+  - canada life
+  - great-west
+  - intact
+  - industrial alliance
+  - insurance
+  - insurer
+  - wealth management
+  - capital markets
+
+# Case-insensitive substring match on job title.
+exclude_title_keywords:
+  - banking
+  - banker
+  - insurance
+  - actuary
+  - actuarial
+  - underwriter
+  - wealth
+
+# Downstream publishers to block. JSearch filters these server-side
+# (exclude_job_publishers); we also re-check locally.
+# Picked based on Trustpilot scores + reports of fake/expired listings:
+#   - BeBee, Sercanto, Jobrapido, Neuvoo/Talent.com, Jobcase, Learn4Good
+#     → known bad actors (fake listings, data harvesting, bait-and-switch)
+#   - Trovit, Mitula, Jooble, Careerjet, Whatjobs
+#     → aggregator-of-aggregator; just re-indexes other sources
+#   - Kijiji → 47.8% ghost-job rate in Canada (jobs.ca 2025 data)
+exclude_publishers:
+  - BeBee
+  - Sercanto
+  - Jobrapido
+  - Neuvoo
+  - Talent.com
+  - Jobcase
+  - Learn4Good
+  - Trovit
+  - Mitula
+  - Jooble
+  - Careerjet
+  - Whatjobs
+  - Kijiji

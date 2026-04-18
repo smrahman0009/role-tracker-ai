@@ -1,0 +1,34 @@
+{
+  "status": "OK",
+  "request_id": "abc-123",
+  "data": [
+    {
+      "job_id": "jsearch_abc123",
+      "employer_name": "Shopify",
+      "job_title": "Staff Machine Learning Engineer",
+      "job_apply_link": "https://shopify.com/careers/12345",
+      "job_city": "Toronto",
+      "job_state": "Ontario",
+      "job_country": "CA",
+      "job_description": "We are looking for a Staff MLE to lead our ranking and recommendations team. You will own end-to-end ML systems, mentor senior engineers, and drive architectural decisions for production-scale personalization systems. Required: 7+ years ML engineering, deep PyTorch expertise, experience with large-scale recommender systems.",
+      "job_posted_at_datetime_utc": "2026-04-15T10:00:00.000Z",
+      "job_min_salary": 180000,
+      "job_max_salary": 240000,
+      "job_publisher": "Shopify Careers"
+    },
+    {
+      "job_id": "jsearch_def456",
+      "employer_name": "Wealthsimple",
+      "job_title": "Senior NLP Researcher",
+      "job_apply_link": "https://wealthsimple.com/careers/67890",
+      "job_city": "Halifax",
+      "job_state": "Nova Scotia",
+      "job_country": "CA",
+      "job_description": "Join our AI research team to advance LLM-based document understanding for financial documents. You will publish at top-tier venues, build novel retrieval systems, and deploy research to production.",
+      "job_posted_at_datetime_utc": "2026-04-14T08:00:00.000Z",
+      "job_min_salary": null,
+      "job_max_salary": null,
+      "job_publisher": "Wealthsimple Careers"
+    }
+  ]
+}

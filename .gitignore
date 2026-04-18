@@ -48,3 +48,6 @@ htmlcov/
 
 # Personal File
 .shaikh_commands
+
+# Claude Code local state
+.claude/

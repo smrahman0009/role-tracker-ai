@@ -16,12 +16,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Adzuna
-    adzuna_app_id: str
-    adzuna_app_key: str
+    # JSearch (RapidAPI — wraps Google for Jobs, full descriptions)
+    jsearch_rapidapi_key: str = ""
 
-    # OpenAI (Phase 3 — embeddings)
+    # OpenAI (embeddings for resume/job matching)
     openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
 
     # Anthropic (Phase 4 — cover letter agent)
     anthropic_api_key: str = ""
@@ -36,22 +36,21 @@ class Settings(BaseSettings):
 
 
 class JobQuery(BaseModel):
-    """A single Adzuna search query."""
+    """A single job search query (used inside UserProfile too)."""
 
     what: str
     where: str = "canada"
 
 
-class JobFilters(BaseModel):
-    """Job search filters loaded from config.yaml."""
+class PipelineDefaults(BaseModel):
+    """Pipeline-wide defaults from config.yaml — shared across users."""
 
     country: str = "ca"
     results_per_page: int = 20
-    queries: list[JobQuery]
 
 
-def load_job_filters(path: Path = Path("config.yaml")) -> JobFilters:
-    """Parse config.yaml and return validated JobFilters."""
+def load_pipeline_defaults(path: Path = Path("config.yaml")) -> PipelineDefaults:
+    """Parse config.yaml and return validated PipelineDefaults."""
     with open(path) as f:
         data = yaml.safe_load(f)
-    return JobFilters(**data["adzuna"])
+    return PipelineDefaults(**data["jobs"])
