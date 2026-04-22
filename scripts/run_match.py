@@ -21,8 +21,8 @@ Usage
 
 import argparse
 
-from dotenv import load_dotenv
 from anthropic import Anthropic
+from dotenv import load_dotenv
 
 from role_tracker.config import (
     JobQuery,
@@ -30,6 +30,8 @@ from role_tracker.config import (
     Settings,
     load_pipeline_defaults,
 )
+from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.jobs.base import JobSource
 from role_tracker.jobs.filters import apply_exclusions
 from role_tracker.jobs.jsearch import JSearchClient
@@ -40,8 +42,6 @@ from role_tracker.matching.scorer import (
     job_to_embedding_text,
     rank_jobs,
 )
-from role_tracker.cover_letter.generator import generate_cover_letter
-from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.resume.parser import parse_resume
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
@@ -235,7 +235,7 @@ def run_for_user(
         for i, scored_job in enumerate(scored, 1):
             try:
                 job = scored_job.job
-                letter = generate_cover_letter(
+                letter = generate_cover_letter_agent(
                     user=user,
                     resume_text=resume_text,
                     job=job,
@@ -270,7 +270,10 @@ def main() -> None:
     anthropic_client = None
     if args.generate_letters:
         if not settings.anthropic_api_key:
-            raise SystemExit("ANTHROPIC_API_KEY is missing from .env. Get one from console.anthropic.com")
+            raise SystemExit(
+                "ANTHROPIC_API_KEY is missing from .env. "
+                "Get one from console.anthropic.com"
+            )
         anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     defaults = load_pipeline_defaults()

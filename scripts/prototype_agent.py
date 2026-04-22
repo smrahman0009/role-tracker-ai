@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""Quick smoke test for Phase 4 Step 1 — generates one letter and saves to disk."""
-
+"""Smoke test for Phase 4 Step 3 — run the agent on the Shopify job."""
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-from role_tracker.cover_letter.generator import generate_cover_letter
+from role_tracker.cover_letter.agent import generate_cover_letter_agent
 from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.jobs.models import JobPosting
 from role_tracker.resume.parser import parse_resume
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
-# Sample job — realistic data from JSearch
+# Same Shopify job we used for the Step 1 baseline, so we can compare.
 SAMPLE_JOB = JobPosting(
-    id="jsearch_shopify_001",
+    id="jsearch_shopify_agent_001",
     title="Staff Machine Learning Engineer",
     company="Shopify",
     location="Toronto, Ontario",
@@ -35,27 +34,23 @@ SAMPLE_JOB = JobPosting(
 
 
 def main() -> None:
-    # Load environment variables from .env
     load_dotenv()
-
-    # Load user and resume
     store = YamlUserProfileStore()
     user = store.get_user("smrah")
     resume_text = parse_resume(user.resume_path)
 
-    # Generate letter
-    print(f"\n{'='*60}")
-    print(f"  Generating cover letter for {SAMPLE_JOB.title} @ {SAMPLE_JOB.company}")
-    print(f"{'='*60}\n")
+    print(f"\n{'=' * 60}")
+    print("  AGENT RUN — Shopify Staff ML Engineer")
+    print(f"{'=' * 60}\n")
+
     client = Anthropic()
-    letter = generate_cover_letter(
+    letter = generate_cover_letter_agent(
         user=user,
         resume_text=resume_text,
         job=SAMPLE_JOB,
         client=client,
     )
 
-    # Save to disk
     folder = build_letter_dir("smrah", SAMPLE_JOB)
     save_letter_bundle(
         folder=folder,
@@ -64,17 +59,8 @@ def main() -> None:
         resume_text=resume_text,
     )
 
-    print(f"\n{'='*60}")
-    print("  Letter saved!")
-    print(f"{'='*60}")
-    print(f"\nFolder: {folder}")
-    print("\nContents:")
-    print("  - cover_letter.md")
-    print("  - job_description.md")
-    print("  - resume_snapshot.txt")
-    print("\nOpen the folder to review:\n")
-    print(f"  open '{folder}'")
-    print()
+    print("\nSaved to:", folder)
+    print("\n  open '" + str(folder) + "'\n")
 
 
 if __name__ == "__main__":
