@@ -89,3 +89,52 @@ def test_resume_embedding_cache_path_is_derived_from_resume(
 def test_list_users_on_missing_dir_returns_empty(tmp_path: Path) -> None:
     store = YamlUserProfileStore(root=tmp_path / "nonexistent")
     assert store.list_users() == []
+
+
+def test_contact_header_includes_all_populated_fields(tmp_path: Path) -> None:
+    (tmp_path).mkdir(exist_ok=True)
+    users_dir = tmp_path / "users"
+    users_dir.mkdir()
+    _write(
+        users_dir / "full.yaml",
+        """
+        id: full
+        name: Jane Doe
+        email: jane@example.com
+        phone: 555-1234
+        city: Toronto, ON
+        linkedin_url: https://linkedin.com/in/jane
+        github_url: https://github.com/jane
+        resume_path: data/resumes/jane.pdf
+        queries: []
+        """,
+    )
+    user = YamlUserProfileStore(root=users_dir).get_user("full")
+    header = user.contact_header()
+    assert "Jane Doe" in header
+    assert "555-1234" in header
+    assert "Toronto, ON" in header
+    assert "jane@example.com" in header
+    assert "[LinkedIn](https://linkedin.com/in/jane)" in header
+    assert "[GitHub](https://github.com/jane)" in header
+
+
+def test_contact_header_skips_empty_fields(tmp_path: Path) -> None:
+    users_dir = tmp_path / "users"
+    users_dir.mkdir()
+    _write(
+        users_dir / "min.yaml",
+        """
+        id: min
+        name: Only Name
+        resume_path: data/resumes/x.pdf
+        queries: []
+        """,
+    )
+    user = YamlUserProfileStore(root=users_dir).get_user("min")
+    header = user.contact_header()
+    assert "Only Name" in header
+    assert "LinkedIn" not in header
+    assert "GitHub" not in header
+    # No dangling separators
+    assert " |  " not in header

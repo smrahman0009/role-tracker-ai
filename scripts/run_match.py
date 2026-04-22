@@ -14,9 +14,15 @@ Usage
 
 # Override fetch size + top-N:
     python scripts/run_match.py --user smrah --limit 30 --top-n 10
+
+# Generate cover letters for top matches:
+    python scripts/run_match.py --user smrah --generate-letters
 """
 
 import argparse
+
+from dotenv import load_dotenv
+from anthropic import Anthropic
 
 from role_tracker.config import (
     JobQuery,
@@ -34,6 +40,8 @@ from role_tracker.matching.scorer import (
     job_to_embedding_text,
     rank_jobs,
 )
+from role_tracker.cover_letter.generator import generate_cover_letter
+from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.resume.parser import parse_resume
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
@@ -82,6 +90,11 @@ def parse_args() -> argparse.Namespace:
         "--show-excluded",
         action="store_true",
         help="Print the list of jobs dropped by the filter.",
+    )
+    parser.add_argument(
+        "--generate-letters",
+        action="store_true",
+        help="Generate tailored cover letters for top-N matches (Phase 4).",
     )
     return parser.parse_args()
 
@@ -167,6 +180,7 @@ def run_for_user(
     embedder: Embedder,
     defaults: PipelineDefaults,
     args: argparse.Namespace,
+    anthropic_client: Anthropic | None = None,
 ) -> None:
     print(f"\n{'#' * 60}\n#  User: {user.name} ({user.id})\n{'#' * 60}")
 
@@ -213,8 +227,37 @@ def run_for_user(
     scored = rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
     print_scored(scored)
 
+    # Generate cover letters if requested.
+    if args.generate_letters and anthropic_client:
+        print(f"\n{'=' * 60}")
+        print(f"  GENERATING {len(scored)} COVER LETTERS")
+        print(f"{'=' * 60}")
+        for i, scored_job in enumerate(scored, 1):
+            try:
+                job = scored_job.job
+                letter = generate_cover_letter(
+                    user=user,
+                    resume_text=resume_text,
+                    job=job,
+                    client=anthropic_client,
+                )
+                folder = build_letter_dir(user.id, job)
+                save_letter_bundle(
+                    folder=folder,
+                    letter_text=letter,
+                    job=job,
+                    resume_text=resume_text,
+                )
+                print(f"\n  #{i} {job.company} — {job.title}")
+                print(f"     Saved to: {folder.relative_to(folder.parent.parent)}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"\n  #{i} {job.company} — {job.title}")
+                print(f"     [!] Failed: {exc}")
+        print(f"\n{'=' * 60}\n")
+
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
 
     if args.what and not args.user:
@@ -223,6 +266,12 @@ def main() -> None:
     settings = Settings()
     if not settings.openai_api_key:
         raise SystemExit("OPENAI_API_KEY is missing from .env")
+
+    anthropic_client = None
+    if args.generate_letters:
+        if not settings.anthropic_api_key:
+            raise SystemExit("ANTHROPIC_API_KEY is missing from .env. Get one from console.anthropic.com")
+        anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     defaults = load_pipeline_defaults()
     store = YamlUserProfileStore()
@@ -241,7 +290,14 @@ def main() -> None:
             country=defaults.country,
             exclude_publishers=user.exclude_publishers,
         )
-        run_for_user(user, sources, embedder, defaults, args)
+        run_for_user(
+            user,
+            sources,
+            embedder,
+            defaults,
+            args,
+            anthropic_client=anthropic_client,
+        )
 
 
 if __name__ == "__main__":
