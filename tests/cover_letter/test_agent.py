@@ -74,21 +74,37 @@ def _response(content: list, stop_reason: str = "tool_use"):
 def test_agent_completes_on_save_letter(
     sample_user: UserProfile, sample_job: JobPosting, sample_resume: str
 ) -> None:
-    # Simulated Claude: read JD → read one resume section → save letter
+    # Simulated Claude flow: read JD → read resume → critique → save.
+    # The critique tool also calls client.messages.create internally (for Haiku),
+    # so we need one extra text response in the mock sequence.
+    import json as _json
+
+    approved_json = _json.dumps(
+        {"total": 92, "verdict": "approved", "priority_fixes": [], "scores": {}}
+    )
     client = MagicMock()
     client.messages.create.side_effect = [
         _response([_tool_use_block("read_job_description", {})]),
         _response(
-            [_tool_use_block("read_resume_section", {"topic": "transformers"}, "id2")]
+            [_tool_use_block(
+                "read_resume_section", {"topic": "transformers"}, "id2"
+            )]
         ),
         _response(
-            [
-                _tool_use_block(
-                    "save_letter",
-                    {"text": "Hello,\n\nFinal letter body.\n\nBest,\nShaikh"},
-                    "id3",
-                )
-            ]
+            [_tool_use_block(
+                "critique_draft",
+                {"draft": "Hello,\n\nDraft body.\n\nBest,\nShaikh"},
+                "id3",
+            )]
+        ),
+        # Internal call by the critique tool (returns JSON verdict).
+        _response([_text_block(approved_json)], stop_reason="end_turn"),
+        _response(
+            [_tool_use_block(
+                "save_letter",
+                {"text": "Hello,\n\nFinal letter body.\n\nBest,\nShaikh"},
+                "id4",
+            )]
         ),
     ]
 
@@ -100,7 +116,8 @@ def test_agent_completes_on_save_letter(
     )
     assert letter.startswith("Hello,")
     assert "Best" in letter
-    assert client.messages.create.call_count == 3
+    # 4 agent iterations + 1 internal critique call = 5
+    assert client.messages.create.call_count == 5
 
 
 def test_agent_raises_on_no_save(
@@ -139,7 +156,12 @@ def test_agent_passes_tools_to_claude(
     )
     kwargs = client.messages.create.call_args.kwargs
     tool_names = {t["name"] for t in kwargs["tools"]}
-    assert tool_names == {"read_job_description", "read_resume_section", "save_letter"}
+    assert tool_names == {
+        "read_job_description",
+        "read_resume_section",
+        "critique_draft",
+        "save_letter",
+    }
 
 
 def test_agent_handles_tool_errors_gracefully(

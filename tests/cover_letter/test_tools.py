@@ -102,3 +102,34 @@ def test_tool_call_count_increments(
     executors["read_job_description"]()
     executors["read_resume_section"](topic="Python")
     assert state["tool_call_count"] == 2
+
+
+def test_critique_schema_is_exposed() -> None:
+    names = {s["name"] for s in TOOL_SCHEMAS}
+    assert "critique_draft" in names
+
+
+def test_critique_without_client_auto_approves(
+    sample_resume: str, sample_job: JobPosting
+) -> None:
+    # No client → unit-test path → critique returns "approved" fallback.
+    executors, state = build_tool_executors(
+        resume_text=sample_resume, job=sample_job
+    )
+    result = executors["critique_draft"](draft="Hello,\n\nBody.\n\nBest,\nX")
+    assert "approved" in result
+    assert state["critique_count"] == 1
+    assert state["last_critique"]["verdict"] == "approved"
+
+
+def test_critique_budget_cap(sample_resume: str, sample_job: JobPosting) -> None:
+    from role_tracker.cover_letter.tools import MAX_CRITIQUES
+
+    executors, state = build_tool_executors(
+        resume_text=sample_resume, job=sample_job
+    )
+    for _ in range(MAX_CRITIQUES):
+        executors["critique_draft"](draft="draft")
+    # One more should hit the cap:
+    result = executors["critique_draft"](draft="draft")
+    assert "Max critiques" in result

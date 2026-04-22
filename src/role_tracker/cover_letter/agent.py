@@ -22,8 +22,8 @@ from role_tracker.users.models import UserProfile
 
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
-MAX_ITERATIONS = 15
-MAX_TOOL_CALLS = 20
+MAX_ITERATIONS = 25
+MAX_TOOL_CALLS = 30
 
 # Reference letter kept here (not in generator.py) so the two modules can
 # diverge independently. Style guide only — never copy facts.
@@ -65,8 +65,14 @@ PROCESS (follow in order):
 3. For each requirement, call read_resume_section with a specific topic to
    find matching evidence in the candidate's resume.
 4. Draft the letter in your internal working memory (do not emit it yet).
-5. Review it against the RULES below. Revise if needed.
-6. Call save_letter with the final text. After that, stop.
+5. Call critique_draft with your draft. Read the verdict and priority fixes.
+6. If verdict is "approved": call save_letter and stop.
+   If verdict is "minor_revision" or "rewrite_required": revise the draft
+   targeting the specific priority fixes, then call critique_draft again.
+   Maximum 3 critiques total (initial + 2 revisions). After the third critique
+   (or if the tool says "Max critiques reached"), call save_letter with your
+   best current draft even if it is not fully approved.
+7. Never call save_letter before at least one critique_draft.
 
 RULES:
 - Ground every factual claim (technology, project, metric, date) in content
@@ -116,7 +122,11 @@ def generate_cover_letter_agent(
     max_iterations: int = MAX_ITERATIONS,
 ) -> str:
     """Run the agent loop. Returns the final letter text."""
-    executors, state = build_tool_executors(resume_text=resume_text, job=job)
+    executors, state = build_tool_executors(
+        resume_text=resume_text,
+        job=job,
+        anthropic_client=client,
+    )
 
     goal = (
         f"Write a tailored cover letter for {user.name} applying to a "
