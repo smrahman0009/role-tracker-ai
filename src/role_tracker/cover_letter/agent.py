@@ -14,11 +14,36 @@ generator or log the failure.
 
 from __future__ import annotations
 
+import copy
+
 from anthropic import Anthropic
 
 from role_tracker.cover_letter.tools import TOOL_SCHEMAS, build_tool_executors
 from role_tracker.jobs.models import JobPosting
 from role_tracker.users.models import UserProfile
+
+
+def _cached_system_blocks() -> list[dict]:
+    """System prompt as list-of-blocks with cache_control on the tail.
+
+    This is the stable prefix that gets reused on every iteration of the
+    agent loop, so we cache it. First call pays a small write premium;
+    subsequent calls within 5 min pay ~10% of normal input cost.
+    """
+    return [
+        {
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def _cached_tools() -> list[dict]:
+    """Tool schemas with cache_control on the last one — caches the whole list."""
+    tools = copy.deepcopy(TOOL_SCHEMAS)
+    tools[-1]["cache_control"] = {"type": "ephemeral"}
+    return tools
 
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
@@ -120,8 +145,14 @@ def generate_cover_letter_agent(
     client: Anthropic,
     model: str = MODEL,
     max_iterations: int = MAX_ITERATIONS,
+    usage_tracker: dict | None = None,
 ) -> str:
-    """Run the agent loop. Returns the final letter text."""
+    """Run the agent loop. Returns the final letter text.
+
+    If `usage_tracker` is provided, it is populated with cache-read /
+    cache-write / uncached-input token counts for the whole run. Useful for
+    verifying prompt caching is working and estimating cost.
+    """
     executors, state = build_tool_executors(
         resume_text=resume_text,
         job=job,
@@ -148,14 +179,27 @@ def generate_cover_letter_agent(
 
     messages: list[dict] = [{"role": "user", "content": initial_user_message}]
 
+    system_blocks = _cached_system_blocks()
+    tools = _cached_tools()
+
+    # Track cache usage across iterations so we can verify caching is working.
+    cache_reads = 0
+    cache_writes = 0
+    uncached_input = 0
+
     for iteration in range(max_iterations):
         response = client.messages.create(
             model=model,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            tools=TOOL_SCHEMAS,
+            system=system_blocks,
+            tools=tools,
             messages=messages,
         )
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            cache_reads += getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_writes += getattr(usage, "cache_creation_input_tokens", 0) or 0
+            uncached_input += getattr(usage, "input_tokens", 0) or 0
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
@@ -191,4 +235,10 @@ def generate_cover_letter_agent(
             f"Agent finished without saving a letter after {max_iterations} "
             f"iterations (tool calls: {state['tool_call_count']})"
         )
+
+    if usage_tracker is not None:
+        usage_tracker["cache_reads"] = cache_reads
+        usage_tracker["cache_writes"] = cache_writes
+        usage_tracker["uncached_input"] = uncached_input
+
     return state["saved_letter"]

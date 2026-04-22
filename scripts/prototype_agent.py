@@ -44,12 +44,23 @@ def main() -> None:
     print(f"{'=' * 60}\n")
 
     client = Anthropic()
+    usage: dict = {}
     letter = generate_cover_letter_agent(
         user=user,
         resume_text=resume_text,
         job=SAMPLE_JOB,
         client=client,
+        usage_tracker=usage,
     )
+
+    print("\nToken usage (main agent):")
+    print(f"  Uncached input: {usage.get('uncached_input', 0):,}")
+    print(f"  Cache writes:   {usage.get('cache_writes', 0):,}")
+    print(f"  Cache reads:    {usage.get('cache_reads', 0):,}")
+    total_prefix = usage.get("cache_reads", 0) + usage.get("cache_writes", 0)
+    if total_prefix:
+        hit_rate = usage["cache_reads"] / total_prefix * 100
+        print(f"  Cache hit rate: {hit_rate:.1f}%")
 
     folder = build_letter_dir("smrah", SAMPLE_JOB)
     save_letter_bundle(

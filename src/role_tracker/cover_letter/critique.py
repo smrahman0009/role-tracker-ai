@@ -196,7 +196,13 @@ def run_critique(
     response = client.messages.create(
         model=model,
         max_tokens=MAX_TOKENS,
-        system=CRITIQUE_SYSTEM_PROMPT,
+        system=[
+            {
+                "type": "text",
+                "text": CRITIQUE_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[
             {
                 "role": "user",
