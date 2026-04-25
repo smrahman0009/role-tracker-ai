@@ -58,11 +58,39 @@ def save_letter_bundle(
     letter_text: str,
     job: JobPosting,
     resume_text: str,
+    strategy: dict | None = None,
+    critique: dict | None = None,
 ) -> None:
-    """Write letter + JD snapshot + resume snapshot into the folder."""
+    """Write letter + JD snapshot + resume snapshot into the folder.
+
+    Optionally also writes strategy.md (agent's committed plan) and
+    critique.json (final rubric score), so the user can audit *why* the
+    letter looks the way it does.
+    """
+    import json as _json
+
     (folder / "cover_letter.md").write_text(letter_text.strip() + "\n")
     (folder / "job_description.md").write_text(_format_jd(job))
     (folder / "resume_snapshot.txt").write_text(resume_text.strip() + "\n")
+    if strategy:
+        (folder / "strategy.md").write_text(_format_strategy(strategy))
+    if critique:
+        (folder / "critique.json").write_text(
+            _json.dumps(critique, indent=2) + "\n"
+        )
+
+
+def _format_strategy(strategy: dict) -> str:
+    """Render the agent's committed strategy as readable markdown."""
+    return (
+        "# Agent Strategy\n\n"
+        f"- **Fit assessment:** {strategy.get('fit_assessment', '?')}\n"
+        f"- **Fit reasoning:** {strategy.get('fit_reasoning', '?')}\n"
+        f"- **Narrative angle:** {strategy.get('narrative_angle', '?')}\n"
+        f"- **Primary project:** {strategy.get('primary_project', '?')}\n"
+        f"- **Secondary project:** "
+        f"{strategy.get('secondary_project') or '(none)'}\n"
+    )
 
 
 def _format_jd(job: JobPosting) -> str:

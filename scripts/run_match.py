@@ -33,7 +33,7 @@ from role_tracker.config import (
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
 from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.jobs.base import JobSource
-from role_tracker.jobs.filters import apply_exclusions
+from role_tracker.jobs.filters import apply_exclusions, apply_title_relevance
 from role_tracker.jobs.jsearch import JSearchClient
 from role_tracker.jobs.models import JobPosting
 from role_tracker.matching.embeddings import Embedder, load_or_embed_resume
@@ -212,9 +212,17 @@ def run_for_user(
         exclude_publishers=user.exclude_publishers,
     )
     print(f"Filtered out {len(excluded)} jobs (per user's exclusion list).")
-    if args.show_excluded and excluded:
+
+    # Title-relevance filter — drop jobs whose titles don't share keywords
+    # with the active queries. Catches loose JSearch matches like backend
+    # roles surfacing for "data scientist".
+    query_strings = [q.what for q in queries]
+    jobs, off_topic = apply_title_relevance(jobs, query_strings)
+    print(f"Filtered out {len(off_topic)} off-topic jobs (title doesn't match query).")
+
+    if args.show_excluded and (excluded or off_topic):
         print("\n  Excluded:")
-        for e in excluded:
+        for e in excluded + off_topic:
             print(f"    - [{e.reason}] {e.job.title} @ {e.job.company}")
 
     if not jobs:
@@ -225,6 +233,15 @@ def run_for_user(
     job_vectors = embedder.embed([job_to_embedding_text(j) for j in jobs])
 
     scored = rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
+
+    # Honest count messaging — say if we couldn't fill the requested top_n.
+    if len(scored) < top_n:
+        print(
+            f"\n[!] You asked for top {top_n}, but only {len(scored)} jobs "
+            "remained after filtering. Consider widening queries (--what) "
+            "or relaxing exclusions in users/<id>.yaml."
+        )
+
     print_scored(scored)
 
     # Generate cover letters if requested.
@@ -235,11 +252,13 @@ def run_for_user(
         for i, scored_job in enumerate(scored, 1):
             try:
                 job = scored_job.job
+                tracker: dict = {}
                 letter = generate_cover_letter_agent(
                     user=user,
                     resume_text=resume_text,
                     job=job,
                     client=anthropic_client,
+                    usage_tracker=tracker,
                 )
                 folder = build_letter_dir(user.id, job)
                 save_letter_bundle(
@@ -247,8 +266,13 @@ def run_for_user(
                     letter_text=letter,
                     job=job,
                     resume_text=resume_text,
+                    strategy=tracker.get("strategy"),
+                    critique=tracker.get("last_critique"),
                 )
+                fit = (tracker.get("strategy") or {}).get("fit_assessment", "?")
+                verdict = (tracker.get("last_critique") or {}).get("verdict", "?")
                 print(f"\n  #{i} {job.company} — {job.title}")
+                print(f"     Fit: {fit}   Verdict: {verdict}")
                 print(f"     Saved to: {folder.relative_to(folder.parent.parent)}")
             except Exception as exc:  # noqa: BLE001
                 print(f"\n  #{i} {job.company} — {job.title}")

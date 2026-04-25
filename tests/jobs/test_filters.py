@@ -1,6 +1,6 @@
 """Unit tests for the job exclusion filter."""
 
-from role_tracker.jobs.filters import apply_exclusions
+from role_tracker.jobs.filters import apply_exclusions, apply_title_relevance
 from role_tracker.jobs.models import JobPosting
 
 
@@ -83,3 +83,33 @@ def test_exclude_by_publisher() -> None:
     )
     assert [j.publisher for j in kept] == ["Shopify Careers"]
     assert "publisher contains 'bebee'" in dropped[0].reason
+
+
+def test_title_relevance_keeps_matching_jobs() -> None:
+    jobs = [
+        _job("Data Scientist", "Shopify"),
+        _job("Senior Data Engineer", "Stripe"),
+        _job("Backend Software Developer", "Snowflake"),
+    ]
+    kept, dropped = apply_title_relevance(jobs, ["data scientist"])
+    titles = [j.title for j in kept]
+    assert "Data Scientist" in titles
+    assert "Senior Data Engineer" in titles  # matches "data"
+    assert "Backend Software Developer" in [d.job.title for d in dropped]
+
+
+def test_title_relevance_no_queries_keeps_all() -> None:
+    jobs = [_job("Anything", "X"), _job("Other", "Y")]
+    kept, dropped = apply_title_relevance(jobs, [])
+    assert len(kept) == 2
+    assert dropped == []
+
+
+def test_title_relevance_strips_stopwords() -> None:
+    jobs = [_job("Data Scientist", "X"), _job("Anything else", "Y")]
+    # Query "in canada" → stopwords removed; "canada" is a real keyword.
+    kept, dropped = apply_title_relevance(jobs, ["data scientist in canada"])
+    # "Data Scientist" matches "data" or "scientist"; "Anything else" matches none.
+    assert len(kept) == 1
+    assert kept[0].title == "Data Scientist"
+    assert dropped[0].job.title == "Anything else"

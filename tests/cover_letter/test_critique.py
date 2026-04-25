@@ -100,7 +100,7 @@ def test_format_for_agent_shows_verdict_and_fixes() -> None:
         "notes": "Close, but needs tightening.",
     }
     out = format_for_agent(result)
-    assert "78/100" in out
+    assert "78/110" in out
     assert "minor_revision" in out
     assert "banned_phrases" in out
     assert "leverage" in out

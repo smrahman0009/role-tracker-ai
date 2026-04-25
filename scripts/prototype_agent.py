@@ -68,7 +68,20 @@ def main() -> None:
         letter_text=letter,
         job=SAMPLE_JOB,
         resume_text=resume_text,
+        strategy=usage.get("strategy"),
+        critique=usage.get("last_critique"),
     )
+
+    if usage.get("strategy"):
+        s = usage["strategy"]
+        print("\nAgent strategy:")
+        print(f"  Fit:      {s.get('fit_assessment')}")
+        print(f"  Angle:    {s.get('narrative_angle')}")
+        print(f"  Primary:  {s.get('primary_project')}")
+        print(f"  Secondary: {s.get('secondary_project') or '(none)'}")
+    if usage.get("last_critique"):
+        c = usage["last_critique"]
+        print(f"\nFinal critique: {c.get('total', '?')}/110 — {c.get('verdict', '?')}")
 
     print("\nSaved to:", folder)
     print("\n  open '" + str(folder) + "'\n")

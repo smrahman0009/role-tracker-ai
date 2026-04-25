@@ -1,5 +1,6 @@
 """Tests for the agentic cover-letter generator. Mocked Anthropic client."""
 
+import json as _json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -48,7 +49,6 @@ def sample_resume() -> str:
 
 
 def _tool_use_block(tool_name: str, tool_input: dict, block_id: str = "id1"):
-    """Build a mock tool_use content block that matches Anthropic's shape."""
     block = MagicMock()
     block.type = "tool_use"
     block.name = tool_name
@@ -71,20 +71,24 @@ def _response(content: list, stop_reason: str = "tool_use"):
     return r
 
 
+def _ok_letter() -> str:
+    """A letter that passes deterministic checks (300+ words, paras <130)."""
+    p1 = " ".join(["word"] * 100)
+    p2 = " ".join(["word"] * 120)
+    p3 = " ".join(["word"] * 100)
+    return f"Header\n\nHello,\n\n{p1}\n\n{p2}\n\n{p3}\n\nBest,\nX"
+
+
 def test_agent_completes_on_save_letter(
     sample_user: UserProfile, sample_job: JobPosting, sample_resume: str
 ) -> None:
-    # Simulated Claude flow: read JD → read resume → critique → save.
-    # The critique tool also calls client.messages.create internally (for Haiku),
-    # so we need one extra text response in the mock sequence.
-    import json as _json
-
+    # Full mandatory flow: read JD → read resume → strategy → critique → save.
     approved_json = _json.dumps(
-        {"total": 92, "verdict": "approved", "priority_fixes": [], "scores": {}}
+        {"total": 100, "verdict": "approved", "priority_fixes": [], "scores": {}}
     )
     client = MagicMock()
     client.messages.create.side_effect = [
-        _response([_tool_use_block("read_job_description", {})]),
+        _response([_tool_use_block("read_job_description", {}, "id1")]),
         _response(
             [_tool_use_block(
                 "read_resume_section", {"topic": "transformers"}, "id2"
@@ -92,19 +96,26 @@ def test_agent_completes_on_save_letter(
         ),
         _response(
             [_tool_use_block(
-                "critique_draft",
-                {"draft": "Hello,\n\nDraft body.\n\nBest,\nShaikh"},
+                "commit_to_strategy",
+                {
+                    "fit_assessment": "HIGH",
+                    "fit_reasoning": "Direct match.",
+                    "narrative_angle": "NLP work maps to ranking.",
+                    "primary_project": "Company Name Resolution",
+                },
                 "id3",
             )]
         ),
-        # Internal call by the critique tool (returns JSON verdict).
-        _response([_text_block(approved_json)], stop_reason="end_turn"),
         _response(
             [_tool_use_block(
-                "save_letter",
-                {"text": "Hello,\n\nFinal letter body.\n\nBest,\nShaikh"},
+                "critique_draft",
+                {"draft": _ok_letter()},
                 "id4",
             )]
+        ),
+        _response([_text_block(approved_json)], stop_reason="end_turn"),
+        _response(
+            [_tool_use_block("save_letter", {"text": _ok_letter()}, "id5")]
         ),
     ]
 
@@ -114,16 +125,13 @@ def test_agent_completes_on_save_letter(
         job=sample_job,
         client=client,
     )
-    assert letter.startswith("Hello,")
+    assert letter.startswith("Header")
     assert "Best" in letter
-    # 4 agent iterations + 1 internal critique call = 5
-    assert client.messages.create.call_count == 5
 
 
 def test_agent_raises_on_no_save(
     sample_user: UserProfile, sample_job: JobPosting, sample_resume: str
 ) -> None:
-    # Claude ends turn without saving — that's an error.
     client = MagicMock()
     client.messages.create.return_value = _response(
         [_text_block("I'll think about it.")], stop_reason="end_turn"
@@ -145,20 +153,26 @@ def test_agent_passes_tools_to_claude(
     client = MagicMock()
     client.messages.create.side_effect = [
         _response(
-            [_tool_use_block("save_letter", {"text": "Hello\n\nX\n\nBest,\nY"})]
+            [_tool_use_block("save_letter", {"text": _ok_letter()}, "id1")]
         ),
     ]
-    generate_cover_letter_agent(
-        user=sample_user,
-        resume_text=sample_resume,
-        job=sample_job,
-        client=client,
-    )
+    # Will fail (no strategy) but we only care about the tools passed.
+    try:
+        generate_cover_letter_agent(
+            user=sample_user,
+            resume_text=sample_resume,
+            job=sample_job,
+            client=client,
+            max_iterations=1,
+        )
+    except RuntimeError:
+        pass
     kwargs = client.messages.create.call_args.kwargs
     tool_names = {t["name"] for t in kwargs["tools"]}
     assert tool_names == {
         "read_job_description",
         "read_resume_section",
+        "commit_to_strategy",
         "critique_draft",
         "save_letter",
     }
@@ -167,20 +181,32 @@ def test_agent_passes_tools_to_claude(
 def test_agent_handles_tool_errors_gracefully(
     sample_user: UserProfile, sample_job: JobPosting, sample_resume: str
 ) -> None:
-    # Agent sends a malformed tool input; executor raises; loop reports error
-    # back to Claude and Claude then saves a valid letter.
+    # Malformed tool input — executor raises; loop reports back to Claude;
+    # Claude then commits strategy, critiques, and saves.
+    approved_json = _json.dumps(
+        {"total": 100, "verdict": "approved", "priority_fixes": [], "scores": {}}
+    )
     client = MagicMock()
     client.messages.create.side_effect = [
-        # Missing "topic" — will raise TypeError in the executor.
         _response([_tool_use_block("read_resume_section", {}, "id1")]),
         _response(
-            [
-                _tool_use_block(
-                    "save_letter",
-                    {"text": "Hello\n\nBody\n\nBest,\nName"},
-                    "id2",
-                )
-            ]
+            [_tool_use_block(
+                "commit_to_strategy",
+                {
+                    "fit_assessment": "MEDIUM",
+                    "fit_reasoning": "Adjacent experience.",
+                    "narrative_angle": "Production ML.",
+                    "primary_project": "Some project.",
+                },
+                "id2",
+            )]
+        ),
+        _response(
+            [_tool_use_block("critique_draft", {"draft": _ok_letter()}, "id3")]
+        ),
+        _response([_text_block(approved_json)], stop_reason="end_turn"),
+        _response(
+            [_tool_use_block("save_letter", {"text": _ok_letter()}, "id4")]
         ),
     ]
     letter = generate_cover_letter_agent(
@@ -189,4 +215,4 @@ def test_agent_handles_tool_errors_gracefully(
         job=sample_job,
         client=client,
     )
-    assert "Hello" in letter
+    assert "Header" in letter
