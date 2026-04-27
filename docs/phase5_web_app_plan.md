@@ -193,7 +193,12 @@ POST   /users/{user_id}/jobs/{job_id}/applied         mark as applied
 DELETE /users/{user_id}/jobs/{job_id}/applied         unmark
 ```
 
-**Out of scope for Phase 5:** auth, frontend, deployment.
+**Phase 5 also includes:**
+- IP allowlist middleware (reads `IP_ALLOWLIST` env var, returns 403 to
+  off-list requests; empty value disables the check for local dev).
+- Rate-limiting middleware: 20 cover-letter generations per user per day.
+
+**Out of scope for Phase 5:** real auth, frontend, deployment.
 
 ### Phase 6 — React frontend (local development)
 
@@ -260,45 +265,45 @@ the existing one.
 
 ---
 
-## Architectural decisions still open (for brainstorming)
+## Locked decisions (resolved 2026-04-27)
 
-These don't need to be resolved before starting Phase 5, but should be
-locked down before Phase 7-8:
+All architectural questions raised during planning have been resolved:
 
-1. **Resume model.** Support multiple resumes per user (e.g., "ML
-   resume" vs "backend resume" for different query types) or just one?
-   Affects API and DB schema. Recommendation: start with one, add
-   multiple in a later iteration.
+1. **Resume model.** One resume per user. Multiple resumes deferred.
 
-2. **Letter version cap.** How many revisions to keep per job before
-   rolling off? Recommendation: keep all versions until the user marks
-   the job as applied; after that, keep the final version only.
+2. **Letter version cap.** Keep all versions until the user marks the
+   job as applied; after that, keep the final version only.
 
-3. **Auth approach (when adding real auth).**
-   - **Auth0** — most polished, free tier covers single-developer use
-   - **Clerk** — newer, similar quality, free tier exists
-   - **Azure AD B2C** — native to Azure, but more complex to set up
-   - Recommendation: defer the decision. Single-user mode with a
-     hardcoded `user_id` is fine for Phases 5-8.
+3. **Auth approach.** Hardcoded `user_id` for Phases 5-8. Real auth
+   choice (Auth0 / Clerk / Azure AD B2C) deferred until multi-user.
+   Plus: **IP allowlist as basic access control** — see decision 8.
 
-4. **Rate limiting.** When deployed, do we add rate limits to prevent
-   accidental cost runaway? Recommendation: yes, but a single-user
-   limit (e.g., 50 letters/day) is enough — set it at the FastAPI
-   middleware layer.
+4. **Rate limiting.** 20 cover-letter generations per day per user,
+   enforced at the FastAPI middleware layer.
 
-5. **Frontend state management.** React's built-in `useState` +
-   `useReducer` + maybe `tanstack-query` for server state, or do we
-   add Zustand / Redux? Recommendation: tanstack-query handles the
-   async polling cleanly; no global state library needed yet.
+5. **Frontend state management.** React `useState` / `useReducer` for
+   component-local state plus **TanStack Query** for all API-backed
+   state (job list, letters, poll status). No global store library
+   yet. If global state is needed later, **Zustand** drops in with
+   minimal migration cost.
 
-6. **Pipeline triggering.** Does the frontend trigger fetching jobs
-   from JSearch on every page load? Or run nightly via a cron and
-   serve from cache? Recommendation: cache + manual "Refresh jobs"
-   button. Avoids burning JSearch quota on idle page loads.
+6. **Pipeline triggering.** Cache the ranked-jobs result; refresh from
+   JSearch only via an explicit "Refresh jobs" button in the UI.
 
-7. **PDF download** of letters. Server-side rendering (FastAPI uses
-   weasyprint / reportlab) or client-side (jsPDF in the browser)?
-   Recommendation: server-side, returns a stable URL.
+7. **PDF download.** Server-side rendering (FastAPI returns PDF) for
+   stable shareable URLs.
+
+8. **IP allowlist (new requirement).** A `IP_ALLOWLIST` environment
+   variable holds a comma-separated list of allowed IPs. FastAPI
+   middleware checks each request's source IP (via `X-Forwarded-For`
+   when behind Azure App Service) against the allowlist; returns 403
+   to anyone outside it. Empty `IP_ALLOWLIST` disables the check
+   (useful for local dev). Cheap, effective single-user defence.
+
+9. **MVP cut = Phase 9 (polished).** The recruiter-ready demo is the
+   *polished* version, not a rough Phase 8 deployment. Implication:
+   no shareable URL until Phase 9 ships. Total path-to-resume timeline
+   stays at 30-50 hours.
 
 ---
 
@@ -315,19 +320,18 @@ locked down before Phase 7-8:
 
 ---
 
-## Open question for the user before kicking off
+## Pre-coding artefacts (resolved 2026-04-27)
 
-1. **API design first** — should we write an OpenAPI spec / endpoint
-   table as the very first artefact, get user agreement, then start
-   coding? Or is the endpoint list above enough to start with?
+Both pre-coding artefacts are confirmed required before any FastAPI or
+React code is written:
 
-2. **Frontend mockup** — do you want a quick wireframe (could be done
-   in Figma, Excalidraw, or just sketched and committed) before any
-   React code is written?
+1. **OpenAPI spec / endpoint table** committed to `docs/api_spec.md`
+   as the first Phase 5 deliverable. User reviews + approves the
+   shape before any FastAPI code lands.
 
-3. **MVP definition for Phase 8 deployment.** What's the minimum
-   feature set you'd be willing to demo to a recruiter? That defines
-   the cut for "Phase 8 ready" vs "Phase 9 ready".
+2. **Frontend wireframe** committed to `docs/wireframes/` as the first
+   Phase 6 deliverable. **Tool: Excalidraw** — its `.excalidraw` files
+   are JSON, editable, openable at excalidraw.com, and can be committed
+   to the repo so the wireframe evolves alongside the code.
 
-These are the brainstorming items the user wanted to discuss after
-reading this plan.
+3. **MVP cut: Phase 9 (polished).** No partial-demo cut at Phase 8.
