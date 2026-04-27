@@ -4,9 +4,14 @@
 > (or any collaborator) can read this once and fully understand where the
 > project stands, how it got here, and where it's going.
 >
-> **Last updated:** 2026-04-22 (after Phase 4 Step 5)
-> **Current branch:** `phase/4-cover-letter`
+> **Last updated:** 2026-04-27 (after Phase 4 merge + architectural rebuild)
+> **Current branch:** `main`
 > **Repo:** github.com/smrahman0009/role-tracker-ai
+>
+> **Major direction change (2026-04-27):** The original Phase 5 plan (email
+> digest + Azure timer trigger for daily runs) has been replaced with a
+> **web-app pivot**. See [phase5_web_app_plan.md](phase5_web_app_plan.md) for
+> the detailed plan. Reasoning summarised in §5 below.
 
 ---
 
@@ -158,7 +163,7 @@ only after a live smoke test passes. Current state:
 - **13-publisher default blocklist** researched against Trustpilot scores +
   reports of fake listings.
 
-### Phase 4 Steps 1–5 — Cover-letter agent (current branch)
+### Phase 4 — Cover-letter agent (merged to main)
 - **Step 1: Naive generator** (`generator.py`). One Sonnet 4.6 call with a
   stuffed prompt. Kept as the baseline for comparison.
 - **Step 2: Pipeline integration.** `--generate-letters` flag on
@@ -168,13 +173,40 @@ only after a live smoke test passes. Current state:
   `read_job_description()`, saves via `save_letter(text)`. Max 25 iterations,
   30 tool calls.
 - **Step 4: Haiku critique + revision loop.** `critique_draft(draft)` calls
-  Haiku 4.5 with the 100-point rubric; returns structured JSON with
-  `verdict` + `priority_fixes`. Main agent revises up to twice before
-  saving. Defensive JSON parsing with fallback.
+  Haiku 4.5 with the rubric; returns structured JSON with `verdict` +
+  `priority_fixes`. Main agent revises up to twice before saving. Defensive
+  JSON parsing with fallback (handles markdown-fenced JSON).
 - **Step 5: Prompt caching.** System prompts (main + critique) and tool
-  schemas wrapped in `cache_control: ephemeral`. Live-verified 85.6% cache
-  hit rate on stable prefix; saves ~$0.04 per letter on system-prompt input
-  at Sonnet 4.6 pricing.
+  schemas wrapped in `cache_control: ephemeral`. Live-verified 85-92% cache
+  hit rate on stable prefix.
+
+### Phase 4 — Architectural rebuild (merged to main on 2026-04-25)
+After observing the agent fabricate qualifications and dump multiple
+projects into one paragraph (the McKesson failure), the agent was
+restructured:
+- **Mandatory strategy phase** via new `commit_to_strategy` tool. Agent
+  picks ONE primary project as the spine, optional ONE secondary, a
+  one-sentence narrative angle, and an honest fit assessment
+  (HIGH / MEDIUM / LOW). Cannot save without committing strategy first.
+- **Stricter hallucination check.** Hedge phrasings ("familiar with",
+  "informally applied", "started ramping up") explicitly count as factual
+  claims requiring resume backing. Any unsupported claim → score 0/25 →
+  hard threshold failure → forced rewrite.
+- **New rubric category: Narrative Coherence (10 pts, hard threshold 7+).**
+  Critic verifies the letter actually executes the agent's committed
+  strategy. Penalises 3+ project dumps. Total scale grew 100 → 110.
+- **Hard deterministic post-save checks.** Word count 280-420, no paragraph
+  > 130 words. Save rejects with specific failures; agent gets 2 retries.
+- **Title-relevance filter.** Drops jobs whose titles share no keyword with
+  the active queries. Fixes the bug where "data scientist" returned
+  backend-engineer roles.
+- **Strategy + critique persisted alongside each letter** (`strategy.md`
+  and `critique.json`) so users can audit *why* a letter looks the way it
+  does.
+
+Live validation: same Shopify role that produced the McKesson-style
+hallucinated letter now scores **98/110 approved** with one clean primary
+project, honest LOW fit assessment, no fabricated claims.
 
 ### Testing + quality
 - **73 unit tests** across all modules. Mocked Anthropic and JSearch
@@ -231,40 +263,55 @@ only after a live smoke test passes. Current state:
 
 ## 5. Next steps / planned features
 
-### Phase 4 — remaining steps (same branch)
+### Direction change (2026-04-27)
 
-- **Step 6: Agent logging.** Per-letter JSONL trace: every tool call, tool
-  result, model response, and usage stat. Written to `data/agent_logs/` for
-  debugging + audit trail. ~20 lines of code.
-- **Step 7: Safety hardening.** Word-count sanity check (reject outside
-  200–500 words, retry once); graceful degradation if one letter fails in a
-  batch (log + continue); harden output paths (ignore paths Claude emits,
-  only accept letter text).
-- **Step 8: Merge Phase 4 to main.** Final smoke test across all 5 letters,
-  PR, merge.
+The original Phase 5 plan (email digest) and Phase 6 plan (Azure timer
+trigger for daily automated runs) have been **replaced** by a
+**web-app pivot**. Reasoning:
 
-### Phase 5 — Email digest (next branch)
+- The user is actively job-hunting and needs a portfolio piece showing
+  end-to-end AI application development (not just a CLI).
+- Cover-letter quality reaches ~90% autonomously; the last 10% is best
+  handled by a human-in-the-loop review UI rather than fully autonomous
+  emailing.
+- A deployable web app URL is more valuable for recruiter conversations
+  than a CLI tool.
+- The existing Python pipeline becomes the **engine**; FastAPI exposes it
+  as HTTP endpoints; React provides the UI.
 
-- Gmail SMTP integration for a daily digest email.
-- Jinja template rendering top-N jobs + links to the letters.
-- "Already applied" flag tracked in a user-level log.
+Detailed plan lives in [phase5_web_app_plan.md](phase5_web_app_plan.md).
 
-### Phase 6 — Azure deployment
+### Phase 5 — FastAPI backend
+Wrap the existing pipeline as HTTP endpoints (list jobs, generate letter,
+poll status, refine with feedback, mark applied). No frontend yet.
 
-- Containerize the pipeline (Docker).
-- Deploy as an Azure Function on a timer trigger (daily at 7am local).
-- Secrets → Azure Key Vault.
-- Logs → Azure Application Insights.
+### Phase 6 — React frontend (local)
+Job list, job detail, generate button, letter viewer, feedback input.
+Tailwind + shadcn/ui for clean modern look.
 
-### Phase 7+ — Nice-to-haves (deferred)
+### Phase 7 — Interactive refinement
+"Refine with feedback" agent flow — user types "make it more technical"
+→ agent revises while keeping committed strategy + grounding intact.
+Letter version history.
 
-- Multi-source aggregation (Greenhouse + Lever + Adzuna alongside JSearch
-  with deduplication).
-- Semantic `read_resume_section` (vector retrieval instead of keyword match)
-  — the embedding infrastructure is already there from Phase 3.
-- Letter revision mode ("make it less formal", "shorter", "rewrite the
-  closing") as a separate CLI command that takes an existing letter folder.
-- Web UI for reviewing / editing letters before sending.
+### Phase 8 — Azure deployment
+Static Web Apps (frontend), App Service F1 free tier (backend), Blob
+Storage (resumes/letters), Cosmos DB free tier (metadata), Key Vault
+(secrets). Realistic monthly cost: under $2/month at single-user scale,
+upgrade path to ~$13/month available with one click.
+
+### Phase 9 — Portfolio polish
+Loading states, error handling, mobile responsive, README with
+screenshots, demo video, custom domain.
+
+### Deferred (former Phase 5/6/7+ — may revisit later)
+
+- Email digest with Gmail SMTP — replaced by the web UI's letter inbox.
+- Azure Function timer trigger for fully automated runs — superseded by
+  on-demand web-app generation.
+- Multi-source job aggregation (Greenhouse + Lever alongside JSearch).
+- Semantic `read_resume_section` (vector retrieval instead of keyword
+  match) — the embedding infrastructure is already there from Phase 3.
 - Referral-mode cover letters (rubric supports WARM_INTRO context already;
   just need a way to pass the referrer name).
 
@@ -381,14 +428,16 @@ piece is there.
 
 If you're picking this up cold:
 
-1. **Read `docs/agentic_ai_tutorial.md`** for the conceptual model of the
-   agent — it was written for this exact project.
-2. **Check the current branch** (`git branch --show-current`) before doing
-   anything. We're currently on `phase/4-cover-letter`.
-3. **Run the tests** (`uv run pytest -q`) to confirm the baseline is green
-   before making changes. Should be 73/73.
-4. **Don't skip Step 6** (agent logging) — it was flagged as the next
-   priority because it unblocks debugging of all subsequent steps.
+1. **Read [phase5_web_app_plan.md](phase5_web_app_plan.md) first** — that's
+   the active plan. This file describes what's been built; that file
+   describes what's being built next.
+2. **Read [agentic_ai_tutorial.md](agentic_ai_tutorial.md)** for the
+   conceptual model of the agent — it was written for this exact project.
+3. **Check the current branch** (`git branch --show-current`). `main`
+   should hold all merged Phase 1-4 work. New work happens on
+   `phase/5-web-app` (branch to be cut when implementation starts).
+4. **Run the tests** (`uv run pytest -q`) to confirm the baseline is green
+   before making changes. Should be 82/82.
 5. **The user's workflow preference** (stored in memory) is: plan first,
    approve, then execute. Propose before coding. Incremental, not
    scaffold-first.
@@ -397,5 +446,10 @@ If you're picking this up cold:
 7. **The user's resume is `data/resumes/smrah.pdf`.** It's the condensed
    version. When assessing letter quality, the agent can only ground
    claims in what's actually in that PDF.
+8. **Architectural rebuild context.** The cover-letter agent has a
+   mandatory `commit_to_strategy → critique → save` flow. Don't bypass it
+   when wrapping in HTTP endpoints; instead, expose the strategy and
+   critique results as part of the API response so the frontend can
+   display them.
 
 You're in good shape to continue. Good luck.

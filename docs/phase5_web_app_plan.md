@@ -1,0 +1,313 @@
+# Phase 5+ — Web App Pivot Plan
+
+> **Status:** planning, not yet started.
+> **Created:** 2026-04-27
+> **Target branch:** `phase/5-web-app` (long-lived, sub-features merge in)
+
+---
+
+## Why we're pivoting
+
+The original Phase 5 plan was a daily email digest with a Gmail SMTP
+integration, plus an Azure Functions timer trigger to run the pipeline
+unattended. That plan is being **replaced** with a web app for three
+reasons:
+
+1. **Portfolio value.** The user is actively job-hunting and has no
+   agentic-AI / LLM project to show recruiters yet. A deployed web app at
+   a real URL is a significantly stronger conversation starter than a
+   CLI tool.
+2. **Quality reality.** Cover-letter quality reaches roughly 90%
+   autonomously. The last 10% is honestly best handled by human review
+   with the option to refine, not by sending automated emails. A UI that
+   surfaces the agent's strategy + critique score and lets the user say
+   "make this more technical" or "shorter" turns this into a *useful*
+   tool rather than a fully autonomous gamble.
+3. **End-to-end story.** Most "AI app" demos in the wild are thin
+   chat-wrapper UIs. Ours has a strategy phase, a critique loop with a
+   110-point rubric, prompt caching, and deterministic safety checks
+   — all preserved and now exposed through a clean API. That's a real
+   differentiator at recruiter scale.
+
+---
+
+## What success looks like
+
+A deployable URL the user can put on a resume / send to recruiters where:
+
+1. **They log in** (single-user for now, hard-coded auth; designed to be
+   swapped for real auth later).
+2. **They see ranked job matches** from their saved queries, with fit
+   assessment, match score, salary, publisher, and a "Generate letter"
+   button per job.
+3. **They click "Generate"** → progress indicator → letter appears
+   inline, alongside the agent's strategy (primary project, narrative
+   angle, fit) and the critique score breakdown.
+4. **They can refine** with free-text feedback ("make it more technical",
+   "shorter", "lead with the audio ML work") → agent revises, preserving
+   strategy and grounding.
+5. **They can download** as Markdown or PDF, or **mark as applied** so it
+   doesn't show up again.
+6. **Letter version history** is preserved per job so they can compare
+   drafts.
+
+**Realistic timeline:** 30-50 hours of work across 6-10 sessions.
+
+---
+
+## Tech stack decisions (locked in)
+
+| Layer | Choice | Why |
+|---|---|---|
+| Backend framework | **FastAPI** | Already use Pydantic; async support; auto-generated OpenAPI docs are a portfolio plus |
+| Frontend framework | **React + Vite** | Recruiter-recognised; Vite for fast dev |
+| Styling | **Tailwind + shadcn/ui** | Modern, clean, looks polished without hand-designing |
+| Backend hosting | **Azure App Service F1 (free tier)** | Always free; one-click upgrade to B1 when needed |
+| Frontend hosting | **Azure Static Web Apps (free tier)** | Always free; built-in custom domain + SSL |
+| File storage | **Azure Blob Storage** | Cheap (~$0.05/month for our scale); resumes + letters |
+| Database | **Cosmos DB free tier** | Always free 1000 RU/s + 25GB; document model fits letter metadata + version history |
+| Secrets | **Azure Key Vault** | Free for 10K ops/month |
+| Observability | **Azure Application Insights** | First 5GB/month free |
+| Auth (Phase 5-7) | Hardcoded user_id in API + minimal placeholder login | Single-user mode |
+| Auth (deferred) | Auth0 or Clerk or Azure AD B2C | Real auth dropped in when going multi-user |
+
+**Realistic monthly cost at single-user scale: under $2/month.**
+
+---
+
+## Azure free-tier strategy
+
+App Service F1 free tier specifics:
+
+- 1 GB RAM, 1 GB storage
+- 60 minutes of CPU compute per day
+- HTTPS via `*.azurewebsites.net` (no custom domain in F1; use Static Web
+  App's domain instead)
+- Sleeps after 20 minutes idle (~30 second cold start)
+
+**Capacity check:** a letter takes ~30-60s to generate. 60 minutes/day
+of compute = roughly 60 letters/day before hitting the cap. For one
+user generating 5-10 letters/day, that's 10-20% utilisation. Plenty.
+
+**Upgrade path** if usage grows or always-on is needed:
+- App Service F1 → B1 (~$13/month) — single click in Azure portal, no
+  code changes. Adds custom domain on backend, no cold starts, more
+  compute headroom.
+- Static Web Apps free → Standard (~$9/month) — also a single click.
+
+**Avoid the trial-credit trap:** new accounts get $200 free credit for 30
+days, but those expire. We will stick to **always-free tier services**
+and ignore the trial credit, so nothing lapses into paid status when
+day 31 hits.
+
+**Spending guardrail:** set a $5/month budget alert in Azure Cost
+Management before deploying anything. Cheap insurance against accidental
+provisioning.
+
+---
+
+## Architectural principles
+
+### 1. The existing pipeline is the engine; the web layer is the consumer
+
+Everything in `src/role_tracker/` already works as a library. FastAPI
+becomes a *second consumer* alongside the existing CLI script. We do
+**not** rewrite the agent for the web app; we wrap it.
+
+### 2. Single-user now, multi-user-ready always
+
+Even though there's only one user, every API endpoint takes `user_id`
+explicitly. No global current-user state. No hard-coded "smrah"
+anywhere outside config. When real auth lands later, we replace the
+"give me user_id from a header" middleware with "give me user_id from a
+JWT" — and nothing else needs to change.
+
+### 3. Long operations are async with polling
+
+Letter generation takes 30-60 seconds. The API uses a job-id pattern:
+- `POST /letters/generate` returns `{job_id: "...", status: "pending"}`
+  immediately
+- `GET /letters/jobs/{job_id}` returns current status (pending →
+  running → done) and the letter when ready
+- Frontend polls every 2-3 seconds while running, shows a progress
+  indicator
+
+This is simpler than WebSockets and works fine for a single-user app.
+Background tasks run inside FastAPI's lifecycle (no separate worker
+needed at this scale).
+
+### 4. Strategy + critique are first-class API responses
+
+The agent's committed strategy (primary project, narrative angle, fit
+assessment) and final critique score (110-point rubric breakdown) are
+returned alongside the letter text. The frontend shows them to the
+user — that's the "trust me" story for recruiters: the agent doesn't
+just produce text, it explains what it was trying to do and how it
+graded itself.
+
+### 5. Storage layout
+
+| Data | Where | Why |
+|---|---|---|
+| Letter content (Markdown) | Azure Blob Storage | Big-ish, immutable, cheap |
+| Strategy + critique | Cosmos DB | Small JSON, queryable |
+| Job metadata (id, title, company, applied flag) | Cosmos DB | Queryable, indexed |
+| Resume PDFs | Azure Blob Storage | One per user, replaceable |
+| Resume embedding cache | Cosmos DB | Small JSON keyed by resume hash |
+
+---
+
+## Phasing
+
+### Phase 5 — FastAPI backend (no frontend)
+
+**Goal:** all the engine behaviour exposed via HTTP. Tested with curl /
+Postman. No UI.
+
+**Endpoints (single-user, `user_id` always passed):**
+
+```
+POST   /users/{user_id}/resume           upload PDF, replaces existing
+GET    /users/{user_id}/resume           retrieve current resume metadata
+
+GET    /users/{user_id}/jobs             list ranked jobs (triggers fetch
+                                          + match if not cached)
+POST   /users/{user_id}/jobs/refresh     force re-fetch from JSearch
+GET    /users/{user_id}/jobs/{job_id}    job detail + match score
+
+POST   /users/{user_id}/jobs/{job_id}/letters         generate letter
+                                                       returns job_id (async)
+GET    /users/{user_id}/letters/jobs/{generation_id}  poll status
+GET    /users/{user_id}/jobs/{job_id}/letters         list versions
+GET    /users/{user_id}/jobs/{job_id}/letters/{ver}   get specific version
+POST   /users/{user_id}/jobs/{job_id}/letters/refine  refine with feedback
+                                                       returns new job_id
+
+POST   /users/{user_id}/jobs/{job_id}/applied         mark as applied
+DELETE /users/{user_id}/jobs/{job_id}/applied         unmark
+```
+
+**Out of scope for Phase 5:** auth, frontend, deployment.
+
+### Phase 6 — React frontend (local development)
+
+**Goal:** clean minimal UI consuming the local FastAPI backend.
+
+**Pages:**
+- Login (placeholder) → sets `user_id` in localStorage / context
+- Job list — table of ranked matches with fit + match score badges
+- Job detail — JD + "Generate letter" button + letter history
+- Letter viewer — Markdown rendering + strategy panel + critique
+  scorecard + "Refine with feedback" textarea + "Download" /
+  "Mark applied" buttons
+
+**Out of scope for Phase 6:** deployment, real auth.
+
+### Phase 7 — Interactive refinement
+
+**Goal:** the "make it more technical / shorter" feature actually works
+without breaking grounding or the strategy.
+
+**Approach:** new agent flow `refine_with_feedback(prev_letter, feedback,
+strategy)`. Agent receives the previous letter + the user's free-text
+feedback + the original committed strategy. It cannot change the
+strategy. It can only revise the letter to address the feedback while
+maintaining the critique-rubric thresholds.
+
+This is non-trivial — it's a new agent flow, not just a parameter on
+the existing one.
+
+### Phase 8 — Azure deployment
+
+**Goal:** real URL the user can share.
+
+- Frontend → Static Web Apps free tier
+- Backend → App Service F1 free tier
+- Resumes + letters → Blob Storage
+- Metadata → Cosmos DB free tier
+- Secrets → Key Vault
+- CI/CD → GitHub Actions deploying on merge to main
+
+### Phase 9 — Portfolio polish
+
+- Loading states (skeleton screens, spinners with progress messages)
+- Error handling (user-facing error toasts)
+- Mobile responsive
+- README with screenshots
+- Demo video (~90 seconds)
+- Custom domain (optional, ~$12/year)
+- Open-source licence + contributing notes (optional)
+
+---
+
+## Architectural decisions still open (for brainstorming)
+
+These don't need to be resolved before starting Phase 5, but should be
+locked down before Phase 7-8:
+
+1. **Resume model.** Support multiple resumes per user (e.g., "ML
+   resume" vs "backend resume" for different query types) or just one?
+   Affects API and DB schema. Recommendation: start with one, add
+   multiple in a later iteration.
+
+2. **Letter version cap.** How many revisions to keep per job before
+   rolling off? Recommendation: keep all versions until the user marks
+   the job as applied; after that, keep the final version only.
+
+3. **Auth approach (when adding real auth).**
+   - **Auth0** — most polished, free tier covers single-developer use
+   - **Clerk** — newer, similar quality, free tier exists
+   - **Azure AD B2C** — native to Azure, but more complex to set up
+   - Recommendation: defer the decision. Single-user mode with a
+     hardcoded `user_id` is fine for Phases 5-8.
+
+4. **Rate limiting.** When deployed, do we add rate limits to prevent
+   accidental cost runaway? Recommendation: yes, but a single-user
+   limit (e.g., 50 letters/day) is enough — set it at the FastAPI
+   middleware layer.
+
+5. **Frontend state management.** React's built-in `useState` +
+   `useReducer` + maybe `tanstack-query` for server state, or do we
+   add Zustand / Redux? Recommendation: tanstack-query handles the
+   async polling cleanly; no global state library needed yet.
+
+6. **Pipeline triggering.** Does the frontend trigger fetching jobs
+   from JSearch on every page load? Or run nightly via a cron and
+   serve from cache? Recommendation: cache + manual "Refresh jobs"
+   button. Avoids burning JSearch quota on idle page loads.
+
+7. **PDF download** of letters. Server-side rendering (FastAPI uses
+   weasyprint / reportlab) or client-side (jsPDF in the browser)?
+   Recommendation: server-side, returns a stable URL.
+
+---
+
+## Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Scope creep — turning a simple app into a complex one | Hard stop at end of each phase; merge before starting next |
+| Letter quality regresses during refactor | Re-run the Shopify + McKesson smoke tests after each major change |
+| Azure costs surprise the user | $5/month budget alert before any provisioning; stick to always-free tiers only |
+| Cold-start latency on F1 backend frustrates the user | Acceptable for portfolio demo; B1 upgrade is one click if needed |
+| Single-user assumption hard-codes things that should be parameterised | Code review every endpoint for hard-coded `user_id` before merging Phase 5 |
+| The refine-with-feedback agent breaks grounding | Critique runs on every refinement output, same hallucination threshold |
+
+---
+
+## Open question for the user before kicking off
+
+1. **API design first** — should we write an OpenAPI spec / endpoint
+   table as the very first artefact, get user agreement, then start
+   coding? Or is the endpoint list above enough to start with?
+
+2. **Frontend mockup** — do you want a quick wireframe (could be done
+   in Figma, Excalidraw, or just sketched and committed) before any
+   React code is written?
+
+3. **MVP definition for Phase 8 deployment.** What's the minimum
+   feature set you'd be willing to demo to a recruiter? That defines
+   the cut for "Phase 8 ready" vs "Phase 9 ready".
+
+These are the brainstorming items the user wanted to discuss after
+reading this plan.
