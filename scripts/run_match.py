@@ -14,9 +14,15 @@ Usage
 
 # Override fetch size + top-N:
     python scripts/run_match.py --user smrah --limit 30 --top-n 10
+
+# Generate cover letters for top matches:
+    python scripts/run_match.py --user smrah --generate-letters
 """
 
 import argparse
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
 
 from role_tracker.config import (
     JobQuery,
@@ -24,8 +30,10 @@ from role_tracker.config import (
     Settings,
     load_pipeline_defaults,
 )
+from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.jobs.base import JobSource
-from role_tracker.jobs.filters import apply_exclusions
+from role_tracker.jobs.filters import apply_exclusions, apply_title_relevance
 from role_tracker.jobs.jsearch import JSearchClient
 from role_tracker.jobs.models import JobPosting
 from role_tracker.matching.embeddings import Embedder, load_or_embed_resume
@@ -82,6 +90,11 @@ def parse_args() -> argparse.Namespace:
         "--show-excluded",
         action="store_true",
         help="Print the list of jobs dropped by the filter.",
+    )
+    parser.add_argument(
+        "--generate-letters",
+        action="store_true",
+        help="Generate tailored cover letters for top-N matches (Phase 4).",
     )
     return parser.parse_args()
 
@@ -167,6 +180,7 @@ def run_for_user(
     embedder: Embedder,
     defaults: PipelineDefaults,
     args: argparse.Namespace,
+    anthropic_client: Anthropic | None = None,
 ) -> None:
     print(f"\n{'#' * 60}\n#  User: {user.name} ({user.id})\n{'#' * 60}")
 
@@ -198,9 +212,17 @@ def run_for_user(
         exclude_publishers=user.exclude_publishers,
     )
     print(f"Filtered out {len(excluded)} jobs (per user's exclusion list).")
-    if args.show_excluded and excluded:
+
+    # Title-relevance filter — drop jobs whose titles don't share keywords
+    # with the active queries. Catches loose JSearch matches like backend
+    # roles surfacing for "data scientist".
+    query_strings = [q.what for q in queries]
+    jobs, off_topic = apply_title_relevance(jobs, query_strings)
+    print(f"Filtered out {len(off_topic)} off-topic jobs (title doesn't match query).")
+
+    if args.show_excluded and (excluded or off_topic):
         print("\n  Excluded:")
-        for e in excluded:
+        for e in excluded + off_topic:
             print(f"    - [{e.reason}] {e.job.title} @ {e.job.company}")
 
     if not jobs:
@@ -211,10 +233,55 @@ def run_for_user(
     job_vectors = embedder.embed([job_to_embedding_text(j) for j in jobs])
 
     scored = rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
+
+    # Honest count messaging — say if we couldn't fill the requested top_n.
+    if len(scored) < top_n:
+        print(
+            f"\n[!] You asked for top {top_n}, but only {len(scored)} jobs "
+            "remained after filtering. Consider widening queries (--what) "
+            "or relaxing exclusions in users/<id>.yaml."
+        )
+
     print_scored(scored)
+
+    # Generate cover letters if requested.
+    if args.generate_letters and anthropic_client:
+        print(f"\n{'=' * 60}")
+        print(f"  GENERATING {len(scored)} COVER LETTERS")
+        print(f"{'=' * 60}")
+        for i, scored_job in enumerate(scored, 1):
+            try:
+                job = scored_job.job
+                tracker: dict = {}
+                letter = generate_cover_letter_agent(
+                    user=user,
+                    resume_text=resume_text,
+                    job=job,
+                    client=anthropic_client,
+                    usage_tracker=tracker,
+                )
+                folder = build_letter_dir(user.id, job)
+                save_letter_bundle(
+                    folder=folder,
+                    letter_text=letter,
+                    job=job,
+                    resume_text=resume_text,
+                    strategy=tracker.get("strategy"),
+                    critique=tracker.get("last_critique"),
+                )
+                fit = (tracker.get("strategy") or {}).get("fit_assessment", "?")
+                verdict = (tracker.get("last_critique") or {}).get("verdict", "?")
+                print(f"\n  #{i} {job.company} — {job.title}")
+                print(f"     Fit: {fit}   Verdict: {verdict}")
+                print(f"     Saved to: {folder.relative_to(folder.parent.parent)}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"\n  #{i} {job.company} — {job.title}")
+                print(f"     [!] Failed: {exc}")
+        print(f"\n{'=' * 60}\n")
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
 
     if args.what and not args.user:
@@ -223,6 +290,15 @@ def main() -> None:
     settings = Settings()
     if not settings.openai_api_key:
         raise SystemExit("OPENAI_API_KEY is missing from .env")
+
+    anthropic_client = None
+    if args.generate_letters:
+        if not settings.anthropic_api_key:
+            raise SystemExit(
+                "ANTHROPIC_API_KEY is missing from .env. "
+                "Get one from console.anthropic.com"
+            )
+        anthropic_client = Anthropic(api_key=settings.anthropic_api_key)
 
     defaults = load_pipeline_defaults()
     store = YamlUserProfileStore()
@@ -241,7 +317,14 @@ def main() -> None:
             country=defaults.country,
             exclude_publishers=user.exclude_publishers,
         )
-        run_for_user(user, sources, embedder, defaults, args)
+        run_for_user(
+            user,
+            sources,
+            embedder,
+            defaults,
+            args,
+            anthropic_client=anthropic_client,
+        )
 
 
 if __name__ == "__main__":

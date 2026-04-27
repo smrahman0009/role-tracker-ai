@@ -1,6 +1,11 @@
 id: smrah
-name: "Mushfikur Rahman"
+name: "Shaikh Mushfikur Rahman"
 email: "smrahman0009@gmail.com"
+phone: "782-882-0852"
+city: "Halifax, NS"
+# Fill these in with your real profile URLs so letter headers link correctly
+linkedin_url: ""
+github_url: ""
 resume_path: "data/resumes/smrah.pdf"
 top_n_jobs: 5
 

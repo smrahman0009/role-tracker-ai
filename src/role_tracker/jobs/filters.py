@@ -1,8 +1,15 @@
 """Keyword-based exclusion filters applied after fetching from any source."""
 
+import re
 from dataclasses import dataclass
 
 from role_tracker.jobs.models import JobPosting
+
+# Words to ignore when extracting "meaningful" tokens from a query.
+_QUERY_STOPWORDS = {
+    "a", "an", "and", "the", "or", "of", "in", "for",
+    "with", "to", "at", "on", "by",
+}
 
 
 @dataclass
@@ -18,6 +25,49 @@ def _contains_any(haystack: str, needles: list[str]) -> str | None:
         if needle.strip().lower() in hay:
             return needle
     return None
+
+
+def _query_keywords(queries: list[str]) -> list[str]:
+    """Extract meaningful keywords from a list of query phrases."""
+    tokens: set[str] = set()
+    for query in queries:
+        for raw in re.split(r"[\s/,&\-]+", query.lower()):
+            token = raw.strip()
+            if len(token) >= 3 and token not in _QUERY_STOPWORDS:
+                tokens.add(token)
+    return sorted(tokens)
+
+
+def apply_title_relevance(
+    jobs: list[JobPosting],
+    queries: list[str],
+) -> tuple[list[JobPosting], list[ExcludedJob]]:
+    """Drop jobs whose titles share no meaningful keyword with any query.
+
+    Example: query="data scientist" → keywords={"data","scientist"}.
+    A job titled "Backend Software Engineer" matches none → dropped.
+    A job titled "Senior Data Engineer" matches "data" → kept.
+    """
+    keywords = _query_keywords(queries)
+    if not keywords:
+        return list(jobs), []
+    kept: list[JobPosting] = []
+    dropped: list[ExcludedJob] = []
+    for job in jobs:
+        title_lower = job.title.lower()
+        if any(kw in title_lower for kw in keywords):
+            kept.append(job)
+        else:
+            dropped.append(
+                ExcludedJob(
+                    job=job,
+                    reason=(
+                        f"title doesn't match any query keyword "
+                        f"({', '.join(keywords)})"
+                    ),
+                )
+            )
+    return kept, dropped
 
 
 def apply_exclusions(
