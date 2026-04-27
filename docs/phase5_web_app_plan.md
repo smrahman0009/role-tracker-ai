@@ -194,8 +194,9 @@ DELETE /users/{user_id}/jobs/{job_id}/applied         unmark
 ```
 
 **Phase 5 also includes:**
-- IP allowlist middleware (reads `IP_ALLOWLIST` env var, returns 403 to
-  off-list requests; empty value disables the check for local dev).
+- Bearer-token middleware (reads `APP_TOKEN` env var; rejects requests
+  whose `Authorization: Bearer <token>` header doesn't match; empty
+  `APP_TOKEN` disables the check for local dev).
 - Rate-limiting middleware: 20 cover-letter generations per user per day.
 
 **Out of scope for Phase 5:** real auth, frontend, deployment.
@@ -276,7 +277,7 @@ All architectural questions raised during planning have been resolved:
 
 3. **Auth approach.** Hardcoded `user_id` for Phases 5-8. Real auth
    choice (Auth0 / Clerk / Azure AD B2C) deferred until multi-user.
-   Plus: **IP allowlist as basic access control** — see decision 8.
+   Plus: **bearer-token access control** — see decision 8.
 
 4. **Rate limiting.** 20 cover-letter generations per day per user,
    enforced at the FastAPI middleware layer.
@@ -293,12 +294,19 @@ All architectural questions raised during planning have been resolved:
 7. **PDF download.** Server-side rendering (FastAPI returns PDF) for
    stable shareable URLs.
 
-8. **IP allowlist (new requirement).** A `IP_ALLOWLIST` environment
-   variable holds a comma-separated list of allowed IPs. FastAPI
-   middleware checks each request's source IP (via `X-Forwarded-For`
-   when behind Azure App Service) against the allowlist; returns 403
-   to anyone outside it. Empty `IP_ALLOWLIST` disables the check
-   (useful for local dev). Cheap, effective single-user defence.
+8. **Bearer-token access control.** An `APP_TOKEN` environment variable
+   holds a single long random string. FastAPI middleware requires every
+   request to include `Authorization: Bearer <token>` matching the env
+   var; anything else returns 401. Empty `APP_TOKEN` disables the check
+   for local dev.
+
+   *Why bearer token, not IP allowlist?* IP allowlists fail under
+   real-world conditions (dynamic ISP IPs, mobile networks, CGNAT,
+   coffee-shop WiFi, recruiter demos from their networks, VPN usage).
+   A token is strictly stronger security, works from any network, and
+   keeps recruiter demos friction-free — they get the URL plus the
+   token and it just works. Frontend stores the token in localStorage
+   after first paste; it's included automatically on every API call.
 
 9. **MVP cut = Phase 9 (polished).** The recruiter-ready demo is the
    *polished* version, not a rough Phase 8 deployment. Implication:
