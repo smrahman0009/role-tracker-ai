@@ -37,19 +37,25 @@ A deployable URL the user can put on a resume / send to recruiters where:
 
 1. **They log in** (single-user for now, hard-coded auth; designed to be
    swapped for real auth later).
-2. **They see ranked job matches** from their saved queries, with fit
-   assessment, match score, salary, publisher, and a "Generate letter"
-   button per job.
-3. **They click "Generate"** → progress indicator → letter appears
-   inline, alongside the agent's strategy (primary project, narrative
-   angle, fit) and the critique score breakdown.
-4. **They can refine** with free-text feedback ("make it more technical",
-   "shorter", "lead with the audio ML work") → agent revises, preserving
-   strategy and grounding.
-5. **They can download** as Markdown or PDF, or **mark as applied** so it
-   doesn't show up again.
-6. **Letter version history** is preserved per job so they can compare
-   drafts.
+2. **They see ranked job matches** as a list of cards on the home page —
+   each card shows title, company, location, salary, publisher, fit
+   assessment, match score, and a one-line JD preview. No full JD on
+   this page (it would overwhelm the layout).
+3. **They click "View details"** on a card and land on a dedicated job
+   detail page (`/jobs/:job_id`). This page shows the full JD, has the
+   "Generate cover letter" button, and is where the rest of the per-job
+   work happens. **One page, one URL, one job application.**
+4. **They click "Generate"** on the job detail page → progress indicator
+   → letter appears inline below the JD, alongside the agent's strategy
+   (primary project, narrative angle, fit) and the critique score
+   breakdown.
+5. **They can refine** with free-text feedback ("make it more technical",
+   "shorter", "lead with the audio ML work") → agent revises in place,
+   preserving the original strategy and grounding.
+6. **They can download** as Markdown or PDF, or **mark as applied** so
+   the job moves to a "Applied" filter and doesn't clutter the main list.
+7. **Letter version history** is preserved per job so they can compare
+   drafts within the same detail page.
 
 **Realistic timeline:** 30-50 hours of work across 6-10 sessions.
 
@@ -193,13 +199,27 @@ DELETE /users/{user_id}/jobs/{job_id}/applied         unmark
 
 **Goal:** clean minimal UI consuming the local FastAPI backend.
 
-**Pages:**
-- Login (placeholder) → sets `user_id` in localStorage / context
-- Job list — table of ranked matches with fit + match score badges
-- Job detail — JD + "Generate letter" button + letter history
-- Letter viewer — Markdown rendering + strategy panel + critique
-  scorecard + "Refine with feedback" textarea + "Download" /
-  "Mark applied" buttons
+**Pages (3 total — keep it simple):**
+
+1. **Login** (`/login`) — placeholder; sets `user_id` in localStorage.
+2. **Job list** (`/`) — cards of ranked matches showing title, company,
+   location, salary, publisher, fit badge, match score, 1-line JD
+   preview, and "View details" link. Filter tabs: All | Unapplied | Applied.
+3. **Job detail** (`/jobs/:job_id`) — combined view that contains
+   everything for one application:
+   - Header: title, company, fit assessment, match score, salary, URL,
+     [Mark applied] button.
+   - Full JD (collapsible after first read).
+   - "Generate cover letter" button (when no letter exists yet).
+   - Letter viewer (when letter exists): Markdown rendering inline.
+   - Strategy panel: primary project, narrative angle, fit reasoning.
+   - Critique scorecard: 110-point breakdown.
+   - "Refine with feedback" textarea + button.
+   - Version history dropdown to switch between drafts.
+   - [Download Markdown] [Download PDF] buttons.
+
+   One URL per job application = simpler routing, no jumping between
+   pages, easier mental model.
 
 **Out of scope for Phase 6:** deployment, real auth.
 
