@@ -4,8 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Role Tracker — Job List (mockup)</title>
-    <!-- Tailwind v4 browser script — for mockup viewing only. The real React
-         app will use the Vite plugin. -->
     <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
     <style>
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -18,7 +16,6 @@
     <header class="bg-white border-b border-slate-200">
       <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <!-- simple monochrome wordmark; no logo image -->
           <span class="text-base font-semibold text-slate-900 tracking-tight">
             Role Tracker
           </span>
@@ -27,11 +24,12 @@
           </span>
         </div>
         <div class="flex items-center gap-3">
+          <a href="./settings_mockup.html" class="text-xs text-slate-500 hover:text-slate-700 transition-colors">
+            Settings
+          </a>
+          <span class="text-slate-300">·</span>
           <span class="text-xs text-slate-500">smrah</span>
-          <button
-            class="text-xs text-slate-500 hover:text-slate-700 transition-colors"
-            title="Sign out"
-          >
+          <button class="text-xs text-slate-500 hover:text-slate-700 transition-colors">
             Sign out
           </button>
         </div>
@@ -53,19 +51,8 @@
             <span class="font-medium text-slate-700">28 Apr 2026, 11:24</span>
           </p>
         </div>
-        <button
-          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150"
-        >
-          <svg
-            class="h-4 w-4"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
+        <button class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150">
+          <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
             <path d="M21 3v5h-5" />
             <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
@@ -76,109 +63,71 @@
       </div>
 
       <!-- Filter tabs -->
-      <div class="flex gap-1 border-b border-slate-200 mb-5">
-        <button
-          class="px-4 py-2.5 text-sm font-medium text-slate-900 border-b-2 border-indigo-600 -mb-px"
-        >
-          Unapplied <span class="ml-1 text-slate-400 font-normal">10</span>
+      <div class="flex items-center gap-1 border-b border-slate-200 mb-4">
+        <button class="px-4 py-2.5 text-sm font-medium text-slate-900 border-b-2 border-indigo-600 -mb-px">
+          Unapplied <span class="ml-1 text-slate-400 font-normal">7</span>
         </button>
-        <button
-          class="px-4 py-2.5 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition-colors"
-        >
-          All <span class="ml-1 text-slate-400 font-normal">12</span>
+        <button class="px-4 py-2.5 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition-colors">
+          All <span class="ml-1 text-slate-400 font-normal">9</span>
         </button>
-        <button
-          class="px-4 py-2.5 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition-colors"
-        >
+        <button class="px-4 py-2.5 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition-colors">
           Applied <span class="ml-1 text-slate-400 font-normal">2</span>
-        </button>
-        <div class="ml-auto"></div>
-        <button
-          class="px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
-          title="Search settings"
-        >
-          ⚙ Settings
         </button>
       </div>
 
-      <!-- Card list -->
-      <div class="flex flex-col gap-3">
-        <!-- ========================
-             CARD 1 — top match
-             ======================== -->
-        <a
-          href="#job-1"
-          class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="text-base font-semibold text-slate-900 truncate">
-                  Software Engineer — Full Stack
-                </h2>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums"
-                  title="Match score (cosine similarity 0-1)"
-                >
-                  ★ 0.55
-                </span>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200"
-                >
-                  MEDIUM fit
-                </span>
-              </div>
-              <p class="mt-1 text-sm text-slate-700">
-                <span class="font-medium">Microsoft Canada Inc.</span>
-                <span class="text-slate-400">·</span> Vancouver, BC
-                <span class="text-slate-400">·</span>
-                <span class="text-slate-500">$—</span>
-              </p>
-              <p class="mt-0.5 text-xs text-slate-500">
-                Eluta.ca <span class="text-slate-300">·</span> Posted 21 Apr 2026
-              </p>
-              <p class="mt-3 text-sm text-slate-600 line-clamp-2 leading-relaxed">
-                Microsoft is a company where passionate innovators come to
-                collaborate, envision what can be and take their careers
-                further. This is a world of more possibilities, more
-                innovation, more openness…
-              </p>
-            </div>
-          </div>
-          <div class="mt-4 flex items-center justify-between">
-            <span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-              View details →
-            </span>
-            <button
-              class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-              onclick="event.preventDefault();"
-            >
-              Mark applied
-            </button>
-          </div>
-        </a>
+      <!-- Filter chip row — 2 filters active -->
+      <div class="flex items-center gap-2 flex-wrap mb-5">
+        <!-- Active chip 1 -->
+        <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer" title="Click to edit">
+          Job type: Data Scientist
+          <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors" title="Remove">
+            <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </span>
 
-        <!-- ========================
-             CARD 2 — high fit
-             ======================== -->
-        <a
-          href="#job-2"
-          class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
+        <!-- Active chip 2 -->
+        <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer">
+          Salary ≥ $80,000
+          <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors">
+            <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </span>
+
+        <!-- + Add filter button -->
+        <button class="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-md bg-white border border-dashed border-slate-300 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition-colors">
+          <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14" /><path d="M12 5v14" />
+          </svg>
+          Add filter
+        </button>
+
+        <!-- Clear all -->
+        <button class="ml-auto text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          Clear all
+        </button>
+      </div>
+
+      <!-- ============================================================
+           CARDS — filtered to "Data Scientist" + "Salary ≥ $80k"
+           ============================================================ -->
+      <div class="flex flex-col gap-3">
+
+        <!-- CARD 1 -->
+        <a href="./job_detail_mockup.html" class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div class="flex items-start justify-between gap-4">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <h2 class="text-base font-semibold text-slate-900 truncate">
                   Senior Data Scientist
                 </h2>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums"
-                >
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums">
                   ★ 0.51
                 </span>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200"
-                >
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200">
                   HIGH fit
                 </span>
               </div>
@@ -189,13 +138,12 @@
                 <span class="font-medium tabular-nums">$130k – $170k</span>
               </p>
               <p class="mt-0.5 text-xs text-slate-500">
-                LinkedIn <span class="text-slate-300">·</span> Posted 20 Apr 2026
+                LinkedIn <span class="text-slate-300">·</span> Posted 20 Apr 2026 <span class="text-slate-300">·</span> Full-time
               </p>
               <p class="mt-3 text-sm text-slate-600 line-clamp-2 leading-relaxed">
                 We're hiring a Senior Data Scientist to lead our predictive
                 analytics team. You'll own end-to-end models for asset
-                utilisation and equipment health across our global IoT
-                fleet…
+                utilisation and equipment health across our global IoT fleet…
               </p>
             </div>
           </div>
@@ -203,54 +151,83 @@
             <span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
               View details →
             </span>
-            <button
-              class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-              onclick="event.preventDefault();"
-            >
+            <button class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors" onclick="event.preventDefault();">
               Mark applied
             </button>
           </div>
         </a>
 
-        <!-- ========================
-             CARD 3 — no fit assessed yet
-             ======================== -->
-        <a
-          href="#job-3"
-          class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
+        <!-- CARD 2 -->
+        <a href="./job_detail_mockup.html" class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
           <div class="flex items-start justify-between gap-4">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <h2 class="text-base font-semibold text-slate-900 truncate">
-                  AI Experience Engineer
+                  Senior Data Scientist, Personalisation
                 </h2>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums"
-                >
-                  ★ 0.51
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums">
+                  ★ 0.49
                 </span>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-slate-100 text-slate-500 border-slate-200"
-                  title="No letter generated yet — fit will be assessed when you generate"
-                >
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                  MEDIUM fit
+                </span>
+              </div>
+              <p class="mt-1 text-sm text-slate-700">
+                <span class="font-medium">Wealthsimple</span>
+                <span class="text-slate-400">·</span> Toronto, ON
+                <span class="text-slate-400">·</span>
+                <span class="font-medium tabular-nums">$110k – $150k</span>
+              </p>
+              <p class="mt-0.5 text-xs text-slate-500">
+                Wealthsimple Careers <span class="text-slate-300">·</span> Posted 19 Apr 2026 <span class="text-slate-300">·</span> Full-time
+              </p>
+              <p class="mt-3 text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                Join our Personalisation team to build the recommendation
+                engine that powers product surfacing across our investing
+                and savings products. Hands-on with PyTorch, vector
+                retrieval, and online experimentation…
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center justify-between">
+            <span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+              View details →
+            </span>
+            <button class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors" onclick="event.preventDefault();">
+              Mark applied
+            </button>
+          </div>
+        </a>
+
+        <!-- CARD 3 -->
+        <a href="./job_detail_mockup.html" class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-semibold text-slate-900 truncate">
+                  Data Scientist III, Analytics
+                </h2>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums">
+                  ★ 0.46
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-slate-100 text-slate-500 border-slate-200" title="No letter generated yet">
                   Not assessed
                 </span>
               </div>
               <p class="mt-1 text-sm text-slate-700">
-                <span class="font-medium">ProjectBoard</span>
-                <span class="text-slate-400">·</span> Remote, Canada
+                <span class="font-medium">Restaurant Brands International</span>
+                <span class="text-slate-400">·</span> Toronto, ON
                 <span class="text-slate-400">·</span>
-                <span class="text-slate-500">$—</span>
+                <span class="font-medium tabular-nums">$85k – $115k</span>
               </p>
               <p class="mt-0.5 text-xs text-slate-500">
-                LinkedIn <span class="text-slate-300">·</span> Posted 18 Apr 2026
+                LinkedIn <span class="text-slate-300">·</span> Posted 17 Apr 2026 <span class="text-slate-300">·</span> Full-time
               </p>
               <p class="mt-3 text-sm text-slate-600 line-clamp-2 leading-relaxed">
-                Join our AI Experience team to design and ship LLM-powered
-                features in a Next.js application used by thousands of
-                product teams. RAG, evaluation harnesses, and human-in-the-
-                loop interfaces are core…
+                Tim Hortons Canada is hiring a Data Scientist III for a
+                12-month contract on the Operations Analytics team. You'll
+                support drive-through optimisation, customer journey
+                analysis, and store-level reporting…
               </p>
             </div>
           </div>
@@ -258,102 +235,194 @@
             <span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
               View details →
             </span>
-            <button
-              class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-              onclick="event.preventDefault();"
-            >
+            <button class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors" onclick="event.preventDefault();">
               Mark applied
             </button>
           </div>
         </a>
 
-        <!-- ========================
-             CARD 4 — low fit, illustrating the warning color
-             ======================== -->
-        <a
-          href="#job-4"
-          class="block bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="text-base font-semibold text-slate-900 truncate">
-                  Lead Data Scientist — Operations Research
-                </h2>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums"
-                >
-                  ★ 0.48
-                </span>
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-50 text-rose-700 border-rose-200"
-                  title="The agent assessed this role as a stretch fit"
-                >
-                  LOW fit
-                </span>
-              </div>
-              <p class="mt-1 text-sm text-slate-700">
-                <span class="font-medium">McKesson</span>
-                <span class="text-slate-400">·</span> Mississauga, ON
-                <span class="text-slate-400">·</span>
-                <span class="font-medium tabular-nums">$122k – $163k</span>
-              </p>
-              <p class="mt-0.5 text-xs text-slate-500">
-                McKesson Careers <span class="text-slate-300">·</span> Posted 16 Apr 2026
-              </p>
-              <p class="mt-3 text-sm text-slate-600 line-clamp-2 leading-relaxed">
-                The Lead Data Scientist, Operations Research is responsible
-                for architecting and implementing advanced AI/ML and OR
-                solutions… 10+ years required.
-              </p>
-            </div>
-          </div>
-          <div class="mt-4 flex items-center justify-between">
-            <span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-              View details →
-            </span>
-            <button
-              class="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors"
-              onclick="event.preventDefault();"
-            >
-              Mark applied
-            </button>
-          </div>
-        </a>
-
-        <!-- Hint about more cards below -->
+        <!-- Result count -->
         <div class="text-center py-4">
           <p class="text-xs text-slate-400">
-            6 more matches below ·
-            <span class="text-slate-500">scroll for more</span>
+            Showing 3 of 7 unapplied jobs
+            <span class="text-slate-500">·</span>
+            4 hidden by your filters
           </p>
         </div>
       </div>
-    </main>
 
-    <!-- Footer / debug info — never shipped, only here so the mockup is
-         self-documenting -->
-    <footer class="max-w-5xl mx-auto px-6 py-12">
-      <details class="text-xs text-slate-400">
-        <summary class="cursor-pointer hover:text-slate-600">
-          Mockup notes (not part of the real UI)
-        </summary>
-        <div class="mt-3 space-y-2 leading-relaxed">
-          <p>
-            Hover any card to see the lift-and-shadow microinteraction.
-            Hover the filter tabs to see the inactive → hover state.
+      <!-- ============================================================
+           UI STATES REFERENCE (visible only at the bottom of the mockup,
+           NOT part of the real page — it's a Storybook-style appendix)
+           ============================================================ -->
+      <section class="mt-16 pt-8 border-t border-slate-200">
+        <h3 class="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+          UI states · reference
+        </h3>
+        <p class="text-xs text-slate-500 mb-6">
+          The states below are NOT part of the real page — they're shown
+          here so the visual feel of every filter interaction is captured
+          in one place.
+        </p>
+
+        <!-- State A: empty filter row -->
+        <div class="mb-8">
+          <p class="text-xs font-medium text-slate-700 mb-2">
+            A. No filters set (collapsed state)
           </p>
-          <p>
-            Cards 1-4 demonstrate all four fit-badge states: MEDIUM,
-            HIGH, "Not assessed" (no letter yet), and LOW. In the real
-            app the order is by match score, not by fit.
-          </p>
-          <p>
-            Layout uses Tailwind v4 utility classes. Same classes will
-            be used in the React port — just wrapped in components.
-          </p>
+          <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <button class="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-md bg-white border border-dashed border-slate-300 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition-colors">
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14" /><path d="M12 5v14" />
+              </svg>
+              Add filter
+            </button>
+          </div>
         </div>
-      </details>
-    </footer>
+
+        <!-- State B: "Add filter" menu open -->
+        <div class="mb-8">
+          <p class="text-xs font-medium text-slate-700 mb-2">
+            B. "+ Add filter" menu open
+          </p>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 relative">
+            <button class="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-md bg-slate-100 border border-slate-300 text-xs font-medium text-slate-800 transition-colors">
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14" /><path d="M12 5v14" />
+              </svg>
+              Add filter
+            </button>
+            <!-- popover -->
+            <div class="absolute mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-md py-1 z-10">
+              <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">Job type</button>
+              <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">Location</button>
+              <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">Salary minimum</button>
+              <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">Employment type</button>
+              <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">Posted within</button>
+            </div>
+            <div class="h-32"></div>
+          </div>
+        </div>
+
+        <!-- State C: Job-type combobox open with suggestions -->
+        <div class="mb-8">
+          <p class="text-xs font-medium text-slate-700 mb-2">
+            C. Job type filter — combobox open with suggestions as you type
+          </p>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 relative">
+            <div class="inline-block w-72">
+              <div class="px-3 py-2 rounded-lg bg-white border border-indigo-500 ring-2 ring-indigo-500/20 text-sm text-slate-900">
+                data<span class="inline-block w-px h-4 bg-slate-900 align-middle ml-px animate-pulse"></span>
+              </div>
+              <div class="mt-1 bg-white border border-slate-200 rounded-lg shadow-md py-1 absolute w-72 z-10">
+                <button class="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-900 hover:bg-slate-50 transition-colors">
+                  <span><span class="font-semibold">Data</span> Scientist</span>
+                  <span class="text-slate-400">most common</span>
+                </button>
+                <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+                  <span class="font-semibold">Data</span> Engineer
+                </button>
+                <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+                  <span class="font-semibold">Data</span> Analyst
+                </button>
+                <div class="border-t border-slate-100 mt-1 pt-1">
+                  <button class="w-full flex items-center justify-between px-3 py-1.5 text-xs text-indigo-600 hover:bg-slate-50 transition-colors">
+                    Use "data" as custom filter
+                    <span class="text-slate-400">↵</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="h-44"></div>
+          </div>
+        </div>
+
+        <!-- State D: Salary popover -->
+        <div class="mb-8">
+          <p class="text-xs font-medium text-slate-700 mb-2">
+            D. Salary minimum popover (after picking that filter)
+          </p>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 relative">
+            <div class="inline-block w-72 bg-white border border-slate-200 rounded-lg shadow-md p-3">
+              <label class="text-xs font-medium text-slate-700">Minimum salary (CAD)</label>
+              <input type="text" value="80,000" class="mt-2 w-full px-3 py-2 rounded-md bg-white border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+              <label class="flex items-center gap-2 mt-3 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Hide jobs without salary listed
+              </label>
+              <div class="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+                <button class="px-3 py-1.5 rounded-md text-xs text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
+                <button class="px-3 py-1.5 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Apply</button>
+              </div>
+            </div>
+            <div class="h-32"></div>
+          </div>
+        </div>
+
+        <!-- State E: Employment type popover -->
+        <div class="mb-8">
+          <p class="text-xs font-medium text-slate-700 mb-2">
+            E. Employment type popover (multi-select)
+          </p>
+          <div class="bg-white border border-slate-200 rounded-xl p-4 relative">
+            <div class="inline-block w-64 bg-white border border-slate-200 rounded-lg shadow-md p-3">
+              <label class="text-xs font-medium text-slate-700 block mb-2">Employment type</label>
+              <div class="space-y-1.5">
+                <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  Full-time
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  Part-time
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  Contract
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  Internship
+                </label>
+              </div>
+              <div class="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+                <button class="px-3 py-1.5 rounded-md text-xs text-slate-600 hover:bg-slate-100 transition-colors">Cancel</button>
+                <button class="px-3 py-1.5 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Apply</button>
+              </div>
+            </div>
+            <div class="h-32"></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="mt-12">
+        <details class="text-xs text-slate-400">
+          <summary class="cursor-pointer hover:text-slate-600">
+            Mockup notes (not part of the real UI)
+          </summary>
+          <div class="mt-3 space-y-2 leading-relaxed">
+            <p>
+              Filter chips are indigo-tinted to signal they're "active
+              constraints"; "Add filter" stays white-with-dashed-border
+              so it reads as an action, not a filter.
+            </p>
+            <p>
+              All filter values become URL params (e.g. <code>?type=data-scientist&salary_min=80000</code>),
+              so refresh and back/forward work naturally.
+            </p>
+            <p>
+              The "result count" line ("Showing 3 of 7… 4 hidden by your
+              filters") is important — never silently disappear data.
+              Always show how many jobs the filters are hiding.
+            </p>
+            <p>
+              Job type and Location filters use a combobox (text input
+              with autocomplete suggestions) rather than a closed
+              dropdown — anything you type becomes a valid filter.
+            </p>
+          </div>
+        </details>
+      </footer>
+    </main>
   </body>
 </html>

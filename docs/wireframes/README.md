@@ -3,25 +3,54 @@
 > Three pages: **Login**, **Job List**, **Job Detail**.
 > Designed before any React code is written, per the locked Phase 6 plan.
 >
-> **Two layers of fidelity in this folder:**
+> **Three layers of fidelity in this folder:**
 > 1. This README — ASCII layouts + behavioral notes. Structure-only.
 > 2. [`design_system.md`](design_system.md) — locked color, typography,
 >    spacing, component, and microinteraction tokens. Every React
 >    component built in Phase 6 must follow this.
-> 3. **HTML mockups** ([`job_list_mockup.html`](job_list_mockup.html)
->    and [`job_detail_mockup.html`](job_detail_mockup.html)) — actual
->    rendered visual at high fidelity. Open in a browser to see what
->    the real React pages should look and feel like.
+> 3. **HTML mockups** — high-fidelity rendered visuals. Open in browser:
+>    - [`job_list_mockup.html`](job_list_mockup.html) (home page + filter chip UI states)
+>    - [`job_detail_mockup.html`](job_detail_mockup.html) (single application view)
+>    - [`settings_mockup.html`](settings_mockup.html) (resume, contact, saved searches, exclusions)
 >
 > **Routing summary:**
 > - `/login`             → Login page (placeholder; sets auth in localStorage)
 > - `/`                  → Job List page (the home page)
 > - `/jobs/:job_id`      → Job Detail page (everything for one application)
+> - `/settings`          → Settings page (profile, searches, exclusion lists)
 >
 > **How to view the HTML mockups:** open the `.html` file directly in
 > your browser. They use the Tailwind v4 browser script via CDN, so
 > there's no build step. You should see a fully styled page that
 > reflects the visual feel the React port will match.
+
+---
+
+## Filtering model — important architectural distinction
+
+Two distinct concepts that live in different places in the UI:
+
+**Set once / rarely change → Settings page**
+- Resume
+- Contact info (header data for letters)
+- Saved searches (queries that drive what JSearch fetches)
+- Excluded companies / title keywords / publishers (stable lists)
+
+**Adjust while browsing → Job List page (inline filter chips)**
+- Job type (combobox; matches against title; suggestions from common roles)
+- Location (combobox; matches against location; suggestions from common cities)
+- Salary minimum (number input)
+- Employment type (multi-select: full-time / part-time / contract / internship)
+- Posted within (last 7 / 30 / 90 days)
+
+Filter values become URL query params (`/?type=data-scientist&salary_min=80000`)
+so refresh and back/forward work naturally and the URL is shareable.
+
+The `[+ Add filter]` button shows a small popover listing every available
+filter. Each active filter renders as an indigo-tinted chip with `✕` to
+remove. "Clear all" removes everything. When no filters are set the row
+collapses to just the dashed `+ Add filter` button so it doesn't waste
+space. See state diagrams at the bottom of `job_list_mockup.html`.
 
 ---
 
