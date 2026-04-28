@@ -27,6 +27,7 @@ __all__ = [
     "LetterGenerationStatus",
     "LetterVersionList",
     "QueryListResponse",
+    "RefineLetterRequest",
     "RefreshJobResponse",
     "RefreshStatusResponse",
     "ResumeMetadata",
@@ -219,3 +220,9 @@ class LetterGenerationStatus(BaseModel):
     completed_at: datetime | None = None
     letter: Letter | None = None        # populated when status="done"
     error: str | None = None
+
+
+class RefineLetterRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/letters/{version}/refine."""
+
+    feedback: str = Field(min_length=5, max_length=500)

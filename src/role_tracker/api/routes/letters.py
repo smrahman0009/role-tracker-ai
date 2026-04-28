@@ -40,10 +40,12 @@ from role_tracker.api.schemas import (
     Letter,
     LetterGenerationStatus,
     LetterVersionList,
+    RefineLetterRequest,
     Strategy,
 )
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.cache import JobsCache
 from role_tracker.jobs.models import JobPosting
 from role_tracker.letters.generation_state import (
@@ -232,6 +234,64 @@ def get_letter_version(
             ),
         )
     return _to_response(stored)
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/letters/{version}/refine",
+    response_model=GenerateLetterResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def refine_letter(
+    user_id: str,
+    job_id: str,
+    version: int,
+    body: RefineLetterRequest,
+    background_tasks: BackgroundTasks,
+    cache: JobsCache = Depends(get_jobs_cache),
+    resume_store: ResumeStore = Depends(get_resume_store),
+    letter_store: LetterStore = Depends(get_letter_store),
+    generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
+    client: Anthropic = Depends(get_anthropic_client),
+) -> GenerateLetterResponse:
+    """Refine an existing letter version with free-text feedback.
+
+    Returns a new generation_id; poll the same letter-jobs endpoint as
+    initial generation. The refined letter becomes a new version in the
+    same job's history (so you can compare drafts).
+
+    Strategy is preserved — see cover_letter/refine.py for details.
+    If the user wants to change strategy, they should call /regenerate
+    instead.
+    """
+    # Verify the source version exists before kicking off the bg task.
+    source = letter_store.get_version(user_id, job_id, version)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Letter version {version} not found for job '{job_id}', "
+                f"user '{user_id}'"
+            ),
+        )
+
+    generation_id = uuid.uuid4().hex[:12]
+    generation_store.create(user_id, generation_id, job_id=job_id)
+    background_tasks.add_task(
+        _run_refine_in_background,
+        user_id=user_id,
+        job_id=job_id,
+        source_version=version,
+        feedback=body.feedback,
+        generation_id=generation_id,
+        cache=cache,
+        resume_store=resume_store,
+        letter_store=letter_store,
+        generation_store=generation_store,
+        user_store=user_store,
+        client=client,
+    )
+    return GenerateLetterResponse(generation_id=generation_id, status="pending")
 
 
 @router.get(
@@ -430,6 +490,112 @@ def _find_job(
         if stored.job.id == job_id:
             return stored.job
     return None
+
+
+def _run_refine_in_background(
+    *,
+    user_id: str,
+    job_id: str,
+    source_version: int,
+    feedback: str,
+    generation_id: str,
+    cache: JobsCache,
+    resume_store: ResumeStore,
+    letter_store: LetterStore,
+    generation_store: LetterGenerationStore,
+    user_store: UserProfileStore,
+    client: Anthropic,
+) -> None:
+    """Run a single Sonnet call to refine the existing letter."""
+    try:
+        generation_store.mark_running(user_id, generation_id)
+
+        source = letter_store.get_version(user_id, job_id, source_version)
+        if source is None:
+            generation_store.mark_failed(
+                user_id,
+                generation_id,
+                error=f"Source version {source_version} no longer exists",
+            )
+            return
+        if not source.strategy:
+            generation_store.mark_failed(
+                user_id,
+                generation_id,
+                error=(
+                    "Source letter has no committed strategy. "
+                    "Refinement requires a strategy to preserve. "
+                    "Use /regenerate instead."
+                ),
+            )
+            return
+
+        job = _find_job(cache, user_id, job_id)
+        if job is None:
+            generation_store.mark_failed(
+                user_id,
+                generation_id,
+                error=(
+                    f"Job '{job_id}' not in current snapshot. "
+                    "Refresh jobs first."
+                ),
+            )
+            return
+
+        resume_bytes = resume_store.get_file_bytes(user_id)
+        if resume_bytes is None:
+            generation_store.mark_failed(
+                user_id,
+                generation_id,
+                error="No resume uploaded.",
+            )
+            return
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf", delete=False
+        ) as tmp:
+            tmp.write(resume_bytes)
+            tmp_path = Path(tmp.name)
+        try:
+            resume_text = parse_resume(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        try:
+            user_profile = user_store.get_user(user_id)
+        except FileNotFoundError as exc:
+            generation_store.mark_failed(
+                user_id,
+                generation_id,
+                error=f"User profile not found: {exc}",
+            )
+            return
+
+        revised_text = refine_cover_letter(
+            user=user_profile,
+            resume_text=resume_text,
+            job=job,
+            previous_letter=source.text,
+            previous_strategy=source.strategy,
+            feedback=feedback,
+            client=client,
+        )
+
+        # Persist as a new version. Strategy carries forward unchanged
+        # (preserved by the refine flow); critique is None because we
+        # didn't run the rubric on this revision.
+        saved = letter_store.save_letter(
+            user_id,
+            job_id,
+            text=revised_text,
+            strategy=source.strategy,
+            critique=None,
+            feedback_used=feedback,
+        )
+        generation_store.mark_done(
+            user_id, generation_id, saved_version=saved.version
+        )
+    except Exception as exc:  # noqa: BLE001
+        generation_store.mark_failed(user_id, generation_id, error=str(exc))
 
 
 __all__ = [

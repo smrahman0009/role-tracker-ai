@@ -278,3 +278,128 @@ def test_download_404_for_missing(client: TestClient) -> None:
 def test_poll_404_for_unknown_generation(client: TestClient) -> None:
     response = client.get("/users/alice/letter-jobs/nonexistent")
     assert response.status_code == 404
+
+
+# ----- refine -----
+
+
+@pytest.fixture
+def client_with_refine_stub(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[TestClient]:
+    """Same fixture as `client` but also stubs out refine_cover_letter."""
+    monkeypatch.delenv("APP_TOKEN", raising=False)
+
+    import role_tracker.api.routes.letters as letters_module
+
+    def fake_agent(
+        *,
+        user: Any,  # noqa: ARG001
+        resume_text: str,  # noqa: ARG001
+        job: JobPosting,  # noqa: ARG001
+        client: Any,  # noqa: ARG001
+        usage_tracker: dict | None = None,
+        **_: Any,
+    ) -> str:
+        if usage_tracker is not None:
+            usage_tracker["strategy"] = _FAKE_STRATEGY
+            usage_tracker["last_critique"] = _FAKE_CRITIQUE
+        return _FAKE_LETTER
+
+    def fake_refine(
+        *,
+        user: Any,  # noqa: ARG001
+        resume_text: str,  # noqa: ARG001
+        job: JobPosting,  # noqa: ARG001
+        previous_letter: str,
+        previous_strategy: dict,  # noqa: ARG001
+        feedback: str,
+        client: Any,  # noqa: ARG001
+        **_: Any,
+    ) -> str:
+        # Echo the feedback so we can verify the parameter wiring.
+        return f"REFINED [{feedback}]\n\n" + previous_letter
+
+    monkeypatch.setattr(letters_module, "generate_cover_letter_agent", fake_agent)
+    monkeypatch.setattr(letters_module, "refine_cover_letter", fake_refine)
+    monkeypatch.setattr(letters_module, "parse_resume", lambda _: "fake resume text")
+
+    app = create_app()
+    cache = FileJobsCache(root=tmp_path / "jobs")
+    cache.save_snapshot("alice", [ScoredJob(job=_job("j1"), score=0.9)])
+
+    app.dependency_overrides[get_resume_store] = lambda: FileResumeStore(
+        root=tmp_path / "resumes"
+    )
+    app.dependency_overrides[get_jobs_cache] = lambda: cache
+    app.dependency_overrides[get_letter_store] = lambda: FileLetterStore(
+        root=tmp_path / "letters"
+    )
+    app.dependency_overrides[get_letter_generation_store] = (
+        lambda: FileLetterGenerationStore(root=tmp_path / "letters")
+    )
+    app.dependency_overrides[get_user_profile_store] = lambda: _StubUserProfileStore()
+    app.dependency_overrides[get_anthropic_client] = lambda: object()
+
+    with TestClient(app) as c:
+        yield c
+
+
+def _generate_v1(client: TestClient) -> None:
+    """Helper: seed a v1 letter so we have something to refine."""
+    client.post(
+        "/users/alice/resume",
+        files={"file": ("r.pdf", _FAKE_PDF, "application/pdf")},
+    )
+    gen = client.post("/users/alice/jobs/j1/letters", json={})
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+
+
+def test_refine_returns_202(client_with_refine_stub: TestClient) -> None:
+    _generate_v1(client_with_refine_stub)
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/refine",
+        json={"feedback": "Make it more technical"},
+    )
+    assert response.status_code == 202
+    assert response.json()["status"] == "pending"
+
+
+def test_refine_creates_new_version_with_feedback(
+    client_with_refine_stub: TestClient,
+) -> None:
+    _generate_v1(client_with_refine_stub)
+    refine_response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/refine",
+        json={"feedback": "Shorter please"},
+    )
+    generation_id = refine_response.json()["generation_id"]
+
+    poll = client_with_refine_stub.get(f"/users/alice/letter-jobs/{generation_id}")
+    body = poll.json()
+    assert body["status"] == "done"
+    assert body["letter"]["version"] == 2
+    assert "REFINED [Shorter please]" in body["letter"]["text"]
+    assert body["letter"]["feedback_used"] == "Shorter please"
+    # Strategy carries forward from v1
+    assert body["letter"]["strategy"]["primary_project"] == "Company Name Resolution"
+
+
+def test_refine_404_for_missing_source_version(
+    client_with_refine_stub: TestClient,
+) -> None:
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/99/refine",
+        json={"feedback": "anything please"},
+    )
+    assert response.status_code == 404
+
+
+def test_refine_validates_min_feedback_length(
+    client_with_refine_stub: TestClient,
+) -> None:
+    _generate_v1(client_with_refine_stub)
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/refine", json={"feedback": "hi"}
+    )
+    assert response.status_code == 422  # Pydantic validation
