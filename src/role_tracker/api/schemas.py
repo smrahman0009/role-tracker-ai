@@ -16,15 +16,22 @@ from role_tracker.resume.models import ResumeMetadata
 __all__ = [
     "ApiError",
     "CreateQueryRequest",
+    "CritiqueScore",
+    "GenerateLetterRequest",
+    "GenerateLetterResponse",
     "HealthResponse",
     "JobDetailResponse",
     "JobListResponse",
     "JobSummary",
+    "Letter",
+    "LetterGenerationStatus",
+    "LetterVersionList",
     "QueryListResponse",
     "RefreshJobResponse",
     "RefreshStatusResponse",
     "ResumeMetadata",
     "SavedQuery",
+    "Strategy",
     "UpdateQueryRequest",
 ]
 
@@ -140,4 +147,75 @@ class RefreshStatusResponse(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     jobs_added: int | None = None
+    error: str | None = None
+
+
+# ----- Cover letters -----
+
+
+class Strategy(BaseModel):
+    """The agent's committed plan, surfaced in the UI."""
+
+    fit_assessment: Literal["HIGH", "MEDIUM", "LOW"]
+    fit_reasoning: str
+    narrative_angle: str
+    primary_project: str
+    secondary_project: str | None = None
+
+
+class CritiqueScore(BaseModel):
+    """Subset of the rubric output the UI cares about."""
+
+    total: int                          # 0-110
+    verdict: Literal["approved", "minor_revision", "rewrite_required"]
+    category_scores: dict[str, int]     # e.g. {"hallucination": 25, ...}
+    failed_thresholds: list[str]
+    notes: str = ""
+
+
+class Letter(BaseModel):
+    """One version of a saved cover letter (response shape)."""
+
+    version: int
+    text: str
+    word_count: int
+    strategy: Strategy | None = None
+    critique: CritiqueScore | None = None
+    feedback_used: str | None = None
+    created_at: datetime
+
+
+class LetterVersionList(BaseModel):
+    """Body of GET /users/{user_id}/jobs/{job_id}/letters."""
+
+    versions: list[Letter]              # latest first
+    total: int
+
+
+class GenerateLetterRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/letters.
+
+    Reserved for future fields. Currently empty — the job_id in the URL
+    plus the user's resume + queries is everything the agent needs.
+    """
+
+    pass
+
+
+class GenerateLetterResponse(BaseModel):
+    """Returned 202 immediately from generate / regenerate / refine."""
+
+    generation_id: str
+    status: Literal["pending"]
+    estimated_seconds: int = 60
+
+
+class LetterGenerationStatus(BaseModel):
+    """Body of GET /users/{user_id}/letter-jobs/{generation_id}."""
+
+    generation_id: str
+    status: Literal["pending", "running", "done", "failed"]
+    started_at: datetime
+    completed_at: datetime | None = None
+    letter: Letter | None = None        # populated when status="done"
     error: str | None = None
