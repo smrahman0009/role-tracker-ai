@@ -37,13 +37,27 @@ Two distinct concepts that live in different places in the UI:
 - Excluded companies / title keywords / publishers (stable lists)
 
 **Adjust while browsing → Job List page (inline filter chips)**
-- Job type (combobox; matches against title; suggestions from common roles)
-- Location (combobox; matches against location; suggestions from common cities)
-- Salary minimum (number input)
-- Employment type (multi-select: full-time / part-time / contract / internship)
-- Posted within (last 7 / 30 / 90 days)
+- **Job type** — multi-select combobox; matches against title; suggestions
+  from common roles ("Data Scientist", "ML Engineer", …); user can pick
+  several at once or type any custom value. Filter is OR-logic: a job
+  matches if its title contains ANY of the selected types.
+- **Location** — multi-select combobox; matches against location;
+  suggestions from common Canadian cities + "Remote"; OR-logic.
+- **Salary minimum** — single number input. Filters jobs with
+  `salary_min < threshold`.
+- **Employment type** — multi-select (Full-time / Part-time / Contract /
+  Internship). OR-logic.
+- **Posted within** — single-select (Last 7 / 30 / 90 days / All time).
+  Mutually exclusive options, so radio-style not multi-select.
 
-Filter values become URL query params (`/?type=data-scientist&salary_min=80000`)
+In the chip row, multi-value filters render as one chip showing the first
+two values + "+N" (e.g. *"Job type: Data Scientist, ML Engineer +1"*).
+Click the chip body to reopen the popover and edit the selection; click
+the `✕` to clear all values for that filter.
+
+Filter values become URL query params with comma-separated lists for
+multi-select filters
+(`/?type=data-scientist,ml-engineer&location=toronto,remote&salary_min=80000`)
 so refresh and back/forward work naturally and the URL is shareable.
 
 The `[+ Add filter]` button shows a small popover listing every available

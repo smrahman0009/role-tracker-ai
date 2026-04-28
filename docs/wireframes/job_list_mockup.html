@@ -75,19 +75,30 @@
         </button>
       </div>
 
-      <!-- Filter chip row — 2 filters active -->
+      <!-- Filter chip row — multi-value chips active -->
       <div class="flex items-center gap-2 flex-wrap mb-5">
-        <!-- Active chip 1 -->
+        <!-- Multi-value chip 1: Job type with 3 selections -->
         <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer" title="Click to edit">
-          Job type: Data Scientist
-          <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors" title="Remove">
+          Job type: Data Scientist, ML Engineer
+          <span class="text-indigo-400 font-normal">+1</span>
+          <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors" title="Remove all">
             <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 6 6 18" /><path d="m6 6 12 12" />
             </svg>
           </button>
         </span>
 
-        <!-- Active chip 2 -->
+        <!-- Multi-value chip 2: Location with 2 selections -->
+        <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer">
+          Location: Toronto, Remote
+          <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors">
+            <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </span>
+
+        <!-- Single-value chip: Salary -->
         <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer">
           Salary ≥ $80,000
           <button class="ml-0.5 p-0.5 rounded hover:bg-indigo-200 transition-colors">
@@ -304,37 +315,63 @@
           </div>
         </div>
 
-        <!-- State C: Job-type combobox open with suggestions -->
+        <!-- State C: Job-type combobox open — multi-select with checkboxes -->
         <div class="mb-8">
           <p class="text-xs font-medium text-slate-700 mb-2">
-            C. Job type filter — combobox open with suggestions as you type
+            C. Job type filter — multi-select combobox (select as many as you want)
           </p>
           <div class="bg-white border border-slate-200 rounded-xl p-4 relative">
-            <div class="inline-block w-72">
-              <div class="px-3 py-2 rounded-lg bg-white border border-indigo-500 ring-2 ring-indigo-500/20 text-sm text-slate-900">
-                data<span class="inline-block w-px h-4 bg-slate-900 align-middle ml-px animate-pulse"></span>
+            <div class="inline-block w-80">
+              <!-- Input area with selected values as pills -->
+              <div class="px-2 py-1.5 rounded-lg bg-white border border-indigo-500 ring-2 ring-indigo-500/20 text-sm flex items-center gap-1 flex-wrap min-h-[2.5rem]">
+                <span class="inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs font-medium">
+                  Data Scientist
+                  <button class="p-0.5 rounded hover:bg-indigo-200 transition-colors">
+                    <svg class="h-2.5 w-2.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </span>
+                <span class="inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs font-medium">
+                  ML Engineer
+                  <button class="p-0.5 rounded hover:bg-indigo-200 transition-colors">
+                    <svg class="h-2.5 w-2.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </button>
+                </span>
+                <span class="text-slate-700">data<span class="inline-block w-px h-4 bg-slate-900 align-middle ml-px animate-pulse"></span></span>
               </div>
-              <div class="mt-1 bg-white border border-slate-200 rounded-lg shadow-md py-1 absolute w-72 z-10">
-                <button class="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-900 hover:bg-slate-50 transition-colors">
-                  <span><span class="font-semibold">Data</span> Scientist</span>
+              <!-- Suggestions dropdown — checkbox-style multi-select -->
+              <div class="mt-1 bg-white border border-slate-200 rounded-lg shadow-md py-1 absolute w-80 z-10">
+                <div class="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Suggestions
+                </div>
+                <button class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-900 hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  <span class="flex-1 text-left"><span class="font-semibold">Data</span> Scientist</span>
                   <span class="text-slate-400">most common</span>
                 </button>
-                <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
-                  <span class="font-semibold">Data</span> Engineer
+                <button class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  <span class="flex-1 text-left"><span class="font-semibold">Data</span> Engineer</span>
                 </button>
-                <button class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
-                  <span class="font-semibold">Data</span> Analyst
+                <button class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                  <span class="flex-1 text-left"><span class="font-semibold">Data</span> Analyst</span>
                 </button>
                 <div class="border-t border-slate-100 mt-1 pt-1">
                   <button class="w-full flex items-center justify-between px-3 py-1.5 text-xs text-indigo-600 hover:bg-slate-50 transition-colors">
-                    Use "data" as custom filter
+                    <span>Add "data" as a custom value</span>
                     <span class="text-slate-400">↵</span>
                   </button>
                 </div>
               </div>
             </div>
-            <div class="h-44"></div>
+            <div class="h-56"></div>
           </div>
+          <p class="text-xs text-slate-500 mt-2">
+            Same multi-select pattern applies to the Location filter.
+            Each selected value appears as a small pill inside the input;
+            keep typing to filter suggestions; press Enter to add a custom
+            value.
+          </p>
         </div>
 
         <!-- State D: Salary popover -->
