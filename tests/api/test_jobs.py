@@ -13,12 +13,14 @@ from fastapi.testclient import TestClient
 
 from role_tracker.api.main import create_app
 from role_tracker.api.routes.jobs import (
+    get_applied_store,
     get_jobs_cache,
     get_pipeline_runner,
     get_refresh_store,
 )
 from role_tracker.api.routes.queries import get_query_store
 from role_tracker.api.routes.resume import get_resume_store
+from role_tracker.applied.store import FileAppliedStore
 from role_tracker.jobs.cache import FileJobsCache
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.refresh_state import FileRefreshTaskStore
@@ -77,6 +79,9 @@ def client(
     app.dependency_overrides[get_refresh_store] = lambda: FileRefreshTaskStore(
         root=tmp_path / "jobs"
     )
+    app.dependency_overrides[get_applied_store] = lambda: FileAppliedStore(
+        root=tmp_path / "applied"
+    )
     app.dependency_overrides[get_pipeline_runner] = (
         lambda: lambda _user_id, _queries, _resume: _fake_pipeline_results()
     )
@@ -131,15 +136,34 @@ def test_list_filter_unapplied_returns_all_when_none_applied(
     assert body["jobs"][0]["match_score"] == 0.92
 
 
-def test_list_filter_applied_returns_empty_for_now(client: TestClient) -> None:
+def test_list_filter_applied_returns_only_marked(client: TestClient) -> None:
     _seed_resume(client)
     _seed_query(client)
     refresh_response = client.post("/users/alice/jobs/refresh")
-    refresh_id = refresh_response.json()["refresh_id"]
-    client.get(f"/users/alice/jobs/refresh/{refresh_id}")  # let bg task complete
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
 
-    response = client.get("/users/alice/jobs?filter=applied")
-    assert response.json()["jobs"] == []
+    # Initially no jobs are marked applied.
+    assert client.get("/users/alice/jobs?filter=applied").json()["jobs"] == []
+
+    # Mark one job applied; it should now appear in 'applied', not 'unapplied'.
+    client.post("/users/alice/jobs/j1/applied")
+    applied = client.get("/users/alice/jobs?filter=applied").json()
+    unapplied = client.get("/users/alice/jobs?filter=unapplied").json()
+    assert len(applied["jobs"]) == 1
+    assert applied["jobs"][0]["job_id"] == "j1"
+    assert applied["jobs"][0]["applied"] is True
+    assert {j["job_id"] for j in unapplied["jobs"]} == {"j2"}
+
+
+def test_list_filter_all_includes_both(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+    client.post("/users/alice/jobs/j1/applied")
+
+    response = client.get("/users/alice/jobs?filter=all")
+    assert response.json()["total"] == 2
 
 
 def test_list_includes_description_preview(client: TestClient) -> None:
@@ -243,3 +267,56 @@ def test_detail_404_for_missing_job(client: TestClient) -> None:
 
     response = client.get("/users/alice/jobs/nonexistent")
     assert response.status_code == 404
+
+
+def test_detail_reflects_applied_flag(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    pre = client.get("/users/alice/jobs/j1").json()
+    assert pre["applied"] is False
+
+    client.post("/users/alice/jobs/j1/applied")
+    post = client.get("/users/alice/jobs/j1").json()
+    assert post["applied"] is True
+
+
+# ----- apply / unapply -----
+
+
+def test_mark_applied_returns_204(client: TestClient) -> None:
+    response = client.post("/users/alice/jobs/j1/applied")
+    assert response.status_code == 204
+
+
+def test_mark_applied_409_when_already_applied(client: TestClient) -> None:
+    client.post("/users/alice/jobs/j1/applied")
+    response = client.post("/users/alice/jobs/j1/applied")
+    assert response.status_code == 409
+
+
+def test_unmark_applied_returns_204(client: TestClient) -> None:
+    client.post("/users/alice/jobs/j1/applied")
+    response = client.delete("/users/alice/jobs/j1/applied")
+    assert response.status_code == 204
+
+
+def test_unmark_applied_idempotent_when_not_applied(client: TestClient) -> None:
+    """DELETE on a non-applied job is fine — returns 204, not 404."""
+    response = client.delete("/users/alice/jobs/never_applied/applied")
+    assert response.status_code == 204
+
+
+def test_apply_unapply_roundtrip(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    client.post("/users/alice/jobs/j1/applied")
+    assert client.get("/users/alice/jobs/j1").json()["applied"] is True
+
+    client.delete("/users/alice/jobs/j1/applied")
+    assert client.get("/users/alice/jobs/j1").json()["applied"] is False

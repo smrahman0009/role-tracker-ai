@@ -19,6 +19,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 # We import these "via" the queries / resume routers to share the same
@@ -34,6 +35,7 @@ from role_tracker.api.schemas import (
     RefreshJobResponse,
     RefreshStatusResponse,
 )
+from role_tracker.applied.store import AppliedStore, FileAppliedStore
 from role_tracker.config import Settings
 from role_tracker.jobs.cache import (
     FileJobsCache,
@@ -69,6 +71,10 @@ def get_jobs_cache() -> JobsCache:
 
 def get_refresh_store() -> RefreshTaskStore:
     return FileRefreshTaskStore()
+
+
+def get_applied_store() -> AppliedStore:
+    return FileAppliedStore()
 
 
 def get_pipeline_runner() -> PipelineRunner:
@@ -124,8 +130,9 @@ def list_jobs(
     user_id: str,
     filter: JobFilter = "unapplied",  # type: ignore[assignment]
     cache: JobsCache = Depends(get_jobs_cache),
+    applied_store: AppliedStore = Depends(get_applied_store),
 ) -> JobListResponse:
-    """List ranked jobs from the latest cached snapshot."""
+    """List ranked jobs from the latest cached snapshot, with applied flags."""
     snapshot = cache.get_snapshot(user_id)
     if snapshot is None:
         return JobListResponse(
@@ -134,13 +141,16 @@ def list_jobs(
             last_refreshed_at=None,
         )
 
-    summaries = [_to_summary(s) for s in snapshot.jobs]
+    applied_ids = applied_store.list_applied(user_id)
+    summaries = [
+        _to_summary(s, applied=s.job.id in applied_ids) for s in snapshot.jobs
+    ]
 
-    # Applied tracking lands in the next commit; for now `applied` is
-    # always False, so the "applied" filter returns nothing and "unapplied"
-    # / "all" return everything.
     if filter == "applied":
-        summaries = []
+        summaries = [s for s in summaries if s.applied]
+    elif filter == "unapplied":
+        summaries = [s for s in summaries if not s.applied]
+    # "all" → no filter
 
     return JobListResponse(
         jobs=summaries,
@@ -200,6 +210,7 @@ def get_job_detail(
     user_id: str,
     job_id: str,
     cache: JobsCache = Depends(get_jobs_cache),
+    applied_store: AppliedStore = Depends(get_applied_store),
 ) -> JobDetailResponse:
     """Return one job's full details (including JD)."""
     snapshot = cache.get_snapshot(user_id)
@@ -210,17 +221,52 @@ def get_job_detail(
         )
     for stored in snapshot.jobs:
         if stored.job.id == job_id:
-            return _to_detail(stored)
+            return _to_detail(
+                stored, applied=applied_store.is_applied(user_id, job_id)
+            )
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Job '{job_id}' not found in current snapshot",
     )
 
 
+@router.post(
+    "/{job_id}/applied",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def mark_applied(
+    user_id: str,
+    job_id: str,
+    applied_store: AppliedStore = Depends(get_applied_store),
+) -> Response:
+    """Mark a job as applied — moves it to the 'Applied' filter."""
+    if not applied_store.mark_applied(user_id, job_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Job '{job_id}' is already marked applied",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{job_id}/applied",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def unmark_applied(
+    user_id: str,
+    job_id: str,
+    applied_store: AppliedStore = Depends(get_applied_store),
+) -> Response:
+    """Remove the applied flag — job returns to the 'Unapplied' list."""
+    applied_store.unmark_applied(user_id, job_id)
+    # Idempotent: returns 204 whether the job was applied or not.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ----- Helpers -----
 
 
-def _to_summary(stored: StoredScoredJob) -> JobSummary:
+def _to_summary(stored: StoredScoredJob, *, applied: bool = False) -> JobSummary:
     """Convert StoredScoredJob → JobSummary (no full description)."""
     desc = (stored.job.description or "").strip()
     preview = desc[:240]
@@ -242,12 +288,14 @@ def _to_summary(stored: StoredScoredJob) -> JobSummary:
         url=stored.job.url,
         match_score=stored.score,
         fit_assessment=None,    # populated when a letter is generated (later)
-        applied=False,           # wired in the apply-tracking commit
+        applied=applied,
         description_preview=preview,
     )
 
 
-def _to_detail(stored: StoredScoredJob) -> JobDetailResponse:
+def _to_detail(
+    stored: StoredScoredJob, *, applied: bool = False
+) -> JobDetailResponse:
     """Convert StoredScoredJob → JobDetailResponse (full description)."""
     return JobDetailResponse(
         job_id=stored.job.id,
@@ -262,7 +310,7 @@ def _to_detail(stored: StoredScoredJob) -> JobDetailResponse:
         description=stored.job.description,
         match_score=stored.score,
         fit_assessment=None,
-        applied=False,
+        applied=applied,
     )
 
 
