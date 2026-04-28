@@ -96,36 +96,113 @@
         <div class="px-6 py-4 border-b border-slate-100">
           <h2 class="text-sm font-semibold text-slate-900">Contact info</h2>
           <p class="text-xs text-slate-500 mt-0.5">
-            Appears at the top of every generated cover letter.
-            Leave fields blank to omit them from the header.
+            Stored on your profile. Toggle each field's "Show in letter"
+            switch to control what appears in the cover-letter header.
+            Empty fields are skipped automatically.
           </p>
         </div>
-        <div class="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="px-6 py-5 space-y-4">
+          <!-- Name (always shown) -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">Full name</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">Full name</label>
+              <span class="text-xs text-slate-400">always shown</span>
+            </div>
             <input type="text" value="Shaikh Mushfikur Rahman" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
+
+          <!-- Phone -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">Phone</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">Phone</label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
             <input type="tel" value="782-882-0852" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
+
+          <!-- Email -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">Email</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">Email</label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
             <input type="email" value="smrahman0009@gmail.com" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
+
+          <!-- City -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">City</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">City</label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
             <input type="text" value="Halifax, NS" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
+
+          <!-- LinkedIn -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">LinkedIn URL</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">LinkedIn URL</label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-not-allowed" title="Empty field — fill in to enable">
+                <input type="checkbox" disabled class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
             <input type="url" placeholder="https://linkedin.com/in/…" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
+
+          <!-- GitHub -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1.5">GitHub URL</label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">GitHub URL</label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-not-allowed" title="Empty field — fill in to enable">
+                <input type="checkbox" disabled class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
             <input type="url" placeholder="https://github.com/…" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
           </div>
-          <div class="sm:col-span-2 flex justify-end">
+
+          <!-- Portfolio (new optional field) -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-700">Portfolio URL <span class="text-slate-400 font-normal">(optional)</span></label>
+              <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-not-allowed" title="Empty field — fill in to enable">
+                <input type="checkbox" disabled class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20" />
+                Show in letter
+              </label>
+            </div>
+            <input type="url" placeholder="https://yourname.com" class="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
+          </div>
+
+          <!-- Live preview block -->
+          <div class="pt-4 mt-2 border-t border-slate-100">
+            <div class="flex items-center gap-1.5 mb-2">
+              <svg class="h-3.5 w-3.5 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Letter header preview</span>
+            </div>
+            <div class="px-4 py-3.5 rounded-lg bg-slate-50 border border-slate-200 font-mono text-sm text-slate-800 leading-relaxed">
+              <p><strong>Shaikh Mushfikur Rahman</strong></p>
+              <p class="text-slate-700">782-882-0852 &nbsp;·&nbsp; smrahman0009@gmail.com &nbsp;·&nbsp; Halifax, NS</p>
+            </div>
+            <p class="text-xs text-slate-500 mt-2">
+              Updates as you toggle fields above. This is exactly what
+              the agent will put at the top of every cover letter.
+            </p>
+          </div>
+
+          <div class="flex justify-end pt-2">
             <button class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors duration-150">
               Save changes
             </button>
@@ -205,14 +282,21 @@
       </section>
 
       <!-- ============================================================
-           4. EXCLUDED COMPANIES
+           4. HIDDEN COMPANIES (your personal filter list)
            ============================================================ -->
       <section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
-        <div class="px-6 py-4 border-b border-slate-100">
-          <h2 class="text-sm font-semibold text-slate-900">Excluded companies</h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Jobs whose employer name contains any of these words are dropped before ranking.
-          </p>
+        <div class="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900">Hidden companies</h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Your personal filter. Jobs whose employer name contains any
+              of these words won't appear in your matches. Useful for
+              filtering out industries you're not targeting right now.
+            </p>
+          </div>
+          <button class="shrink-0 text-xs text-slate-500 hover:text-slate-700 transition-colors whitespace-nowrap">
+            Clear all
+          </button>
         </div>
         <div class="px-6 py-5">
           <div class="flex items-center gap-2 flex-wrap">
@@ -250,14 +334,21 @@
       </section>
 
       <!-- ============================================================
-           5. EXCLUDED TITLE KEYWORDS
+           5. HIDDEN TITLE KEYWORDS (your personal filter list)
            ============================================================ -->
       <section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
-        <div class="px-6 py-4 border-b border-slate-100">
-          <h2 class="text-sm font-semibold text-slate-900">Excluded title keywords</h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Jobs whose title contains any of these words are dropped before ranking.
-          </p>
+        <div class="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900">Hidden title keywords</h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Your personal filter. Jobs whose title contains any of
+              these words won't appear in your matches. Useful for
+              skipping role types outside your search.
+            </p>
+          </div>
+          <button class="shrink-0 text-xs text-slate-500 hover:text-slate-700 transition-colors whitespace-nowrap">
+            Clear all
+          </button>
         </div>
         <div class="px-6 py-5">
           <div class="flex items-center gap-2 flex-wrap">
@@ -294,23 +385,32 @@
       </section>
 
       <!-- ============================================================
-           6. EXCLUDED PUBLISHERS
+           6. HIDDEN PUBLISHERS (sources you'd rather not see)
            ============================================================ -->
       <section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
-        <div class="px-6 py-4 border-b border-slate-100">
-          <h2 class="text-sm font-semibold text-slate-900">Excluded publishers</h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Untrustworthy job-board publishers. We seed sensible defaults; you can edit.
-          </p>
+        <div class="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900">Hidden publishers</h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Job-board sources you'd rather not see in your results.
+              Adjust to your preference. The list is private to your
+              profile and reflects nothing more than your personal
+              filtering choices.
+            </p>
+          </div>
+          <button class="shrink-0 text-xs text-slate-500 hover:text-slate-700 transition-colors whitespace-nowrap">
+            Clear all
+          </button>
         </div>
         <div class="px-6 py-5">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">BeBee <button class="ml-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors"><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">Sercanto <button class="ml-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors"><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">Jobrapido <button class="ml-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors"><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">Talent.com <button class="ml-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors"><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">Trovit <button class="ml-0.5 p-0.5 rounded hover:bg-slate-200 transition-colors"><svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></span>
-            <span class="text-xs text-slate-400">+ 8 more</span>
+            <span class="text-xs text-slate-400 italic">
+              No publishers hidden — your results include every source.
+            </span>
+          </div>
+          <div class="mt-4 flex items-center gap-2">
+            <input type="text" placeholder="Add a publisher name and press Enter…" class="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors" />
+            <button class="px-3 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors">Add</button>
           </div>
         </div>
       </section>
@@ -328,11 +428,23 @@
               page itself as filter chips, not here.
             </p>
             <p>
+              The "Hidden" sections (companies, title keywords,
+              publishers) are framed as personal filtering preferences,
+              not judgments about the listed entities. Each section
+              has a "Clear all" button — useful when recording demos
+              you don't want exclusion lists visible in.
+            </p>
+            <p>
               Saved searches are queries that drive what JSearch
               fetches; they're applied at fetch time, not at view
               time. The "AI engineer" search above is paused (toggle
-              off) — its results are excluded from the next refresh,
-              but the search isn't deleted.
+              off) — its results are skipped on the next refresh, but
+              the search isn't deleted.
+            </p>
+            <p>
+              Contact info now has per-field "Show in letter" toggles
+              with a live preview. Empty fields auto-disable their
+              toggles. Name is always shown.
             </p>
             <p>
               The PDF "drop zone" appears only when there's no current

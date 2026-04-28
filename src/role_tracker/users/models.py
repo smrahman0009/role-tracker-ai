@@ -27,9 +27,10 @@ class UserProfile(BaseModel):
     queries: list[JobQuery]
     exclude_companies: list[str] = []
     exclude_title_keywords: list[str] = []
-    # Downstream publishers (Google-for-Jobs hosts) to block — filters low-quality
-    # scraper sites like BeBee, Sercanto, Jobrapido. Passed to JSearch as a
-    # server-side filter AND re-checked locally in case anything slips through.
+    # Downstream publisher names the user has chosen to filter out of their
+    # results. Passed to JSearch as a server-side filter AND re-checked
+    # locally. Personal preference list — no implied judgment about the
+    # named publishers.
     exclude_publishers: list[str] = []
 
     @property

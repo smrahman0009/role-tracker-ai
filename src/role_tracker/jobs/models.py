@@ -16,4 +16,4 @@ class JobPosting(BaseModel):
     salary_min: float | None = None
     salary_max: float | None = None
     source: str = "unknown"  # which provider this came from (e.g. "adzuna")
-    publisher: str = "unknown"  # the downstream site hosting the listing (e.g. "BeBee")
+    publisher: str = "unknown"  # the downstream site hosting the listing

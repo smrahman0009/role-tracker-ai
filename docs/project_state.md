@@ -41,9 +41,9 @@ This one command:
    only re-embeds when the text hash changes).
 4. Calls the **JSearch API** (RapidAPI, wraps Google for Jobs) with each of
    the user's saved queries; fetches up to `--limit` jobs per query. Server-side
-   filters untrustworthy publishers (BeBee, Sercanto, Jobrapido, Neuvoo,
-   Talent.com, Jobcase, Learn4Good, Trovit, Mitula, Jooble, Careerjet,
-   Whatjobs, Kijiji) via JSearch's `exclude_job_publishers` parameter.
+   filters out publishers the user has chosen to hide from their results,
+   via JSearch's `exclude_job_publishers` parameter. The default list is
+   editable in Settings; it reflects personal filtering preferences only.
 5. Deduplicates by `(title, company)`, applies local exclusion filters
    (company, title keyword, publisher — belt-and-suspenders).
 6. Embeds each job description, computes cosine similarity against the
@@ -158,10 +158,12 @@ only after a live smoke test passes. Current state:
   `users/*.yaml`. Designed to be swapped for a DB-backed store in Scope B
   without touching call sites.
 - **Exclusion filters** — per-user company / title-keyword / publisher
-  blocklists. Publisher blocklist is enforced server-side (JSearch's
+  filter lists. Publisher filter is enforced server-side (JSearch's
   `exclude_job_publishers` param) and rechecked locally.
-- **13-publisher default blocklist** researched against Trustpilot scores +
-  reports of fake listings.
+- **Default hidden-publisher list** seeded with sources commonly
+  preferred to be filtered out; users edit freely in Settings. The
+  list is private to each profile and reflects only personal
+  filtering preferences.
 
 ### Phase 4 — Cover-letter agent (merged to main)
 - **Step 1: Naive generator** (`generator.py`). One Sonnet 4.6 call with a

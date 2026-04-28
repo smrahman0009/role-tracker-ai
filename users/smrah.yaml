@@ -50,14 +50,11 @@ exclude_title_keywords:
   - underwriter
   - wealth
 
-# Downstream publishers to block. JSearch filters these server-side
-# (exclude_job_publishers); we also re-check locally.
-# Picked based on Trustpilot scores + reports of fake/expired listings:
-#   - BeBee, Sercanto, Jobrapido, Neuvoo/Talent.com, Jobcase, Learn4Good
-#     → known bad actors (fake listings, data harvesting, bait-and-switch)
-#   - Trovit, Mitula, Jooble, Careerjet, Whatjobs
-#     → aggregator-of-aggregator; just re-indexes other sources
-#   - Kijiji → 47.8% ghost-job rate in Canada (jobs.ca 2025 data)
+# Personal filter list of publisher names the user prefers not to see
+# in their job results. JSearch filters these server-side via the
+# exclude_job_publishers parameter; we also re-check locally.
+# This list reflects nothing more than the user's personal preferences
+# and contains no implied judgment about the listed publishers.
 exclude_publishers:
   - BeBee
   - Sercanto
