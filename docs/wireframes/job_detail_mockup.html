@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Role Tracker — Job Detail (mockup)</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    </style>
+  </head>
+  <body class="bg-slate-50 min-h-screen">
+    <!-- ============================================================
+         HEADER (same as job list)
+         ============================================================ -->
+    <header class="bg-white border-b border-slate-200">
+      <div class="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-base font-semibold text-slate-900 tracking-tight">
+            Role Tracker
+          </span>
+          <span class="text-xs text-slate-400 font-medium tracking-wider uppercase">
+            beta
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-slate-500">smrah</span>
+          <button class="text-xs text-slate-500 hover:text-slate-700 transition-colors">
+            Sign out
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-6 py-8">
+      <!-- Breadcrumb / back link -->
+      <a
+        href="./job_list_mockup.html"
+        class="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors mb-5"
+      >
+        <svg
+          class="h-4 w-4"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </svg>
+        Back to jobs
+      </a>
+
+      <!-- ============================================================
+           JOB HEADER CARD
+           ============================================================ -->
+      <section class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-4">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <h1 class="text-2xl font-semibold text-slate-900 tracking-tight">
+              Software Engineer — Full Stack
+            </h1>
+            <p class="mt-2 text-sm text-slate-700">
+              <span class="font-medium">Microsoft Canada Inc.</span>
+              <span class="text-slate-400">·</span> Vancouver, BC
+              <span class="text-slate-400">·</span>
+              <span class="text-slate-500">Salary not listed</span>
+            </p>
+            <p class="mt-1 text-xs text-slate-500">
+              Eluta.ca <span class="text-slate-300">·</span> Posted 21 Apr 2026
+            </p>
+            <div class="mt-4 flex items-center gap-2 flex-wrap">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums">
+                ★ Match score 0.55
+              </span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                MEDIUM fit
+              </span>
+              <a
+                href="#"
+                class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors ml-1"
+              >
+                View original posting
+                <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 7h10v10" />
+                  <path d="M7 17 17 7" />
+                </svg>
+              </a>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150">
+              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"/>
+              </svg>
+              Mark applied
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           JOB DESCRIPTION (collapsible)
+           ============================================================ -->
+      <section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
+        <details open>
+          <summary
+            class="flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50/60 rounded-xl transition-colors"
+          >
+            <span class="flex items-center gap-2">
+              <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <path d="M14 2v6h6"/>
+                <path d="M16 13H8"/>
+                <path d="M16 17H8"/>
+                <path d="M10 9H8"/>
+              </svg>
+              <span class="text-sm font-semibold text-slate-900">Job description</span>
+              <span class="text-xs text-slate-400">7,513 chars</span>
+            </span>
+            <span class="text-xs text-slate-500">Click to collapse</span>
+          </summary>
+          <div class="px-6 pb-6 pt-2 text-sm text-slate-700 leading-relaxed border-t border-slate-100">
+            <p class="font-medium text-slate-900 mt-3">Overview</p>
+            <p class="mt-2">
+              Microsoft is a company where passionate innovators come to
+              collaborate, envision what can be and take their careers
+              further. This is a world of more possibilities, more
+              innovation, more openness, and the sky is the limit thinking.
+            </p>
+            <p class="mt-3">
+              The OneLake team is hiring a Software Engineer who thrives at
+              the intersection of distributed systems, data infrastructure,
+              and developer experience. You'll own end-to-end services that
+              ISV partners build on…
+            </p>
+            <p class="text-xs text-slate-400 mt-4 italic">
+              (full JD truncated in this mockup — real app shows the entire
+              7,513-character description)
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <!-- ============================================================
+           COVER LETTER SECTION — letter + strategy panel side-by-side
+           ============================================================ -->
+      <section class="bg-white border border-slate-200 rounded-xl shadow-sm mb-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="16" x="2" y="4" rx="2"/>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+            <span class="text-sm font-semibold text-slate-900">Cover letter</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- version selector -->
+            <div class="relative inline-block">
+              <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors tabular-nums">
+                v3 (latest)
+                <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
+            </div>
+            <button class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" x2="12" y1="15" y2="3"/>
+              </svg>
+              Markdown
+            </button>
+            <button class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9V2h12v7"/>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                <rect width="12" height="8" x="6" y="14"/>
+              </svg>
+              Print → PDF
+            </button>
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">
+              <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M8 16H3v5"/>
+              </svg>
+              Regenerate
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-0">
+          <!-- LETTER TEXT -->
+          <div class="px-6 py-6 text-sm text-slate-800 leading-relaxed border-r border-slate-100">
+            <div class="font-semibold text-slate-900">Shaikh Mushfikur Rahman</div>
+            <div class="text-xs text-slate-500 mt-0.5">
+              782-882-0852 · smrahman0009@gmail.com · Halifax, NS
+            </div>
+            <p class="mt-5">Hello,</p>
+            <p class="mt-3">
+              The Software Engineer, Full Stack role on Microsoft Canada's
+              OneLake team caught my attention for a specific reason: the
+              job is fundamentally about owning services end-to-end in a
+              cloud environment, and that's been the throughline of my work
+              at Everstream Analytics.
+            </p>
+            <p class="mt-3">
+              At Everstream, the Company Name Resolution system was producing
+              inconsistent results, sometimes returning different outputs for
+              the exact same input. I owned the full workflow: data
+              exploration, preprocessing, feature engineering, and model
+              training. When the engineering team was occupied, I also
+              prepped the deployment using Azure Functions and Docker. The
+              final push hit 92% accuracy and improved resolution quality
+              by roughly 17%, with measurable gains in customer satisfaction…
+            </p>
+            <p class="text-xs text-slate-400 italic mt-3">
+              (truncated in this mockup; real app shows the full ~330 word
+              letter)
+            </p>
+            <p class="mt-5">Best,</p>
+            <p>Shaikh Mushfikur Rahman</p>
+
+            <div class="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
+              <span>270 words · Created 28 Apr 2026, 14:32</span>
+              <span>v3 of 3 versions</span>
+            </div>
+          </div>
+
+          <!-- STRATEGY + CRITIQUE PANEL -->
+          <aside class="bg-slate-50/50 px-5 py-6">
+            <!-- Strategy block -->
+            <div>
+              <div class="flex items-center gap-1.5 mb-3">
+                <svg class="h-3.5 w-3.5 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="m9 12 2 2 4-4"/>
+                </svg>
+                <span class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Strategy</span>
+              </div>
+              <dl class="space-y-3 text-xs">
+                <div>
+                  <dt class="text-slate-500">Fit assessment</dt>
+                  <dd class="mt-0.5">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                      MEDIUM
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-slate-500">Primary project</dt>
+                  <dd class="mt-0.5 text-slate-800 leading-snug">
+                    Company Name Resolution pipeline (transformer-based NLP, 92% production accuracy)
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-slate-500">Narrative angle</dt>
+                  <dd class="mt-0.5 text-slate-800 leading-snug italic">
+                    "My habit of owning the full pipeline, from architecture through Azure deployment, is exactly the end-to-end production responsibility Microsoft's OneLake team is hiring for."
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Critique block -->
+            <div class="mt-6 pt-6 border-t border-slate-200">
+              <div class="flex items-center gap-1.5 mb-3">
+                <svg class="h-3.5 w-3.5 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 12 3.27 6.96a2.7 2.7 0 0 1 0-3.81L4 2.4a2.7 2.7 0 0 1 3.81 0L13 7.6"/>
+                  <path d="m22 22-9-9"/>
+                  <path d="m13 7.6 5.2 5.2"/>
+                </svg>
+                <span class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Critique</span>
+              </div>
+              <div class="flex items-baseline gap-2 mb-3">
+                <span class="text-2xl font-semibold text-slate-900 tabular-nums">98</span>
+                <span class="text-xs text-slate-500">/ 110</span>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Approved
+                </span>
+              </div>
+              <ul class="space-y-1 text-xs">
+                <li class="flex items-center justify-between"><span class="text-slate-600">Hallucination</span><span class="font-medium text-slate-900 tabular-nums">25 / 25</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Tailoring</span><span class="font-medium text-slate-900 tabular-nums">19 / 20</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Voice</span><span class="font-medium text-slate-900 tabular-nums">13 / 15</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Banned phrases</span><span class="font-medium text-slate-900 tabular-nums">15 / 15</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Structure</span><span class="font-medium text-slate-900 tabular-nums">9 / 10</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Gap handling</span><span class="font-medium text-slate-900 tabular-nums">8 / 10</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Opening / closing</span><span class="font-medium text-slate-900 tabular-nums">5 / 5</span></li>
+                <li class="flex items-center justify-between"><span class="text-slate-600">Narrative coherence</span><span class="font-medium text-slate-900 tabular-nums">9 / 10</span></li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           REFINE WITH FEEDBACK
+           ============================================================ -->
+      <section class="bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+            <span class="text-sm font-semibold text-slate-900">Refine with feedback</span>
+            <span class="text-xs text-slate-500 ml-auto">Strategy stays locked · creates a new version</span>
+          </div>
+        </div>
+        <div class="px-6 py-4">
+          <textarea
+            rows="3"
+            placeholder="e.g. Make it more technical and add a sentence about my embedding work on commodity classification."
+            class="w-full px-3.5 py-3 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors resize-none"
+          ></textarea>
+          <div class="mt-3 flex items-center justify-between">
+            <span class="text-xs text-slate-500">5–500 characters</span>
+            <button
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-150"
+            >
+              Refine letter
+              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14"/>
+                <path d="m12 5 7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           Mockup notes
+           ============================================================ -->
+      <footer class="mt-12">
+        <details class="text-xs text-slate-400">
+          <summary class="cursor-pointer hover:text-slate-600">
+            Mockup notes (not part of the real UI)
+          </summary>
+          <div class="mt-3 space-y-2 leading-relaxed">
+            <p>
+              The strategy + critique sidebar shows what makes this app
+              different from a thin GPT wrapper: the agent's plan and
+              self-grade are surfaced. This is intentional — recruiters
+              looking at the live demo see the AI's "reasoning."
+            </p>
+            <p>
+              The version selector (v3 (latest)) is a placeholder dropdown
+              — opens a list of all saved versions in the real app.
+            </p>
+            <p>
+              Refine textarea uses the focus-ring pattern from the design
+              system (20% opacity indigo ring).
+            </p>
+            <p>
+              When no letter exists, this section collapses to an empty
+              state with a single "Generate cover letter" button. Mid-
+              generation it shows a progress card. Both states omitted from
+              this mockup for brevity — they're documented in the wireframe
+              README.
+            </p>
+          </div>
+        </details>
+      </footer>
+    </main>
+  </body>
+</html>

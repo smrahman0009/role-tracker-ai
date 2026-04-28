@@ -3,13 +3,25 @@
 > Three pages: **Login**, **Job List**, **Job Detail**.
 > Designed before any React code is written, per the locked Phase 6 plan.
 >
-> **Format:** ASCII boxes + annotations. Renders directly on GitHub. If we
-> need higher-fidelity mocks later, we'll graduate to Excalidraw or Figma.
+> **Two layers of fidelity in this folder:**
+> 1. This README — ASCII layouts + behavioral notes. Structure-only.
+> 2. [`design_system.md`](design_system.md) — locked color, typography,
+>    spacing, component, and microinteraction tokens. Every React
+>    component built in Phase 6 must follow this.
+> 3. **HTML mockups** ([`job_list_mockup.html`](job_list_mockup.html)
+>    and [`job_detail_mockup.html`](job_detail_mockup.html)) — actual
+>    rendered visual at high fidelity. Open in a browser to see what
+>    the real React pages should look and feel like.
 >
 > **Routing summary:**
 > - `/login`             → Login page (placeholder; sets auth in localStorage)
 > - `/`                  → Job List page (the home page)
 > - `/jobs/:job_id`      → Job Detail page (everything for one application)
+>
+> **How to view the HTML mockups:** open the `.html` file directly in
+> your browser. They use the Tailwind v4 browser script via CDN, so
+> there's no build step. You should see a fully styled page that
+> reflects the visual feel the React port will match.
 
 ---
 
