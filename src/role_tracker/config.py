@@ -26,13 +26,19 @@ class Settings(BaseSettings):
     # Anthropic (Phase 4 — cover letter agent)
     anthropic_api_key: str = ""
 
-    # Gmail (Phase 5 — email digest)
+    # Gmail (deferred — email digest superseded by web app)
     gmail_sender: str = ""
     gmail_app_password: str = ""
     gmail_recipient: str = ""
 
     # Pipeline
     top_n_jobs: int = 5
+
+    # Web API (Phase 5+) — bearer-token + CORS
+    app_token: str = ""                          # empty disables auth in dev
+    cors_origins: str = "http://localhost:5173"  # comma-separated list
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
 
 
 class JobQuery(BaseModel):

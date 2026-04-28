@@ -13,6 +13,10 @@ dependencies = [
     "jinja2>=3.1",
     "pyyaml>=6.0",
     "pypdf>=4.0",
+    # Phase 5: web API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",  # required for file uploads
 ]
 
 [project.optional-dependencies]
