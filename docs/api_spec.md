@@ -193,22 +193,56 @@ Get a specific saved letter version (full text, strategy, critique).
 
 #### `POST /users/{user_id}/jobs/{job_id}/letters/{version}/refine`
 Refine a saved letter using free-text feedback. Async — returns a new
-generation_id to poll. The refinement preserves the original strategy
-and grounding rules.
+generation_id to poll.
+
+**The refinement strictly preserves the committed strategy** (primary
+project, narrative angle, fit assessment). It can only revise prose,
+voice, length, emphasis within sentences. It cannot switch the primary
+project or change the narrative angle. If the user's feedback implies
+a strategy change ("focus on the audio ML angle instead of NLP"), the
+refinement will produce a same-strategy letter that mostly ignores the
+implied change. To actually change strategy, the user must call
+`POST /jobs/{job_id}/regenerate` (below).
+
+This is by design — refinement that drifts the strategy round by round
+loses the anchor that makes letters coherent.
 
 **Request body:** `RefineLetterRequest`
 **Response 202:** `GenerateLetterResponse`
+
+#### `POST /users/{user_id}/jobs/{job_id}/regenerate`
+Throw away the existing strategy and start over from scratch. Async —
+returns a new generation_id. Use this when the existing letter is on
+the wrong track and refinement won't help.
+
+The agent re-reads the JD, re-fetches resume sections, picks a new
+strategy (which may pick a different primary project, different angle,
+or different fit assessment), drafts, critiques, and saves. The new
+letter becomes a new version; previous versions are kept.
+
+**Request body:** none.
+**Response 202:** `GenerateLetterResponse`
+**Response 429:** if daily rate limit hit (regenerate counts toward
+the same 20/day limit as initial generation).
 
 #### `GET /users/{user_id}/jobs/{job_id}/letters/{version}/download.md`
 Download the letter as a Markdown file.
 
 **Response 200:** `text/markdown` body.
 
-#### `GET /users/{user_id}/jobs/{job_id}/letters/{version}/download.pdf`
-Server-rendered PDF of the letter. Generated on first request, then
-cached.
+#### PDF download — handled in the browser, not the backend
 
-**Response 200:** `application/pdf` body.
+Server-side PDF rendering was deferred out of MVP scope after the final
+plan review. The risk of WeasyPrint / system-font issues on Azure App
+Service Linux F1 is real and could eat half a day in Phase 8. Reportlab
+output looks notably worse than WeasyPrint's.
+
+**MVP approach:** the frontend renders the letter as nicely formatted HTML
+and the user clicks "Print → Save as PDF" in their browser. One click,
+zero backend complexity, identical-looking PDF.
+
+If, after Phase 9 ships, server-side PDF turns out to add real value
+(automated email attachments, server-rendered share links), we revisit.
 
 ---
 
@@ -456,9 +490,31 @@ Frontend                      Backend                    Agent
 ```
 
 The "background task" runs inside FastAPI's `BackgroundTasks` for
-single-user scale. No Celery / queue worker needed at this size. If
-the backend restarts mid-generation, the task is lost — the frontend
-will see `status=failed` after a timeout, and the user can retry.
+single-user scale. No Celery / queue worker needed at this size.
+
+### Stale-task sweeper (important)
+
+App Service F1 sleeps after 20 min idle and can be restarted by Azure
+at any time. If a background task is running when this happens, the
+in-memory work dies but its poll record remains in Cosmos DB stuck on
+`status="running"` forever. Without protection, the frontend would
+poll forever and the user would never see an error.
+
+**Rule:** any poll record with `status="running"` and `started_at >
+5 minutes ago` is a dead task. Two implementation options:
+
+1. **On every poll request,** check `started_at` first. If older than
+   5 minutes and still `running`, mark `failed` with
+   `error="Generation timed out (likely server restart). Please retry."`
+   and return that. Cheap, no separate scheduler needed.
+2. **A periodic sweep** (every 60s via FastAPI's lifespan / startup)
+   marks all stale records as failed.
+
+Recommendation: implement (1) — it's lazy, free, and self-cleaning.
+Same logic for `refresh_id` records.
+
+The 5-minute cutoff is generous (a normal generation finishes in
+30-60 seconds) so it won't mark in-flight work as failed.
 
 ---
 

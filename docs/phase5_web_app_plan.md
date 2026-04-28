@@ -227,6 +227,13 @@ DELETE /users/{user_id}/jobs/{job_id}/applied         unmark
    One URL per job application = simpler routing, no jumping between
    pages, easier mental model.
 
+**External review checkpoint:** at the end of Phase 6, before starting
+Phase 7, have at least one outside person play with the app locally for
+5-10 minutes. They don't need to be a developer — they just need to try
+to generate a letter and tell you what felt confusing. Catch UX
+problems while they're cheap to fix; the alternative is discovering them
+at Phase 9 after polish work is already underway.
+
 **Out of scope for Phase 6:** deployment, real auth.
 
 ### Phase 7 — Interactive refinement
@@ -291,8 +298,13 @@ All architectural questions raised during planning have been resolved:
 6. **Pipeline triggering.** Cache the ranked-jobs result; refresh from
    JSearch only via an explicit "Refresh jobs" button in the UI.
 
-7. **PDF download.** Server-side rendering (FastAPI returns PDF) for
-   stable shareable URLs.
+7. **PDF download.** **Browser print-to-PDF for the MVP**, not server-side
+   rendering. The server-side path (WeasyPrint / ReportLab on Azure
+   App Service Linux F1) has a real risk of system-font / native-library
+   issues that could eat half a day in Phase 8. The frontend renders the
+   letter as nicely formatted HTML and the user clicks "Print → Save as
+   PDF" in their browser. Server-side PDF revisited only post-Phase-9 if
+   it adds real value (e.g., automated email attachments).
 
 8. **Bearer-token access control.** An `APP_TOKEN` environment variable
    holds a single long random string. FastAPI middleware requires every
