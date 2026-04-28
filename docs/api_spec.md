@@ -212,7 +212,55 @@ cached.
 
 ---
 
-### 5. Apply tracking
+### 5. Saved queries
+
+The user's job-search queries (what + where) live in Cosmos DB and are
+editable from the UI. On first run, the backend bootstraps from
+`users/{id}.yaml`; after that, the YAML is ignored and the DB is the
+source of truth.
+
+#### `GET /users/{user_id}/queries`
+List all saved queries for this user.
+
+**Response 200:** `QueryListResponse`
+
+#### `POST /users/{user_id}/queries`
+Add a new query. **Auto-triggers a job refresh** (subject to the
+60-second throttle below).
+
+**Request body:** `CreateQueryRequest`
+**Response 201:** `SavedQuery` — newly created.
+**Side effect:** kicks off a background refresh if cooldown allows.
+
+#### `PUT /users/{user_id}/queries/{query_id}`
+Update an existing query (change `what`, `where`, or `enabled`).
+**Auto-triggers a job refresh** (subject to throttle).
+
+**Request body:** `UpdateQueryRequest` (all fields optional)
+**Response 200:** `SavedQuery` — updated.
+**Side effect:** kicks off a background refresh if cooldown allows.
+
+#### `DELETE /users/{user_id}/queries/{query_id}`
+Remove a query. Does NOT auto-refresh (less work, not more).
+
+**Response 204:** no body.
+
+#### Refresh throttle
+
+To prevent JSearch quota burn during rapid query edits, the backend
+enforces a **60-second cooldown** on auto-refreshes. If a query
+change happens within 60s of the last refresh, the change is saved
+to the DB immediately but the refresh is **deferred** until the
+cooldown expires OR the user clicks "Refresh jobs" manually. The
+`/jobs` endpoint includes `next_refresh_allowed_at` so the frontend
+can display a "next auto-refresh in N seconds" banner.
+
+This applies only to auto-refreshes triggered by query CRUD; manual
+refreshes via `POST /jobs/refresh` ignore the cooldown.
+
+---
+
+### 6. Apply tracking
 
 #### `POST /users/{user_id}/jobs/{job_id}/applied`
 Mark this job as applied. Hides it from the default job list view.
@@ -303,6 +351,28 @@ class RefreshStatusResponse(BaseModel):
     completed_at: datetime | None
     jobs_added: int | None              # populated when status==done
     error: str | None = None            # populated when status==failed
+
+# ---------- Saved queries ----------
+
+class SavedQuery(BaseModel):
+    query_id: str           # short UUID
+    what: str               # job type, e.g. "data scientist", "ML engineer"
+    where: str              # location, e.g. "canada", "toronto", "remote"
+    enabled: bool = True    # disable without deleting
+    created_at: datetime
+
+class QueryListResponse(BaseModel):
+    queries: list[SavedQuery]
+    next_refresh_allowed_at: datetime | None  # for auto-refresh throttle
+
+class CreateQueryRequest(BaseModel):
+    what: str
+    where: str
+
+class UpdateQueryRequest(BaseModel):
+    what: str | None = None
+    where: str | None = None
+    enabled: bool | None = None
 
 # ---------- Cover letters ----------
 
@@ -399,9 +469,6 @@ The following will be added in later phases when we hit the use case:
 - **Search / filter on jobs** beyond `applied/unapplied` (e.g. by company,
   by date) — only when we have enough jobs to need it.
 - **Bulk operations** (mark several as applied at once) — premature.
-- **Queries CRUD** (changing the user's saved JSearch queries from the
-  UI) — Phase 5-8 reads them from `users/{id}.yaml`; UI editing is a
-  later iteration.
 - **Multiple resume variants** — locked decision: single resume per user.
 - **Real auth endpoints** (`/login`, `/logout`) — Phase 5-8 uses bearer
   token only.
