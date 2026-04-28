@@ -35,6 +35,19 @@ Every per-user endpoint includes `user_id` in the URL path:
 particular user_id — it accepts whatever the URL path carries. This
 keeps multi-user migration trivial later.
 
+### API field names vs user-facing labels
+The API uses internal field names like `exclude_companies`,
+`exclude_title_keywords`, `exclude_publishers` — these are stable
+contracts and carry over from the existing domain model. The
+**user-facing UI labels these as "Hidden companies", "Hidden title
+keywords", "Hidden publishers"** — neutral framing that reads as
+personal filtering preference rather than a public judgment about
+named entities.
+
+When working on the frontend, always use the "Hidden" naming in
+labels, descriptions, and copy. When working on the backend or API,
+the `exclude_*` field names are unchanged.
+
 ### Content type
 - Requests: `application/json` for body, `multipart/form-data` for
   resume upload only.
@@ -126,14 +139,44 @@ Download the original PDF.
 ### 3. Jobs
 
 #### `GET /users/{user_id}/jobs`
-List ranked job matches. Returns from cache if a refresh hasn't been
-triggered; otherwise runs the matching pipeline.
+List ranked job matches from the latest cached snapshot.
 
-**Query parameters:**
-- `filter` (optional, default `unapplied`): one of `all`, `unapplied`,
-  `applied`. Controls which jobs are returned.
+**Query parameters (all optional):**
 
-**Response 200:** `JobListResponse`
+| Param                | Type / format                                   | Behavior                                                                |
+|----------------------|--------------------------------------------------|-------------------------------------------------------------------------|
+| `filter`             | `all` \| `unapplied` (default) \| `applied`     | Single-select. Filters by the `applied` flag.                           |
+| `type`               | comma-separated string                          | Multi-value. OR-logic on job title containing any term, case-insensitive. |
+| `location`           | comma-separated string                          | Multi-value. OR-logic on job location containing any term.              |
+| `salary_min`         | integer (CAD)                                   | Drops jobs whose `salary_min` is below this. See `hide_no_salary` below. |
+| `hide_no_salary`     | `true` \| `false` (default `false`)             | If true, also hide jobs without a salary listed (only meaningful with `salary_min`). |
+| `employment_types`   | comma-separated `FULLTIME,PARTTIME,CONTRACTOR,INTERN` | Multi-value. OR-logic. Maps to JSearch's `job_employment_type` field. |
+| `posted_within_days` | integer (typically 7, 30, 90)                   | Single-select. Drops jobs older than N days based on `posted_at`.       |
+
+**Filter logic across params:** AND between filter types, OR within each
+multi-value filter. Example:
+
+```
+GET /users/smrah/jobs?
+    filter=unapplied&
+    type=Data%20Scientist,ML%20Engineer&
+    location=Toronto,Remote&
+    salary_min=80000&
+    employment_types=FULLTIME,CONTRACTOR&
+    posted_within_days=30
+```
+
+A job matches if: it's unapplied AND its title contains "data scientist"
+OR "ml engineer", AND its location contains "toronto" OR "remote", AND
+its `salary_min ≥ 80000`, AND its employment type is FULLTIME OR
+CONTRACTOR, AND it was posted within the last 30 days.
+
+URL state is the source of truth: the frontend reflects active filters
+in the query string so refresh, back/forward, and link-sharing work.
+
+**Response 200:** `JobListResponse` — contains the filtered list plus a
+`hidden_by_filters` count so the UI can show "Showing N of M jobs · K
+hidden by your filters".
 
 #### `POST /users/{user_id}/jobs/refresh`
 Force re-fetch from JSearch and re-rank. Slow (~30-90 seconds).
@@ -207,8 +250,51 @@ implied change. To actually change strategy, the user must call
 This is by design — refinement that drifts the strategy round by round
 loses the anchor that makes letters coherent.
 
+**Per-letter refinement cap:** each letter has a hard limit of 10
+refinements. After the 10th refine call on a given letter (counting
+across the whole version history that traces back to the same original
+generation), this endpoint returns:
+
+- **Response 422:** `{"detail": "10 refinements is the cap for this
+  letter. Regenerate (POST /jobs/{id}/regenerate) for a fresh
+  approach."}` with the body shape:
+
+```python
+class Letter(BaseModel):
+    ...
+    refinement_index: int = 0   # 0 for the original generation,
+                                 # 1..10 for refined versions
+```
+
+Quality drift past 10 rounds is real — the cleanest path is a fresh
+strategy via regenerate, not refine #11. The frontend should show a
+counter ("Refinement 4 of 10") and disable the refine button at 10.
+
 **Request body:** `RefineLetterRequest`
 **Response 202:** `GenerateLetterResponse`
+**Response 422:** if the per-letter refinement cap is exceeded.
+
+#### `POST /users/{user_id}/jobs/{job_id}/letters/{version}/edit`
+Save a manually-edited version of a letter. Synchronous (no agent
+involvement, no background task). The user's text is taken as-is and
+saved as a new version in the same job's history.
+
+**The committed strategy carries forward unchanged** to the new
+version, but `critique` is set to `null` because the agent's quality
+assessment doesn't apply to text the agent didn't write. The frontend
+displays edited versions with a "Edited by you" label instead of the
+critique badge.
+
+**Request body:** `ManualEditRequest`
+**Response 201:** `Letter` — the new version (with `feedback_used =
+"manual edit"`).
+**Response 422:** if the text is empty, > 5000 chars, or fails the
+deterministic checks (word count outside 200-500, paragraph > 200
+words). Validation is gentler than the agent's hard limits — users
+get more freedom than the agent does.
+
+This endpoint does NOT count toward the 10-refinement cap, the daily
+20-generation rate limit, or any other quota. Manual edits are free.
 
 #### `POST /users/{user_id}/jobs/{job_id}/regenerate`
 Throw away the existing strategy and start over from scratch. Async —
@@ -309,6 +395,69 @@ Unmark applied. Job returns to the unapplied list.
 
 ---
 
+### 7. Profile (contact info shown in cover letters)
+
+#### `GET /users/{user_id}/profile`
+Return the user's contact info plus the per-field "show in letter"
+flags. Used by the Settings → Contact info form.
+
+**Response 200:** `ProfileResponse`
+
+#### `PUT /users/{user_id}/profile`
+Update contact info and/or per-field show-in-letter flags. All fields
+optional — only the ones provided get patched.
+
+**Request body:** `UpdateProfileRequest`
+**Response 200:** `ProfileResponse` — the updated profile.
+
+The agent's letter-header builder respects these flags:
+
+- Empty field OR `show_in_header=false` → that line is skipped
+- Filled field AND `show_in_header=true` → that line appears
+
+Name is always shown. Email/phone/city/LinkedIn/GitHub/portfolio are
+each individually toggleable.
+
+---
+
+### 8. Hidden lists (filter preferences)
+
+These three endpoints manage the user's personal filter lists. The
+field names use `exclude_*` for backward compatibility with the existing
+domain model, but the UI labels them "Hidden" — the API name is just an
+internal identifier.
+
+#### `GET /users/{user_id}/hidden`
+Return all three hidden lists in one response.
+
+**Response 200:** `HiddenListsResponse` —
+```python
+{
+  "companies": ["bank", "insurance", ...],
+  "title_keywords": ["banking", "wealth", ...],
+  "publishers": ["...", ...]   # may be empty
+}
+```
+
+#### `PUT /users/{user_id}/hidden/companies`
+Replace the entire `exclude_companies` list. Useful for both bulk
+edits and the "Clear all" button (send `{"items": []}`).
+
+**Request body:** `{"items": ["string", ...]}`
+**Response 200:** the updated list.
+
+#### `PUT /users/{user_id}/hidden/title-keywords`
+Same pattern for `exclude_title_keywords`.
+
+#### `PUT /users/{user_id}/hidden/publishers`
+Same pattern for `exclude_publishers`.
+
+For granular add/remove the UI can fetch the current list, modify
+locally, and PUT the new list back. Three small dedicated CRUD endpoints
+per list felt like overkill for stable data the user touches rarely.
+
+---
+
 ## Pydantic models (request/response shapes)
 
 These will live in `src/role_tracker/api/schemas.py`. The existing
@@ -355,7 +504,9 @@ class JobSummary(BaseModel):
 
 class JobListResponse(BaseModel):
     jobs: list[JobSummary]
-    total: int
+    total: int                          # count of jobs in this response
+    total_unfiltered: int                # before query-param filters
+    hidden_by_filters: int               # total_unfiltered - total
     last_refreshed_at: datetime | None
     next_refresh_allowed_at: datetime | None  # to throttle JSearch usage
 
@@ -457,6 +608,89 @@ class LetterGenerationStatus(BaseModel):
 
 class RefineLetterRequest(BaseModel):
     feedback: str                       # free-text, 5-500 chars
+
+class ManualEditRequest(BaseModel):
+    """Body of POST /jobs/{job_id}/letters/{version}/edit."""
+    text: str                           # full letter Markdown, 1-5000 chars
+
+# ---------- Profile (contact info + show-in-letter flags) ----------
+
+class ProfileResponse(BaseModel):
+    """Body of GET /users/{user_id}/profile."""
+
+    # Identity (always shown in letter header if set)
+    name: str
+
+    # Optional fields, each individually toggleable
+    phone: str = ""
+    email: str = ""
+    city: str = ""
+    linkedin_url: str = ""
+    github_url: str = ""
+    portfolio_url: str = ""              # NEW: optional personal site/portfolio
+
+    # Per-field "show in letter header" flags. All default True.
+    # Empty fields are skipped regardless of flag (you can't render blank).
+    show_phone_in_header: bool = True
+    show_email_in_header: bool = True
+    show_city_in_header: bool = True
+    show_linkedin_in_header: bool = True
+    show_github_in_header: bool = True
+    show_portfolio_in_header: bool = True
+
+
+class UpdateProfileRequest(BaseModel):
+    """Body of PUT /users/{user_id}/profile. All fields optional."""
+
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    city: str | None = None
+    linkedin_url: str | None = None
+    github_url: str | None = None
+    portfolio_url: str | None = None
+
+    show_phone_in_header: bool | None = None
+    show_email_in_header: bool | None = None
+    show_city_in_header: bool | None = None
+    show_linkedin_in_header: bool | None = None
+    show_github_in_header: bool | None = None
+    show_portfolio_in_header: bool | None = None
+
+
+# ---------- Hidden lists ----------
+
+class HiddenListsResponse(BaseModel):
+    """Body of GET /users/{user_id}/hidden."""
+    companies: list[str]
+    title_keywords: list[str]
+    publishers: list[str]
+
+
+class UpdateHiddenListRequest(BaseModel):
+    """Body of PUT /users/{user_id}/hidden/{kind}.
+
+    Replace-style: send the full list each time. To clear, send
+    {"items": []}.
+    """
+    items: list[str]
+```
+
+The existing `Letter` shape gets one new field:
+
+```python
+class Letter(BaseModel):
+    version: int
+    text: str
+    word_count: int
+    strategy: Strategy | None = None
+    critique: CritiqueScore | None = None
+    feedback_used: str | None = None
+    refinement_index: int = 0           # 0 for original generation,
+                                         # 1..10 for refined versions,
+                                         # carries through manual edits
+    edited_by_user: bool = False         # true if last save was a manual edit
+    created_at: datetime
 ```
 
 ---
