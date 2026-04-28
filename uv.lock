@@ -685,7 +685,7 @@ wheels = [
 ]
 
 [[package]]
-name = "role-tracker-ai"
+name = "role-tracker"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

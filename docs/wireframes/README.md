@@ -1,4 +1,4 @@
-# Role Tracker AI — Frontend Wireframes
+# Role Tracker — Frontend Wireframes
 
 > Three pages: **Login**, **Job List**, **Job Detail**.
 > Designed before any React code is written, per the locked Phase 6 plan.
@@ -24,7 +24,7 @@ Placeholder authentication. Sets `user_id` and `app_token` in
 │                                                                  │
 │                                                                  │
 │                  ┌────────────────────────────┐                  │
-│                  │   Role Tracker AI          │                  │
+│                  │   Role Tracker             │                  │
 │                  │                            │                  │
 │                  │  User ID                   │                  │
 │                  │  ┌──────────────────────┐  │                  │
@@ -67,7 +67,7 @@ The home page. Shows ranked jobs as cards. Includes filter tabs and a
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  Role Tracker AI         Last refreshed: 2026-04-28 11:24    [↻ Refresh] │
+│  Role Tracker            Last refreshed: 2026-04-28 11:24    [↻ Refresh] │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │   [ All ]  [ Unapplied (10) ]  [ Applied (2) ]               [⚙ Settings] │

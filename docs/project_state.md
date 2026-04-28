@@ -1,4 +1,4 @@
-# Role Tracker AI — Project State
+# Role Tracker — Project State
 
 > A self-contained handoff document. Written so a future Claude Code session
 > (or any collaborator) can read this once and fully understand where the
@@ -17,7 +17,7 @@
 
 ## 1. Core purpose and functionality
 
-Role Tracker AI is a **daily, automated job-matching + tailored cover-letter
+Role Tracker is a **daily, automated job-matching + tailored cover-letter
 pipeline** built for personal use by a job-seeking data scientist / ML
 engineer in Canada, with planned expansion to 4–5 friends.
 
@@ -394,7 +394,7 @@ Working well. The pattern that has consistently worked across Phases 1–4:
 ### What works particularly well
 - **Persistent memory across sessions.** Claude Code's memory files at
   `~/.claude/projects/.../memory/` survive restarts, so the next session
-  already knows the project is Role Tracker AI, the user's role, and
+  already knows the project is Role Tracker, the user's role, and
   preferences around plan-first-then-execute.
 - **Parallel tool calls.** Reading multiple files + running `pytest` + lint
   in one turn keeps turnaround fast.

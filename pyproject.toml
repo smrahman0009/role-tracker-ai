@@ -1,5 +1,5 @@
 [project]
-name = "role-tracker-ai"
+name = "role-tracker"
 version = "0.1.0"
 description = "Daily automated job-matching pipeline with tailored cover letters and email digest"
 requires-python = ">=3.12"

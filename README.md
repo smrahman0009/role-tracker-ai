@@ -1,4 +1,4 @@
-# Role Tracker AI
+# Role Tracker
 
 A daily automated pipeline that fetches Canadian job postings from Adzuna, scores them against your resume using OpenAI embeddings, tailors a cover letter per top match via a multi-step LLM agent, and emails you a digest — deployed on Azure via Docker + GitHub Actions.
 

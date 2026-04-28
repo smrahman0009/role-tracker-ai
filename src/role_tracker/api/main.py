@@ -1,4 +1,4 @@
-"""FastAPI app factory for Role Tracker AI.
+"""FastAPI app factory for Role Tracker.
 
 Entry points:
 - `app` — the module-level instance, used by uvicorn.
@@ -30,10 +30,10 @@ def create_app() -> FastAPI:
     settings = Settings()
 
     app = FastAPI(
-        title="Role Tracker AI API",
+        title="Role Tracker API",
         version="0.1.0",
         description=(
-            "HTTP API for the Role Tracker AI agent. "
+            "HTTP API for the Role Tracker agent. "
             "See docs/api_spec.md for the contract."
         ),
         lifespan=lifespan,

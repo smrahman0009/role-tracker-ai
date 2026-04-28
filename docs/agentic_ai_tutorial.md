@@ -1,6 +1,6 @@
 # Agentic AI — Beginner-to-Mid-Level Tutorial
 
-> A practical course using the Role Tracker AI project as the running example.
+> A practical course using the Role Tracker project as the running example.
 > Every concept is paired with code you'd actually write in Phase 4 (cover-letter generation).
 
 ---
@@ -704,7 +704,7 @@ You've covered the fundamentals. Mid-level territory starts here:
 - **Tool composition** — tools that call other tools. E.g. `draft_paragraph` internally calls `read_resume_section` then Claude. Keeps agent traces shorter.
 - **Structured outputs / JSON mode** — force Claude to return JSON matching a schema. Great for pipelines where the output feeds another system.
 - **Streaming** — get tokens as they generate instead of waiting for full response. Better UX for interactive tools.
-- **Computer use / browser agents** — Claude can control a real browser. Overkill for Role Tracker AI, but you'll see it everywhere in 2026.
+- **Computer use / browser agents** — Claude can control a real browser. Overkill for Role Tracker, but you'll see it everywhere in 2026.
 - **Agent frameworks** — LangGraph, AutoGen, Anthropic's Agent SDK. Worth learning *after* you've built an agent from scratch — otherwise you won't understand what the framework is hiding.
 
 ---

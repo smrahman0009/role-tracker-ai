@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the Role Tracker AI API in development mode.
+"""Start the Role Tracker API in development mode.
 
 Reads .env, then runs uvicorn with hot-reload on the configured host/port
 (defaults to 127.0.0.1:8000). Production deploys use a different startup
@@ -16,7 +16,7 @@ def main() -> None:
     from role_tracker.config import Settings
 
     settings = Settings()
-    print(f"\nStarting Role Tracker AI API on http://{settings.api_host}:{settings.api_port}")
+    print(f"\nStarting Role Tracker API on http://{settings.api_host}:{settings.api_port}")
     print(f"  - OpenAPI docs:   http://{settings.api_host}:{settings.api_port}/docs")
     print(f"  - Health probe:   http://{settings.api_host}:{settings.api_port}/health")
     auth_state = (

@@ -1,4 +1,4 @@
-# Role Tracker AI — API Specification
+# Role Tracker — API Specification
 
 > **Phase 5 first deliverable.** This is the contract for the FastAPI
 > backend. No backend code is written until this is approved.

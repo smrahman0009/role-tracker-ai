@@ -1,4 +1,4 @@
-# Role Tracker AI — Project Plan
+# Role Tracker — Project Plan
 
 ## Context
 The user is job-hunting for data science, ML, AI engineer, and software developer and other roles in Canada or anywhere in the world. Manually searching Adzuna every day, scoring each posting against his resume, tailoring a cover letter per job, and tracking which jobs he has already applied to is repetitive and slow.
@@ -182,7 +182,7 @@ tailoring/
 
 ### Phase 8 — Docker
 - Multi-stage Dockerfile, non-root user, `.dockerignore`.
-- **Done when:** `docker run --env-file .env role-tracker-ai:local` runs end-to-end.
+- **Done when:** `docker run --env-file .env role-tracker:local` runs end-to-end.
 
 ### Phase 9 — Azure infrastructure (one-time)
 - Resource group, ACR, Storage (Table + Blob), Key Vault, Container Apps env + Job with cron, managed identity.
@@ -233,7 +233,7 @@ role_tracker_ai/
 
 ## Verification end-to-end
 - **Local:** `python -m role_tracker` → digest arrives; rerun → zero duplicates.
-- **Docker:** `docker run --env-file .env role-tracker-ai:local` → same as local run.
+- **Docker:** `docker run --env-file .env role-tracker:local` → same as local run.
 - **Azure manual:** `az containerapp job start` → email + rows in Azure Table.
 - **CI/CD:** push to `main` → image built, pushed, ACA Job updated, next scheduled run uses it.
 
