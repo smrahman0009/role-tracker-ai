@@ -10,12 +10,14 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from role_tracker.queries.models import SavedQuery
+from role_tracker.resume.models import ResumeMetadata
 
 __all__ = [
     "ApiError",
     "CreateQueryRequest",
     "HealthResponse",
     "QueryListResponse",
+    "ResumeMetadata",
     "SavedQuery",
     "UpdateQueryRequest",
 ]

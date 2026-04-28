@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from role_tracker.api.middleware import BearerTokenMiddleware
-from role_tracker.api.routes import health, queries
+from role_tracker.api.routes import health, queries, resume
 from role_tracker.config import Settings
 
 
@@ -56,6 +56,7 @@ def create_app() -> FastAPI:
     # Routes.
     app.include_router(health.router)
     app.include_router(queries.router)
+    app.include_router(resume.router)
 
     return app
 
