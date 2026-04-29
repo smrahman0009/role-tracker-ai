@@ -8,7 +8,7 @@ from role_tracker.users.models import UserProfile
 
 
 class YamlUserProfileStore:
-    """Reads UserProfile objects from YAML files in a directory."""
+    """Reads + writes UserProfile objects to YAML files in a directory."""
 
     def __init__(self, root: Path = Path("users")) -> None:
         self._root = root
@@ -26,6 +26,16 @@ class YamlUserProfileStore:
                 f"{[u.id for u in self.list_users()]}"
             )
         return self._load_file(path)
+
+    def save_user(self, profile: UserProfile) -> None:
+        """Persist a profile back to disk. Overwrites any existing file."""
+        self._root.mkdir(parents=True, exist_ok=True)
+        path = self._root / f"{profile.id}.yaml"
+        # Atomic write: temp file, then rename.
+        tmp = path.with_suffix(".yaml.tmp")
+        data = profile.model_dump(mode="json")
+        tmp.write_text(yaml.safe_dump(data, sort_keys=False))
+        tmp.replace(path)
 
     @staticmethod
     def _load_file(path: Path) -> UserProfile:

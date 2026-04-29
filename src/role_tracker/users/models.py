@@ -21,8 +21,20 @@ class UserProfile(BaseModel):
     city: str = ""
     linkedin_url: str = ""
     github_url: str = ""
+    portfolio_url: str = ""
     resume_path: Path
     top_n_jobs: int = 5
+
+    # Per-field "show in cover-letter header" flags. All default True; the
+    # contact_header() builder respects them. Empty fields are skipped
+    # regardless of flag (you can't render a blank line). Name is always
+    # shown.
+    show_phone_in_header: bool = True
+    show_email_in_header: bool = True
+    show_city_in_header: bool = True
+    show_linkedin_in_header: bool = True
+    show_github_in_header: bool = True
+    show_portfolio_in_header: bool = True
 
     queries: list[JobQuery]
     exclude_companies: list[str] = []
@@ -39,19 +51,26 @@ class UserProfile(BaseModel):
         return self.resume_path.with_suffix(".embedding.json")
 
     def contact_header(self) -> str:
-        """Formatted header block used at the top of every cover letter."""
+        """Formatted header block used at the top of every cover letter.
+
+        Respects per-field show-in-header flags. Empty fields are skipped
+        regardless. Name is always rendered.
+        """
         contact_parts: list[str] = []
-        if self.phone:
+        if self.phone and self.show_phone_in_header:
             contact_parts.append(self.phone)
-        if self.email:
+        if self.email and self.show_email_in_header:
             contact_parts.append(self.email)
-        if self.city:
+        if self.city and self.show_city_in_header:
             contact_parts.append(self.city)
-        links = [
-            f"[LinkedIn]({self.linkedin_url})" if self.linkedin_url else "",
-            f"[GitHub]({self.github_url})" if self.github_url else "",
-        ]
-        links = [link for link in links if link]
+
+        links: list[str] = []
+        if self.linkedin_url and self.show_linkedin_in_header:
+            links.append(f"[LinkedIn]({self.linkedin_url})")
+        if self.github_url and self.show_github_in_header:
+            links.append(f"[GitHub]({self.github_url})")
+        if self.portfolio_url and self.show_portfolio_in_header:
+            links.append(f"[Portfolio]({self.portfolio_url})")
 
         lines = [f"**{self.name}**"]
         if contact_parts:

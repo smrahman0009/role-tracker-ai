@@ -11,8 +11,10 @@ from role_tracker.users.models import UserProfile
 
 
 class UserProfileStore(Protocol):
-    """Minimal interface: list users, get one by id."""
+    """Minimal interface: list users, get one, persist updates."""
 
     def list_users(self) -> list[UserProfile]: ...
 
     def get_user(self, user_id: str) -> UserProfile: ...
+
+    def save_user(self, profile: UserProfile) -> None: ...

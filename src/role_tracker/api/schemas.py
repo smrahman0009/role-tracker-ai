@@ -20,6 +20,7 @@ __all__ = [
     "GenerateLetterRequest",
     "GenerateLetterResponse",
     "HealthResponse",
+    "HiddenListsResponse",
     "JobDetailResponse",
     "JobListResponse",
     "JobSummary",
@@ -27,6 +28,7 @@ __all__ = [
     "LetterGenerationStatus",
     "LetterVersionList",
     "ManualEditRequest",
+    "ProfileResponse",
     "QueryListResponse",
     "RefineLetterRequest",
     "RefreshJobResponse",
@@ -34,6 +36,8 @@ __all__ = [
     "ResumeMetadata",
     "SavedQuery",
     "Strategy",
+    "UpdateHiddenListRequest",
+    "UpdateProfileRequest",
     "UpdateQueryRequest",
 ]
 
@@ -243,3 +247,65 @@ class ManualEditRequest(BaseModel):
     """
 
     text: str = Field(min_length=1, max_length=5000)
+
+
+# ----- Profile (contact info + show-in-letter flags) -----
+
+
+class ProfileResponse(BaseModel):
+    """Body of GET /users/{user_id}/profile."""
+
+    name: str
+    phone: str = ""
+    email: str = ""
+    city: str = ""
+    linkedin_url: str = ""
+    github_url: str = ""
+    portfolio_url: str = ""
+
+    show_phone_in_header: bool = True
+    show_email_in_header: bool = True
+    show_city_in_header: bool = True
+    show_linkedin_in_header: bool = True
+    show_github_in_header: bool = True
+    show_portfolio_in_header: bool = True
+
+
+class UpdateProfileRequest(BaseModel):
+    """Body of PUT /users/{user_id}/profile. All fields optional."""
+
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    city: str | None = None
+    linkedin_url: str | None = None
+    github_url: str | None = None
+    portfolio_url: str | None = None
+
+    show_phone_in_header: bool | None = None
+    show_email_in_header: bool | None = None
+    show_city_in_header: bool | None = None
+    show_linkedin_in_header: bool | None = None
+    show_github_in_header: bool | None = None
+    show_portfolio_in_header: bool | None = None
+
+
+# ----- Hidden lists -----
+
+
+class HiddenListsResponse(BaseModel):
+    """Body of GET /users/{user_id}/hidden."""
+
+    companies: list[str]
+    title_keywords: list[str]
+    publishers: list[str]
+
+
+class UpdateHiddenListRequest(BaseModel):
+    """Body of PUT /users/{user_id}/hidden/{kind}.
+
+    Replace-style: send the full list each time. To clear, send
+    {"items": []}.
+    """
+
+    items: list[str]

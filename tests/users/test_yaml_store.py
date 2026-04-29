@@ -119,6 +119,58 @@ def test_contact_header_includes_all_populated_fields(tmp_path: Path) -> None:
     assert "[GitHub](https://github.com/jane)" in header
 
 
+def test_contact_header_respects_show_flags(tmp_path: Path) -> None:
+    users_dir = tmp_path / "users"
+    users_dir.mkdir()
+    _write(
+        users_dir / "alice.yaml",
+        """
+        id: alice
+        name: Alice
+        phone: "555-1234"
+        email: a@b.com
+        city: Toronto
+        linkedin_url: https://linkedin.com/in/alice
+        show_phone_in_header: false
+        show_linkedin_in_header: false
+        resume_path: data/resumes/alice.pdf
+        queries: []
+        """,
+    )
+    user = YamlUserProfileStore(root=users_dir).get_user("alice")
+    header = user.contact_header()
+    assert "555-1234" not in header        # phone hidden by flag
+    assert "linkedin" not in header.lower()  # LinkedIn hidden by flag
+    assert "a@b.com" in header              # email still shown
+    assert "Toronto" in header              # city still shown
+    assert "Alice" in header                # name always shown
+
+
+def test_save_user_round_trip(tmp_path: Path) -> None:
+    """save_user persists changes that survive a fresh store instance."""
+    users_dir = tmp_path / "users"
+    users_dir.mkdir()
+    _write(
+        users_dir / "alice.yaml",
+        """
+        id: alice
+        name: Alice
+        resume_path: data/resumes/alice.pdf
+        queries: []
+        """,
+    )
+    store = YamlUserProfileStore(root=users_dir)
+    user = store.get_user("alice")
+    updated = user.model_copy(
+        update={"phone": "999-0000", "show_email_in_header": False}
+    )
+    store.save_user(updated)
+
+    fresh = YamlUserProfileStore(root=users_dir).get_user("alice")
+    assert fresh.phone == "999-0000"
+    assert fresh.show_email_in_header is False
+
+
 def test_contact_header_skips_empty_fields(tmp_path: Path) -> None:
     users_dir = tmp_path / "users"
     users_dir.mkdir()

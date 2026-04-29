@@ -1,71 +1,64 @@
 id: smrah
-name: "Shaikh Mushfikur Rahman"
-email: "smrahman0009@gmail.com"
-phone: "782-882-0852"
-city: "Halifax, NS"
-# Fill these in with your real profile URLs so letter headers link correctly
-linkedin_url: ""
-github_url: ""
-resume_path: "data/resumes/smrah.pdf"
+name: Shaikh Mushfikur Rahman
+email: smrahman0009@gmail.com
+phone: 782-882-0852
+city: Halifax, NS
+linkedin_url: ''
+github_url: ''
+portfolio_url: ''
+resume_path: data/resumes/smrah.pdf
 top_n_jobs: 5
-
-# Each query becomes a separate JSearch call.
+show_phone_in_header: true
+show_email_in_header: true
+show_city_in_header: true
+show_linkedin_in_header: true
+show_github_in_header: true
+show_portfolio_in_header: true
 queries:
-  - what: "data scientist"
-    where: "canada"
-  - what: "machine learning engineer"
-    where: "canada"
-  - what: "software developer"
-    where: "canada"
-  - what: "AI engineer"
-    where: "canada"
-
-# Case-insensitive substring match on employer_name.
-# A job is dropped if the company name contains ANY of these.
+- what: data scientist
+  where: canada
+- what: machine learning engineer
+  where: canada
+- what: software developer
+  where: canada
+- what: AI engineer
+  where: canada
 exclude_companies:
-  - bank
-  - rbc
-  - cibc
-  - bmo
-  - scotiabank
-  - desjardins
-  - manulife
-  - sun life
-  - canada life
-  - great-west
-  - intact
-  - industrial alliance
-  - insurance
-  - insurer
-  - wealth management
-  - capital markets
-
-# Case-insensitive substring match on job title.
+- bank
+- rbc
+- cibc
+- bmo
+- scotiabank
+- desjardins
+- manulife
+- sun life
+- canada life
+- great-west
+- intact
+- industrial alliance
+- insurance
+- insurer
+- wealth management
+- capital markets
 exclude_title_keywords:
-  - banking
-  - banker
-  - insurance
-  - actuary
-  - actuarial
-  - underwriter
-  - wealth
-
-# Personal filter list of publisher names the user prefers not to see
-# in their job results. JSearch filters these server-side via the
-# exclude_job_publishers parameter; we also re-check locally.
-# This list reflects nothing more than the user's personal preferences
-# and contains no implied judgment about the listed publishers.
+- banking
+- banker
+- insurance
+- actuary
+- actuarial
+- underwriter
+- wealth
 exclude_publishers:
-  - BeBee
-  - Sercanto
-  - Jobrapido
-  - Neuvoo
-  - Talent.com
-  - Jobcase
-  - Learn4Good
-  - Trovit
-  - Mitula
-  - Jooble
-  - Careerjet
-  - Whatjobs
-  - Kijiji
+- BeBee
+- Sercanto
+- Jobrapido
+- Neuvoo
+- Talent.com
+- Jobcase
+- Learn4Good
+- Trovit
+- Mitula
+- Jooble
+- Careerjet
+- Whatjobs
+- Kijiji
