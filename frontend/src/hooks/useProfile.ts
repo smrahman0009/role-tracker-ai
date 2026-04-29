@@ -12,14 +12,40 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/auth/AuthContext";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import type { ProfileResponse, UpdateProfileRequest } from "@/lib/types";
+
+const EMPTY_PROFILE: ProfileResponse = {
+  name: "",
+  phone: "",
+  email: "",
+  city: "",
+  linkedin_url: "",
+  github_url: "",
+  portfolio_url: "",
+  show_phone_in_header: true,
+  show_email_in_header: true,
+  show_city_in_header: true,
+  show_linkedin_in_header: true,
+  show_github_in_header: true,
+  show_portfolio_in_header: false,
+};
 
 export function useProfile() {
   const { userId } = useAuth();
   return useQuery<ProfileResponse>({
     queryKey: ["profile", userId],
-    queryFn: () => api.get<ProfileResponse>(`/users/${userId}/profile`),
+    queryFn: async () => {
+      try {
+        return await api.get<ProfileResponse>(`/users/${userId}/profile`);
+      } catch (err) {
+        // No profile yet → render an empty form so the user can fill it in.
+        if (err instanceof ApiClientError && err.status === 404) {
+          return EMPTY_PROFILE;
+        }
+        throw err;
+      }
+    },
     enabled: Boolean(userId),
   });
 }

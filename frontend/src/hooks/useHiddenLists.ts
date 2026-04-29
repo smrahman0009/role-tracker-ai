@@ -6,18 +6,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/auth/AuthContext";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import type {
   HiddenListKind,
   HiddenListsResponse,
   UpdateHiddenListRequest,
 } from "@/lib/types";
 
+const EMPTY_HIDDEN: HiddenListsResponse = {
+  companies: [],
+  title_keywords: [],
+  publishers: [],
+};
+
 export function useHiddenLists() {
   const { userId } = useAuth();
   return useQuery<HiddenListsResponse>({
     queryKey: ["hidden", userId],
-    queryFn: () => api.get<HiddenListsResponse>(`/users/${userId}/hidden`),
+    queryFn: async () => {
+      try {
+        return await api.get<HiddenListsResponse>(`/users/${userId}/hidden`);
+      } catch (err) {
+        // No profile yet → empty lists, so the user can add entries.
+        if (err instanceof ApiClientError && err.status === 404) {
+          return EMPTY_HIDDEN;
+        }
+        throw err;
+      }
+    },
     enabled: Boolean(userId),
   });
 }
