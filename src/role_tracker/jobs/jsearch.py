@@ -84,4 +84,5 @@ class JSearchClient:
             salary_max=raw.get("job_max_salary"),
             source="jsearch",
             publisher=raw.get("job_publisher") or "unknown",
+            employment_type=(raw.get("job_employment_type") or "").upper(),
         )

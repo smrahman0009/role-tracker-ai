@@ -110,7 +110,9 @@ class JobListResponse(BaseModel):
     """Body of GET /users/{user_id}/jobs."""
 
     jobs: list[JobSummary]
-    total: int
+    total: int                          # count after all filters
+    total_unfiltered: int = 0           # count before query-param filters
+    hidden_by_filters: int = 0          # = total_unfiltered - total
     last_refreshed_at: datetime | None
     next_refresh_allowed_at: datetime | None = None
 

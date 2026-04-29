@@ -320,3 +320,90 @@ def test_apply_unapply_roundtrip(client: TestClient) -> None:
 
     client.delete("/users/alice/jobs/j1/applied")
     assert client.get("/users/alice/jobs/j1").json()["applied"] is False
+
+
+# ----- inline filter chips on GET /jobs -----
+
+
+def test_list_response_reports_unfiltered_total_and_hidden_count(
+    client: TestClient,
+) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    # Mock pipeline returns 2 ScoredJobs (j1 = Senior Data Scientist,
+    # j2 = ML Engineer). Filter by type=data — j1 matches, j2 doesn't.
+    response = client.get("/users/alice/jobs?filter=all&type=data")
+    body = response.json()
+    assert body["total"] == 1
+    assert body["total_unfiltered"] == 2
+    assert body["hidden_by_filters"] == 1
+    assert body["jobs"][0]["job_id"] == "j1"
+
+
+def test_type_filter_multi_value_or_logic(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    response = client.get(
+        "/users/alice/jobs?filter=all&type=data%20scientist,ml%20engineer"
+    )
+    body = response.json()
+    # Both fixture jobs match.
+    assert body["total"] == 2
+
+
+def test_location_filter(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    # Both fixture jobs are in Toronto, so this matches both.
+    body = client.get("/users/alice/jobs?filter=all&location=toronto").json()
+    assert body["total"] == 2
+
+    # Filter that matches none.
+    body = client.get("/users/alice/jobs?filter=all&location=halifax").json()
+    assert body["total"] == 0
+    assert body["hidden_by_filters"] == 2
+
+
+def test_filters_combine_with_applied_filter(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    # Mark j1 applied, then filter by type=ml — j2 is the only ML role
+    # AND it's unapplied, so the unapplied+type filter returns just j2.
+    client.post("/users/alice/jobs/j1/applied")
+    body = client.get("/users/alice/jobs?filter=unapplied&type=ml").json()
+    assert body["total"] == 1
+    assert body["jobs"][0]["job_id"] == "j2"
+
+
+def test_no_filters_returns_everything(client: TestClient) -> None:
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+
+    body = client.get("/users/alice/jobs?filter=all").json()
+    assert body["total"] == 2
+    assert body["total_unfiltered"] == 2
+    assert body["hidden_by_filters"] == 0
+
+
+def test_filters_on_empty_snapshot(client: TestClient) -> None:
+    """Filtering on a missing snapshot should return zeros, not 500."""
+    body = client.get(
+        "/users/alice/jobs?type=data&salary_min=80000"
+    ).json()
+    assert body["total"] == 0
+    assert body["total_unfiltered"] == 0
+    assert body["hidden_by_filters"] == 0

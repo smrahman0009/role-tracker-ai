@@ -42,7 +42,9 @@ from role_tracker.jobs.cache import (
     JobsCache,
     StoredScoredJob,
 )
+from role_tracker.jobs.filters import apply_list_filters
 from role_tracker.jobs.jsearch import JSearchClient
+from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.pipeline import PipelineRunner, run_matching_pipeline
 from role_tracker.jobs.refresh_state import (
     FileRefreshTaskStore,
@@ -125,36 +127,75 @@ def get_pipeline_runner() -> PipelineRunner:
 # ----- Routes -----
 
 
+def _split_csv(value: str) -> list[str]:
+    """Parse a comma-separated query param into a clean list."""
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 @router.get("", response_model=JobListResponse)
 def list_jobs(
     user_id: str,
     filter: JobFilter = "unapplied",  # type: ignore[assignment]
+    type: str = "",                     # comma-separated multi-value
+    location: str = "",                 # comma-separated multi-value
+    salary_min: int | None = None,
+    hide_no_salary: bool = False,
+    employment_types: str = "",         # comma-separated multi-value
+    posted_within_days: int | None = None,
     cache: JobsCache = Depends(get_jobs_cache),
     applied_store: AppliedStore = Depends(get_applied_store),
 ) -> JobListResponse:
-    """List ranked jobs from the latest cached snapshot, with applied flags."""
+    """List ranked jobs from the latest cached snapshot, with applied flags
+    and the inline filter-chip filters applied."""
     snapshot = cache.get_snapshot(user_id)
     if snapshot is None:
         return JobListResponse(
             jobs=[],
             total=0,
+            total_unfiltered=0,
+            hidden_by_filters=0,
             last_refreshed_at=None,
         )
 
     applied_ids = applied_store.list_applied(user_id)
-    summaries = [
-        _to_summary(s, applied=s.job.id in applied_ids) for s in snapshot.jobs
-    ]
+    all_jobs = [s.job for s in snapshot.jobs]
+    score_by_id = {s.job.id: s.score for s in snapshot.jobs}
+    total_unfiltered = len(all_jobs)
 
+    # Step 1: applied/unapplied filter (the existing tabs).
     if filter == "applied":
-        summaries = [s for s in summaries if s.applied]
+        all_jobs = [j for j in all_jobs if j.id in applied_ids]
     elif filter == "unapplied":
-        summaries = [s for s in summaries if not s.applied]
-    # "all" → no filter
+        all_jobs = [j for j in all_jobs if j.id not in applied_ids]
+
+    # Step 2: the inline filter-chip filters.
+    filtered_jobs = apply_list_filters(
+        all_jobs,
+        type_terms=_split_csv(type),
+        location_terms=_split_csv(location),
+        salary_min=salary_min,
+        hide_no_salary=hide_no_salary,
+        employment_types=_split_csv(employment_types),
+        posted_within_days=posted_within_days,
+    )
+
+    # Step 3: convert to summaries.
+    summaries = [
+        _to_summary_from_job(
+            job,
+            score=score_by_id.get(job.id, 0.0),
+            applied=job.id in applied_ids,
+        )
+        for job in filtered_jobs
+    ]
 
     return JobListResponse(
         jobs=summaries,
         total=len(summaries),
+        total_unfiltered=total_unfiltered,
+        hidden_by_filters=max(0, total_unfiltered - len(summaries)),
         last_refreshed_at=snapshot.last_refreshed_at,
     )
 
@@ -268,7 +309,14 @@ def unmark_applied(
 
 def _to_summary(stored: StoredScoredJob, *, applied: bool = False) -> JobSummary:
     """Convert StoredScoredJob → JobSummary (no full description)."""
-    desc = (stored.job.description or "").strip()
+    return _to_summary_from_job(stored.job, score=stored.score, applied=applied)
+
+
+def _to_summary_from_job(
+    job: JobPosting, *, score: float, applied: bool = False
+) -> JobSummary:
+    """Build a JobSummary from a raw JobPosting + its match score."""
+    desc = (job.description or "").strip()
     preview = desc[:240]
     if len(desc) > 240:
         # End at the last word boundary so we don't cut a word in half.
@@ -277,16 +325,16 @@ def _to_summary(stored: StoredScoredJob, *, applied: bool = False) -> JobSummary
             preview = preview[:last_space]
         preview += "…"
     return JobSummary(
-        job_id=stored.job.id,
-        title=stored.job.title,
-        company=stored.job.company,
-        location=stored.job.location,
-        posted_at=stored.job.posted_at,
-        salary_min=stored.job.salary_min,
-        salary_max=stored.job.salary_max,
-        publisher=stored.job.publisher,
-        url=stored.job.url,
-        match_score=stored.score,
+        job_id=job.id,
+        title=job.title,
+        company=job.company,
+        location=job.location,
+        posted_at=job.posted_at,
+        salary_min=job.salary_min,
+        salary_max=job.salary_max,
+        publisher=job.publisher,
+        url=job.url,
+        match_score=score,
         fit_assessment=None,    # populated when a letter is generated (later)
         applied=applied,
         description_preview=preview,

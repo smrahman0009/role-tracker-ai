@@ -17,3 +17,6 @@ class JobPosting(BaseModel):
     salary_max: float | None = None
     source: str = "unknown"  # which provider this came from (e.g. "adzuna")
     publisher: str = "unknown"  # the downstream site hosting the listing
+    # JSearch's job_employment_type — FULLTIME, PARTTIME, CONTRACTOR, INTERN.
+    # Empty string when missing (older snapshots) or when JSearch didn't tag.
+    employment_type: str = ""

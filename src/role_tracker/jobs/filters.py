@@ -1,7 +1,15 @@
-"""Keyword-based exclusion filters applied after fetching from any source."""
+"""Keyword-based exclusion filters applied after fetching from any source.
+
+Two layers of filtering:
+1. apply_exclusions / apply_title_relevance — applied at fetch time,
+   based on the user's stable "Hidden" lists and active query keywords.
+2. apply_list_filters — applied at request time on the cached snapshot,
+   based on the inline filter chips on the Job List page.
+"""
 
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from role_tracker.jobs.models import JobPosting
 
@@ -97,3 +105,87 @@ def apply_exclusions(
             continue
         kept.append(job)
     return kept, dropped
+
+
+# ====================================================================
+# Inline list filters — applied at GET /jobs request time on the cached
+# snapshot. Distinct from apply_exclusions (which runs at fetch time).
+# ====================================================================
+
+
+def apply_list_filters(
+    jobs: list[JobPosting],
+    *,
+    type_terms: list[str],
+    location_terms: list[str],
+    salary_min: int | None,
+    hide_no_salary: bool,
+    employment_types: list[str],
+    posted_within_days: int | None,
+) -> list[JobPosting]:
+    """Apply the inline filter-chip filters from GET /jobs.
+
+    Each filter is independent (AND across filter types); within a
+    multi-value filter (type/location/employment_types), values are
+    OR-combined. Empty filter lists or None values mean "no filter on
+    this dimension."
+
+    All match logic is case-insensitive and uses substring containment
+    for type/location (so "Senior Data Scientist" matches type="data
+    scientist").
+    """
+    cutoff = (
+        datetime.now(UTC) - timedelta(days=posted_within_days)
+        if posted_within_days
+        else None
+    )
+    type_terms_lower = [t.lower().strip() for t in type_terms if t.strip()]
+    location_terms_lower = [
+        loc.lower().strip() for loc in location_terms if loc.strip()
+    ]
+    employment_set = {e.upper().strip() for e in employment_types if e.strip()}
+
+    out: list[JobPosting] = []
+    for job in jobs:
+        # Type (multi-value, OR within)
+        if type_terms_lower:
+            title_lower = job.title.lower()
+            if not any(t in title_lower for t in type_terms_lower):
+                continue
+
+        # Location (multi-value, OR within)
+        if location_terms_lower:
+            location_lower = job.location.lower()
+            if not any(loc in location_lower for loc in location_terms_lower):
+                continue
+
+        # Salary minimum
+        if salary_min is not None:
+            if job.salary_min is None:
+                if hide_no_salary:
+                    continue
+                # else: lenient — keep jobs with no listed salary
+            elif job.salary_min < salary_min:
+                continue
+
+        # Employment type (multi-value, OR within; empty types pass through)
+        if employment_set:
+            if job.employment_type and job.employment_type not in employment_set:
+                continue
+
+        # Posted within
+        if cutoff is not None:
+            try:
+                posted = datetime.fromisoformat(
+                    job.posted_at.replace("Z", "+00:00")
+                )
+                if posted.tzinfo is None:
+                    posted = posted.replace(tzinfo=UTC)
+                if posted < cutoff:
+                    continue
+            except (ValueError, AttributeError):
+                # Unparseable timestamp — keep the job (lenient).
+                pass
+
+        out.append(job)
+    return out
