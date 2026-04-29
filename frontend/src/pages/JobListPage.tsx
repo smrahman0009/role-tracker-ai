@@ -10,9 +10,10 @@
  */
 
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { FilterChips } from "@/components/FilterChips";
 import { JobCard } from "@/components/JobCard";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -25,18 +26,25 @@ import {
   useRefreshStatus,
   useUnapplyJob,
 } from "@/hooks/useJobs";
-import type { JobFilter, JobSummary } from "@/lib/types";
+import type {
+  EmploymentType,
+  JobFilter,
+  JobListFilters,
+  JobSummary,
+} from "@/lib/types";
 
 export default function JobListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filter = (searchParams.get("filter") as JobFilter) ?? "unapplied";
+  const chipFilters = useMemo(() => parseFilters(searchParams), [searchParams]);
 
-  // We render Unapplied/All/Applied tabs from a single jobs list so that
-  // the counts on each tab are accurate (otherwise we'd need three fetches).
-  // Fetch all jobs (filter=all), then partition client-side for the tab counts.
-  // The active tab's filtered list is the one we render.
-  const allJobsQuery = useJobs({ filter: "all" });
+  // Fetch jobs with chip filters applied server-side (filter=all so we
+  // can partition client-side for the tab counts). Tab counts then
+  // correctly reflect the active chip filters.
+  const allJobsQuery = useJobs({ ...chipFilters, filter: "all" });
   const allJobs = allJobsQuery.data?.jobs ?? [];
+  const totalUnfiltered = allJobsQuery.data?.total_unfiltered ?? 0;
+  const hiddenByFilters = allJobsQuery.data?.hidden_by_filters ?? 0;
   const visibleJobs = allJobs.filter((j) =>
     filter === "applied" ? j.applied : filter === "unapplied" ? !j.applied : true,
   );
@@ -47,10 +55,23 @@ export default function JobListPage() {
     applied: allJobs.filter((j) => j.applied).length,
   };
 
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const j of allJobs) if (j.location) set.add(j.location);
+    return Array.from(set).sort();
+  }, [allJobs]);
+
   const setFilter = (next: JobFilter) => {
     const sp = new URLSearchParams(searchParams);
     if (next === "unapplied") sp.delete("filter");
     else sp.set("filter", next);
+    setSearchParams(sp, { replace: true });
+  };
+
+  const setChipFilters = (next: JobListFilters) => {
+    const sp = new URLSearchParams();
+    if (filter !== "unapplied") sp.set("filter", filter);
+    writeFilters(sp, next);
     setSearchParams(sp, { replace: true });
   };
 
@@ -132,6 +153,21 @@ export default function JobListPage() {
 
       {/* Refresh banner */}
       {isRefreshing && <RefreshBanner status={refreshStatus.data?.status} />}
+
+      {/* Filter chips */}
+      <div className="mb-4">
+        <FilterChips
+          filters={chipFilters}
+          onChange={setChipFilters}
+          locationOptions={locationOptions}
+        />
+        {hiddenByFilters > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            Showing {allJobs.length} of {totalUnfiltered} ·{" "}
+            <span className="text-slate-700">{hiddenByFilters} hidden by filters</span>
+          </p>
+        )}
+      </div>
 
       {/* Tabs */}
       <Tabs value={filter} onValueChange={(v) => setFilter(v as JobFilter)}>
@@ -264,6 +300,53 @@ function EmptyState({
   );
 }
 
+
+const EMPLOYMENT_VALUES: EmploymentType[] = [
+  "FULLTIME",
+  "PARTTIME",
+  "CONTRACTOR",
+  "INTERN",
+];
+
+function parseFilters(sp: URLSearchParams): JobListFilters {
+  const csv = (k: string): string[] | undefined => {
+    const raw = sp.get(k);
+    if (!raw) return undefined;
+    const parts = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return parts.length ? parts : undefined;
+  };
+  const num = (k: string): number | undefined => {
+    const raw = sp.get(k);
+    if (raw == null) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const employmentRaw = csv("employment_types");
+  const employment_types = employmentRaw?.filter((v): v is EmploymentType =>
+    (EMPLOYMENT_VALUES as string[]).includes(v),
+  );
+  return {
+    type: csv("type"),
+    location: csv("location"),
+    salary_min: num("salary_min"),
+    hide_no_salary: sp.get("hide_no_salary") === "1" ? true : undefined,
+    employment_types: employment_types?.length ? employment_types : undefined,
+    posted_within_days: num("posted_within_days"),
+  };
+}
+
+function writeFilters(sp: URLSearchParams, f: JobListFilters): void {
+  if (f.type?.length) sp.set("type", f.type.join(","));
+  if (f.location?.length) sp.set("location", f.location.join(","));
+  if (f.salary_min != null) sp.set("salary_min", String(f.salary_min));
+  if (f.hide_no_salary) sp.set("hide_no_salary", "1");
+  if (f.employment_types?.length) sp.set("employment_types", f.employment_types.join(","));
+  if (f.posted_within_days != null)
+    sp.set("posted_within_days", String(f.posted_within_days));
+}
 
 function formatRefreshedAt(iso: string | null | undefined): string {
   if (!iso) return "never";
