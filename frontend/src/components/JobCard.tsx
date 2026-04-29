@@ -14,6 +14,7 @@ import { useNavigate } from "react-router";
 import { FitBadge } from "@/components/FitBadge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { formatPostedAt, formatSalary } from "@/lib/format";
 import type { JobSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -102,24 +103,3 @@ export function JobCard({ job, onToggleApplied, isToggling = false }: JobCardPro
 }
 
 
-function formatSalary(min: number | null, max: number | null): string {
-  if (!min && !max) return "$—";
-  const fmt = (n: number) =>
-    n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
-  if (min && max) return `${fmt(min)}–${fmt(max)}`;
-  return fmt((min ?? max) as number);
-}
-
-function formatPostedAt(iso: string): string {
-  if (!iso) return "unknown";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return iso.slice(0, 10);
-  }
-}

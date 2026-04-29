@@ -28,6 +28,7 @@ import {
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toaster";
+import { formatBytes, formatDateTime } from "@/lib/format";
 import { useHiddenLists, useUpdateHiddenList } from "@/hooks/useHiddenLists";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfile";
 import {
@@ -106,7 +107,7 @@ function ResumeSection() {
               </p>
               <p className="text-xs text-slate-500 mt-0.5">
                 {formatBytes(meta.size_bytes)} · uploaded{" "}
-                {formatDate(meta.uploaded_at)}
+                {formatDateTime(meta.uploaded_at)}
               </p>
             </div>
             <Button
@@ -679,24 +680,3 @@ function HiddenListEditor({
   );
 }
 
-// ---------- helpers ----------
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}

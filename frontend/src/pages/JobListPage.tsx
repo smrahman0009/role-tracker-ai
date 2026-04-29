@@ -15,6 +15,7 @@ import { useSearchParams } from "react-router";
 
 import { FilterChips } from "@/components/FilterChips";
 import { JobCard } from "@/components/JobCard";
+import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
@@ -137,7 +138,7 @@ export default function JobListPage() {
           <p className="text-xs text-slate-500 mt-1">
             Last refreshed{" "}
             <span className="font-medium text-slate-700">
-              {formatRefreshedAt(allJobsQuery.data?.last_refreshed_at)}
+              {formatDateTime(allJobsQuery.data?.last_refreshed_at)}
             </span>
           </p>
         </div>
@@ -348,17 +349,3 @@ function writeFilters(sp: URLSearchParams, f: JobListFilters): void {
     sp.set("posted_within_days", String(f.posted_within_days));
 }
 
-function formatRefreshedAt(iso: string | null | undefined): string {
-  if (!iso) return "never";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}

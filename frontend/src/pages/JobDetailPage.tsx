@@ -51,6 +51,7 @@ import {
   useRegenerateLetter,
 } from "@/hooks/useLetters";
 import { ApiClientError } from "@/lib/api";
+import { formatSalary } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Letter } from "@/lib/types";
 
@@ -261,7 +262,7 @@ function JobHeader({
   return (
     <Card>
       <CardContent className="py-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
@@ -286,7 +287,11 @@ function JobHeader({
                 <MapPin className="h-3 w-3" />
                 {job.location}
               </span>
-              <span>{formatSalary(job.salary_min, job.salary_max)}</span>
+              <span>
+                {formatSalary(job.salary_min, job.salary_max, {
+                  empty: "Salary not listed",
+                })}
+              </span>
               <span className="text-slate-400">·</span>
               <span>{job.publisher}</span>
             </div>
@@ -423,7 +428,7 @@ function LetterWorkspace({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <CardTitle className="text-sm">Cover letter</CardTitle>
           <VersionSelector
@@ -440,7 +445,7 @@ function LetterWorkspace({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             asChild
             variant="ghost"
@@ -638,13 +643,3 @@ function RefinementCounter({
   );
 }
 
-// ---------- helpers ----------
-
-function formatSalary(min: number | null, max: number | null): string {
-  if (min == null && max == null) return "Salary not listed";
-  const fmt = (n: number) =>
-    n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
-  if (min != null && max != null) return `${fmt(min)}–${fmt(max)}`;
-  if (min != null) return `${fmt(min)}+`;
-  return `up to ${fmt(max!)}`;
-}

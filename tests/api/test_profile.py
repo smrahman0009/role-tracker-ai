@@ -106,12 +106,18 @@ def test_update_profile_persists_across_requests(client: TestClient) -> None:
     assert response.json()["portfolio_url"] == "https://alice.dev"
 
 
-def test_update_profile_404_for_missing_user(client: TestClient) -> None:
+def test_update_profile_upserts_for_missing_user(client: TestClient) -> None:
+    """A fresh user can save the Settings form before uploading a resume."""
     response = client.put(
-        "/users/nobody/profile",
-        json={"phone": "anything"},
+        "/users/newcomer/profile",
+        json={"name": "Newcomer", "email": "n@example.com"},
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Newcomer"
+    assert body["email"] == "n@example.com"
+    # Subsequent GET reflects the upserted state.
+    assert client.get("/users/newcomer/profile").json()["email"] == "n@example.com"
 
 
 # ----- GET /hidden -----
@@ -162,8 +168,11 @@ def test_replace_dedupes_and_strips_whitespace(client: TestClient) -> None:
     assert response.json() == ["banking", "wealth"]
 
 
-def test_hidden_404_for_missing_user(client: TestClient) -> None:
+def test_hidden_upserts_for_missing_user(client: TestClient) -> None:
+    """Editing a hidden list before any profile exists creates the profile."""
     response = client.put(
-        "/users/nobody/hidden/companies", json={"items": ["x"]}
+        "/users/newcomer2/hidden/companies", json={"items": ["acme"]}
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json() == ["acme"]
+    assert client.get("/users/newcomer2/hidden").json()["companies"] == ["acme"]

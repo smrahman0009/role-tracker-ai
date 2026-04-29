@@ -60,7 +60,7 @@ export function RefineDialog({
         <Textarea
           rows={5}
           autoFocus
-          placeholder="e.g. The opening paragraph is too generic — anchor it on the McKesson supply-chain project instead."
+          placeholder="e.g. Opening is too generic — anchor it on my most recent ML project. Cut the third paragraph; it dilutes the narrative."
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
           disabled={isSubmitting}

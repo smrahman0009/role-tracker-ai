@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from role_tracker.api.schemas import (
@@ -22,6 +24,7 @@ from role_tracker.api.schemas import (
     UpdateProfileRequest,
 )
 from role_tracker.users.base import UserProfileStore
+from role_tracker.users.models import UserProfile
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(tags=["profile"])
@@ -73,8 +76,15 @@ def update_profile(
     body: UpdateProfileRequest,
     store: UserProfileStore = Depends(get_profile_store),
 ) -> ProfileResponse:
-    """Patch any subset of contact fields and/or show-in-letter flags."""
-    profile = _load_or_404(store, user_id)
+    """Patch any subset of contact fields and/or show-in-letter flags.
+
+    Upserts: if no profile exists yet for this user, creates one from the
+    body. This is the path a fresh user takes after signing in and filling
+    in the Settings form before uploading a resume. Required fields not in
+    UpdateProfileRequest (resume_path, queries) get safe placeholder
+    defaults that get overwritten by resume upload / saved-search creation.
+    """
+    profile = _load_or_create(store, user_id, body)
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     updated = profile.model_copy(update=updates)
     store.save_user(updated)
@@ -116,7 +126,7 @@ def update_hidden_companies(
     store: UserProfileStore = Depends(get_profile_store),
 ) -> list[str]:
     """Replace the entire companies list. Send {"items": []} to clear all."""
-    profile = _load_or_404(store, user_id)
+    profile = _load_or_create(store, user_id, UpdateProfileRequest())
     cleaned = _clean_items(body.items)
     updated = profile.model_copy(update={"exclude_companies": cleaned})
     store.save_user(updated)
@@ -133,7 +143,7 @@ def update_hidden_title_keywords(
     store: UserProfileStore = Depends(get_profile_store),
 ) -> list[str]:
     """Replace the entire title-keywords list."""
-    profile = _load_or_404(store, user_id)
+    profile = _load_or_create(store, user_id, UpdateProfileRequest())
     cleaned = _clean_items(body.items)
     updated = profile.model_copy(update={"exclude_title_keywords": cleaned})
     store.save_user(updated)
@@ -150,7 +160,7 @@ def update_hidden_publishers(
     store: UserProfileStore = Depends(get_profile_store),
 ) -> list[str]:
     """Replace the entire publishers list."""
-    profile = _load_or_404(store, user_id)
+    profile = _load_or_create(store, user_id, UpdateProfileRequest())
     cleaned = _clean_items(body.items)
     updated = profile.model_copy(update={"exclude_publishers": cleaned})
     store.save_user(updated)
@@ -168,6 +178,29 @@ def _load_or_404(store: UserProfileStore, user_id: str):  # type: ignore[no-unty
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User profile '{user_id}' not found",
         ) from exc
+
+
+def _load_or_create(
+    store: UserProfileStore,
+    user_id: str,
+    body: UpdateProfileRequest,
+) -> UserProfile:
+    """Load the profile, or build a new one with safe defaults if missing.
+
+    Used by PUT /profile so a fresh user can save the Settings form before
+    a resume is uploaded. resume_path is a placeholder; the resume upload
+    flow doesn't read it, and the cover-letter pipeline guards on resume
+    presence separately.
+    """
+    try:
+        return store.get_user(user_id)
+    except FileNotFoundError:
+        return UserProfile(
+            id=user_id,
+            name=(body.name or "").strip() or user_id,
+            resume_path=Path(""),
+            queries=[],
+        )
 
 
 def _clean_items(items: list[str]) -> list[str]:
