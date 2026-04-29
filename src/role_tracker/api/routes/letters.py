@@ -40,6 +40,7 @@ from role_tracker.api.schemas import (
     Letter,
     LetterGenerationStatus,
     LetterVersionList,
+    ManualEditRequest,
     RefineLetterRequest,
     Strategy,
 )
@@ -53,7 +54,11 @@ from role_tracker.letters.generation_state import (
     LetterGenerationStore,
 )
 from role_tracker.letters.models import StoredLetter
-from role_tracker.letters.store import FileLetterStore, LetterStore
+from role_tracker.letters.store import (
+    MAX_REFINEMENTS_PER_LETTER,
+    FileLetterStore,
+    LetterStore,
+)
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
 from role_tracker.users.base import UserProfileStore
@@ -275,6 +280,18 @@ def refine_letter(
             ),
         )
 
+    # Per-letter refinement cap: don't allow refine #11+. Manual edits
+    # don't count toward this; only refinement_index does.
+    if letter_store.count_refinements(user_id, job_id) >= MAX_REFINEMENTS_PER_LETTER:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"{MAX_REFINEMENTS_PER_LETTER} refinements is the cap for this "
+                "letter. Regenerate (POST /jobs/{job_id}/regenerate) for a "
+                "fresh approach."
+            ),
+        )
+
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
     background_tasks.add_task(
@@ -292,6 +309,69 @@ def refine_letter(
         client=client,
     )
     return GenerateLetterResponse(generation_id=generation_id, status="pending")
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/letters/{version}/edit",
+    response_model=Letter,
+    status_code=status.HTTP_201_CREATED,
+)
+def edit_letter(
+    user_id: str,
+    job_id: str,
+    version: int,
+    body: ManualEditRequest,
+    letter_store: LetterStore = Depends(get_letter_store),
+) -> Letter:
+    """Save a user-edited version of a letter. Synchronous — no agent.
+
+    The committed strategy carries forward unchanged. Critique is set to
+    None because the agent's quality assessment doesn't apply to text
+    the agent didn't write. Doesn't count toward the 10-refinement cap
+    or the daily generation rate limit.
+    """
+    source = letter_store.get_version(user_id, job_id, version)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Letter version {version} not found for job '{job_id}', "
+                f"user '{user_id}'"
+            ),
+        )
+
+    # Gentle deterministic checks. Users get more freedom than the agent.
+    word_count = len(body.text.split())
+    if word_count < 200 or word_count > 500:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Letter is {word_count} words; manual edits must be "
+                "between 200 and 500."
+            ),
+        )
+    paragraphs = [p.strip() for p in body.text.split("\n\n") if p.strip()]
+    for i, p in enumerate(paragraphs, 1):
+        if len(p.split()) > 200:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Paragraph {i} is {len(p.split())} words; manual edits "
+                    "should keep paragraphs under 200 words."
+                ),
+            )
+
+    saved = letter_store.save_letter(
+        user_id,
+        job_id,
+        text=body.text,
+        strategy=source.strategy,        # carries forward unchanged
+        critique=None,                    # agent's grade no longer applies
+        feedback_used="manual edit",
+        refinement_index=source.refinement_index,  # not bumped
+        edited_by_user=True,
+    )
+    return _to_response(saved)
 
 
 @router.get(
@@ -390,6 +470,8 @@ def _to_response(stored: StoredLetter) -> Letter:
         strategy=strategy,
         critique=critique,
         feedback_used=stored.feedback_used,
+        refinement_index=stored.refinement_index,
+        edited_by_user=stored.edited_by_user,
         created_at=stored.created_at,
     )
 
@@ -582,7 +664,9 @@ def _run_refine_in_background(
 
         # Persist as a new version. Strategy carries forward unchanged
         # (preserved by the refine flow); critique is None because we
-        # didn't run the rubric on this revision.
+        # didn't run the rubric on this revision. refinement_index bumps
+        # by 1 from the source version's index — manual edits in between
+        # don't affect this count.
         saved = letter_store.save_letter(
             user_id,
             job_id,
@@ -590,6 +674,7 @@ def _run_refine_in_background(
             strategy=source.strategy,
             critique=None,
             feedback_used=feedback,
+            refinement_index=source.refinement_index + 1,
         )
         generation_store.mark_done(
             user_id, generation_id, saved_version=saved.version

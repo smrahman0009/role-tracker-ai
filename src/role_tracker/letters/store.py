@@ -24,6 +24,7 @@ from typing import Protocol
 from role_tracker.letters.models import StoredLetter
 
 DEFAULT_ROOT = Path("data/letters")
+MAX_REFINEMENTS_PER_LETTER = 10  # cap for refine; manual edits don't count
 
 
 class LetterStore(Protocol):
@@ -40,6 +41,8 @@ class LetterStore(Protocol):
         strategy: dict | None,
         critique: dict | None,
         feedback_used: str | None = None,
+        refinement_index: int = 0,
+        edited_by_user: bool = False,
     ) -> StoredLetter: ...
 
 
@@ -69,6 +72,8 @@ class FileLetterStore:
         strategy: dict | None,
         critique: dict | None,
         feedback_used: str | None = None,
+        refinement_index: int = 0,
+        edited_by_user: bool = False,
     ) -> StoredLetter:
         existing = self._load(user_id, job_id)
         next_version = max((letter.version for letter in existing), default=0) + 1
@@ -80,11 +85,24 @@ class FileLetterStore:
             strategy=strategy,
             critique=critique,
             feedback_used=feedback_used,
+            refinement_index=refinement_index,
+            edited_by_user=edited_by_user,
             created_at=datetime.now(UTC),
         )
         existing.append(letter)
         self._save(user_id, job_id, existing)
         return letter
+
+    def count_refinements(self, user_id: str, job_id: str) -> int:
+        """Highest refinement_index across all versions of this job.
+
+        Used to enforce the per-letter refinement cap. Manual edits don't
+        bump the index, so they don't count toward the cap.
+        """
+        return max(
+            (lt.refinement_index for lt in self._load(user_id, job_id)),
+            default=0,
+        )
 
     # ----- internals -----
 

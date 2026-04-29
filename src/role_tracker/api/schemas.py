@@ -26,6 +26,7 @@ __all__ = [
     "Letter",
     "LetterGenerationStatus",
     "LetterVersionList",
+    "ManualEditRequest",
     "QueryListResponse",
     "RefineLetterRequest",
     "RefreshJobResponse",
@@ -185,6 +186,8 @@ class Letter(BaseModel):
     strategy: Strategy | None = None
     critique: CritiqueScore | None = None
     feedback_used: str | None = None
+    refinement_index: int = 0       # 0 for original, 1..10 for refines
+    edited_by_user: bool = False    # true if user manually edited
     created_at: datetime
 
 
@@ -228,3 +231,15 @@ class RefineLetterRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/{job_id}/letters/{version}/refine."""
 
     feedback: str = Field(min_length=5, max_length=500)
+
+
+class ManualEditRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/letters/{version}/edit.
+
+    Validation here is gentler than the agent's hard limits — users get
+    more freedom than the agent does. The deterministic checks
+    (word count 200-500, paragraph length ≤ 200 words) live in the
+    route, not the schema, since they require splitting the text.
+    """
+
+    text: str = Field(min_length=1, max_length=5000)

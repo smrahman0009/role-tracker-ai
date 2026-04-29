@@ -21,4 +21,14 @@ class StoredLetter(BaseModel):
     strategy: dict | None = None    # primary_project, narrative_angle, fit_*
     critique: dict | None = None    # rubric verdict + scores + fixes
     feedback_used: str | None = None  # populated for refined versions
+
+    # 0 for the original generation, 1..MAX_REFINEMENTS_PER_LETTER for
+    # successive refinements. Carries through manual edits unchanged.
+    refinement_index: int = 0
+
+    # True when this version was saved by the user via the manual-edit
+    # endpoint (rather than the agent). Affects how the UI renders it
+    # (no critique badge — agent's grade doesn't apply to user-edited text).
+    edited_by_user: bool = False
+
     created_at: datetime

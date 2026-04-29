@@ -403,3 +403,125 @@ def test_refine_validates_min_feedback_length(
         "/users/alice/jobs/j1/letters/1/refine", json={"feedback": "hi"}
     )
     assert response.status_code == 422  # Pydantic validation
+
+
+def test_refine_cap_blocks_after_max_refinements(
+    client_with_refine_stub: TestClient,
+) -> None:
+    """After 10 refinements on a letter, refine #11 must return 422."""
+    _generate_v1(client_with_refine_stub)
+    # Bump the v1 source version's refinement_index to MAX by saving a
+    # synthetic version directly via the store (the test fixture uses
+    # FileLetterStore in tmp_path).
+    from role_tracker.api.routes.letters import get_letter_store
+
+    # Find which dependency override is registered (the test client's app).
+    app = client_with_refine_stub.app
+    store = app.dependency_overrides[get_letter_store]()
+    store.save_letter(
+        "alice",
+        "j1",
+        text="x" * 10,
+        strategy={"primary_project": "p"},
+        critique=None,
+        feedback_used="prev",
+        refinement_index=10,
+    )
+
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/refine",
+        json={"feedback": "any feedback please"},
+    )
+    assert response.status_code == 422
+    assert "cap" in response.json()["detail"].lower()
+
+
+# ----- manual edit -----
+
+
+def _make_valid_edit_text() -> str:
+    """A 250-word edit body that passes the gentle deterministic checks."""
+    return (
+        "**Shaikh Mushfikur Rahman**\n\n"
+        "Hello,\n\n"
+        + ("word " * 100).strip()
+        + "\n\n"
+        + ("word " * 100).strip()
+        + "\n\n"
+        + "Best,\nShaikh"
+    )
+
+
+def test_manual_edit_returns_201_and_new_version(
+    client_with_refine_stub: TestClient,
+) -> None:
+    _generate_v1(client_with_refine_stub)
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/edit",
+        json={"text": _make_valid_edit_text()},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["version"] == 2
+    assert body["edited_by_user"] is True
+    assert body["feedback_used"] == "manual edit"
+    assert body["critique"] is None
+    # Strategy carries forward
+    assert body["strategy"]["primary_project"] == "Company Name Resolution"
+    # refinement_index NOT bumped
+    assert body["refinement_index"] == 0
+
+
+def test_manual_edit_rejects_too_few_words(
+    client_with_refine_stub: TestClient,
+) -> None:
+    _generate_v1(client_with_refine_stub)
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/edit",
+        json={"text": "Hello,\n\nShort.\n\nBest,\nX"},
+    )
+    assert response.status_code == 422
+    assert "200" in response.json()["detail"] or "500" in response.json()["detail"]
+
+
+def test_manual_edit_rejects_oversized_paragraph(
+    client_with_refine_stub: TestClient,
+) -> None:
+    _generate_v1(client_with_refine_stub)
+    big = "word " * 250
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/edit",
+        json={"text": f"Header\n\nHello,\n\n{big}\n\nBest,\nX"},
+    )
+    assert response.status_code == 422
+    assert "Paragraph" in response.json()["detail"]
+
+
+def test_manual_edit_404_for_missing_source(
+    client_with_refine_stub: TestClient,
+) -> None:
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/99/edit",
+        json={"text": _make_valid_edit_text()},
+    )
+    assert response.status_code == 404
+
+
+def test_manual_edit_does_not_count_toward_refinement_cap(
+    client_with_refine_stub: TestClient,
+) -> None:
+    """Saving 5 manual edits doesn't bump refinement_index, so refine
+    after them still works (cap not yet hit)."""
+    _generate_v1(client_with_refine_stub)
+    for _ in range(5):
+        client_with_refine_stub.post(
+            "/users/alice/jobs/j1/letters/1/edit",
+            json={"text": _make_valid_edit_text()},
+        )
+
+    # Refine should still succeed — refinement_index for v1 is still 0.
+    response = client_with_refine_stub.post(
+        "/users/alice/jobs/j1/letters/1/refine",
+        json={"feedback": "Make it more technical"},
+    )
+    assert response.status_code == 202
