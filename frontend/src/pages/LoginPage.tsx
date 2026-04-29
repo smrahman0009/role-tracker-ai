@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
+import { useHealth } from "@/hooks/useHealth";
 
 interface LocationState {
   from?: string;
@@ -37,6 +38,10 @@ export default function LoginPage() {
 
   const [userId, setUserId] = useState("smrah");
   const [appToken, setAppToken] = useState("");
+
+  // Pings /health on mount so the user knows whether the backend is reachable
+  // before they bother to sign in. No auth required for /health.
+  const health = useHealth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,9 +95,46 @@ export default function LoginPage() {
               No real auth yet — single-user mode. Real OAuth lands when
               the app goes multi-user.
             </p>
+            <BackendStatus
+              isLoading={health.isLoading}
+              isError={health.isError}
+              version={health.data?.version}
+            />
           </form>
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+
+function BackendStatus({
+  isLoading,
+  isError,
+  version,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  version: string | undefined;
+}) {
+  if (isLoading) {
+    return (
+      <p className="text-xs text-slate-400 text-center">
+        Checking backend…
+      </p>
+    );
+  }
+  if (isError) {
+    return (
+      <p className="text-xs text-rose-600 text-center">
+        Backend unreachable. Is <code>scripts/run_api.py</code> running on
+        port 8000?
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-emerald-600 text-center">
+      Backend reachable {version && <span className="text-slate-400">· v{version}</span>}
+    </p>
   );
 }

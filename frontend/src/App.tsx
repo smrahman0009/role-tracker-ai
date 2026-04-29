@@ -1,5 +1,10 @@
 /**
- * App — router setup + auth provider + global Toaster.
+ * App — router setup + auth provider + TanStack Query + Toaster.
+ *
+ * Provider nesting (outer → inner):
+ *   QueryClientProvider     — server-state cache, available to every hook
+ *     AuthProvider          — currently signed-in user
+ *       BrowserRouter       — URL → Routes mapping
  *
  * Route structure:
  *   /login                  → LoginPage (unprotected)
@@ -7,18 +12,17 @@
  *   /jobs/:jobId            → JobDetailPage (protected)
  *   /settings               → SettingsPage (protected)
  *   *                       → NotFoundPage
- *
- * Protected routes are wrapped in <RequireAuth><Layout /></RequireAuth>:
- * RequireAuth bounces unauthenticated users to /login (preserving the
- * destination); Layout renders the top header + <Outlet /> for the page.
  */
 
+import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Route, Routes } from "react-router";
 
 import { AuthProvider } from "@/auth/AuthContext";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { Layout } from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toaster";
+import { queryClient } from "@/lib/queryClient";
 import JobDetailPage from "@/pages/JobDetailPage";
 import JobListPage from "@/pages/JobListPage";
 import LoginPage from "@/pages/LoginPage";
@@ -27,25 +31,28 @@ import SettingsPage from "@/pages/SettingsPage";
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            element={
-              <RequireAuth>
-                <Layout />
-              </RequireAuth>
-            }
-          >
-            <Route path="/" element={<JobListPage />} />
-            <Route path="/jobs/:jobId" element={<JobDetailPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </BrowserRouter>
-      <Toaster />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              element={
+                <RequireAuth>
+                  <Layout />
+                </RequireAuth>
+              }
+            >
+              <Route path="/" element={<JobListPage />} />
+              <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </BrowserRouter>
+        <Toaster />
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
