@@ -102,6 +102,7 @@ export interface JobListFilters {
   hide_no_salary?: boolean;
   employment_types?: EmploymentType[];
   posted_within_days?: number;
+  [key: string]: string | number | boolean | string[] | undefined;
 }
 
 // ---------- Cover letters ----------
