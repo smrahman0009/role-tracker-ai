@@ -94,7 +94,15 @@ export default function JobListPage() {
   useEffect(() => {
     const status = refreshStatus.data?.status;
     if (status === "done") {
-      toast.success(`Refreshed · ${refreshStatus.data?.jobs_added ?? 0} jobs ranked`);
+      const d = refreshStatus.data;
+      const kept = d?.jobs_added ?? 0;
+      const seen = d?.candidates_seen ?? 0;
+      const queries = d?.queries_run ?? 0;
+      const detail =
+        seen > 0 && queries > 0
+          ? ` · kept top ${kept} of ${seen} candidates from ${queries} ${queries === 1 ? "search" : "searches"}`
+          : "";
+      toast.success(`Refresh complete${detail}`);
       allJobsQuery.refetch();
       setActiveRefreshId(null);
     } else if (status === "failed") {
@@ -141,6 +149,7 @@ export default function JobListPage() {
               {formatDateTime(allJobsQuery.data?.last_refreshed_at)}
             </span>
           </p>
+          <PipelineSummary data={allJobsQuery.data} />
         </div>
         <Button
           variant="secondary"
@@ -213,6 +222,29 @@ export default function JobListPage() {
   );
 }
 
+
+function PipelineSummary({
+  data,
+}: {
+  data: import("@/lib/types").JobListResponse | undefined;
+}) {
+  if (!data || !data.last_refreshed_at) return null;
+  const { candidates_seen, queries_run, top_n_cap, total_unfiltered } = data;
+  if (candidates_seen <= 0 || queries_run <= 0) return null;
+  const cap = top_n_cap || total_unfiltered;
+  const tooltip =
+    "JSearch returns up to 50 jobs per saved search. We embed each JD plus your resume and keep the top matches by cosine similarity, then apply your hidden lists. The cap is your 'Max jobs to keep per refresh' setting.";
+  return (
+    <p
+      className="text-xs text-slate-500 mt-0.5"
+      title={tooltip}
+    >
+      Top {Math.min(cap, total_unfiltered)} of {candidates_seen} candidates ·
+      ranked by resume match across {queries_run}{" "}
+      {queries_run === 1 ? "search" : "searches"}
+    </p>
+  );
+}
 
 function RefreshBanner({ status }: { status?: string }) {
   return (

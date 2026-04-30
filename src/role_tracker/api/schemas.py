@@ -120,6 +120,12 @@ class JobListResponse(BaseModel):
     hidden_by_filters: int = 0          # = total_unfiltered - total
     last_refreshed_at: datetime | None
     next_refresh_allowed_at: datetime | None = None
+    # Pipeline transparency — surfaced in the UI subtitle so users
+    # understand "10 of 247 candidates kept" rather than seeing an
+    # opaque list. Filled in by the refresh; 0 between refreshes.
+    candidates_seen: int = 0            # pre-rank, post-hidden-list
+    queries_run: int = 0                # number of saved searches fanned out
+    top_n_cap: int = 0                  # the user's top_n_jobs setting at refresh time
 
 
 class JobDetailResponse(BaseModel):
@@ -155,6 +161,8 @@ class RefreshStatusResponse(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     jobs_added: int | None = None
+    candidates_seen: int | None = None
+    queries_run: int | None = None
     error: str | None = None
 
 
@@ -270,6 +278,11 @@ class ProfileResponse(BaseModel):
     show_github_in_header: bool = True
     show_portfolio_in_header: bool = True
 
+    # How many ranked matches the refresh pipeline keeps. Higher = more
+    # browsing freedom but more low-similarity jobs. Capped at 200 to
+    # prevent accidental huge refreshes.
+    top_n_jobs: int = Field(default=50, ge=1, le=200)
+
 
 class UpdateProfileRequest(BaseModel):
     """Body of PUT /users/{user_id}/profile. All fields optional."""
@@ -288,6 +301,8 @@ class UpdateProfileRequest(BaseModel):
     show_linkedin_in_header: bool | None = None
     show_github_in_header: bool | None = None
     show_portfolio_in_header: bool | None = None
+
+    top_n_jobs: int | None = Field(default=None, ge=1, le=200)
 
 
 # ----- Hidden lists -----

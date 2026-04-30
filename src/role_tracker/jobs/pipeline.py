@@ -13,6 +13,7 @@ a fake embedder and a fake JSearch client.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from role_tracker.config import JobQuery
@@ -28,6 +29,19 @@ from role_tracker.matching.scorer import (
 from role_tracker.queries.models import SavedQuery
 
 
+@dataclass
+class MatchingResult:
+    """Output of run_matching_pipeline.
+
+    Carries the ranked list plus enough stats for the UI to be honest
+    about what happened ("kept 50 of 247 candidates from 4 searches").
+    """
+
+    jobs: list[ScoredJob] = field(default_factory=list)
+    candidates_seen: int = 0   # post-filter, pre-rank — what got embedded
+    queries_run: int = 0       # number of enabled saved searches fanned out
+
+
 def run_matching_pipeline(
     *,
     queries: list[SavedQuery],
@@ -40,16 +54,15 @@ def run_matching_pipeline(
     exclude_publishers: list[str],
     limit_per_query: int,
     top_n: int,
-) -> list[ScoredJob]:
+) -> MatchingResult:
     """Fetch → filter → embed → rank.
 
-    Returns the top_n ranked ScoredJobs. May return fewer than top_n if
-    not enough jobs survived filtering. Returns empty list if no enabled
-    queries or no jobs found.
+    Returns the top_n ranked ScoredJobs plus pipeline stats. May return
+    fewer than top_n if not enough jobs survived filtering.
     """
     enabled_queries = [q for q in queries if q.enabled]
     if not enabled_queries:
-        return []
+        return MatchingResult()
 
     # 1. Embed resume (hash-cached on disk to avoid re-embedding when text
     #    is unchanged).
@@ -74,7 +87,7 @@ def run_matching_pipeline(
 
     jobs = list(seen.values())
     if not jobs:
-        return []
+        return MatchingResult(queries_run=len(enabled_queries))
 
     # 3. Apply user exclusions (company / title-keyword / publisher).
     jobs, _ = apply_exclusions(
@@ -89,12 +102,19 @@ def run_matching_pipeline(
     jobs, _ = apply_title_relevance(jobs, query_strings)
 
     if not jobs:
-        return []
+        return MatchingResult(queries_run=len(enabled_queries))
+
+    candidates_seen = len(jobs)
 
     # 5. Embed jobs + rank.
     job_vectors = embedder.embed([job_to_embedding_text(j) for j in jobs])
-    return rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
+    ranked = rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
+    return MatchingResult(
+        jobs=ranked,
+        candidates_seen=candidates_seen,
+        queries_run=len(enabled_queries),
+    )
 
 
 # Type alias used by the API layer for dependency injection.
-PipelineRunner = Callable[[str, list[SavedQuery], str], list[ScoredJob]]
+PipelineRunner = Callable[[str, list[SavedQuery], str], MatchingResult]

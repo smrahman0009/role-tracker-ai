@@ -45,7 +45,11 @@ from role_tracker.jobs.cache import (
 from role_tracker.jobs.filters import apply_list_filters
 from role_tracker.jobs.jsearch import JSearchClient
 from role_tracker.jobs.models import JobPosting
-from role_tracker.jobs.pipeline import PipelineRunner, run_matching_pipeline
+from role_tracker.jobs.pipeline import (
+    MatchingResult,
+    PipelineRunner,
+    run_matching_pipeline,
+)
 from role_tracker.jobs.refresh_state import (
     FileRefreshTaskStore,
     RefreshTaskStore,
@@ -62,6 +66,14 @@ router = APIRouter(
     prefix="/users/{user_id}/jobs",
     tags=["jobs"],
 )
+
+
+def _user_top_n(user_id: str, *, default: int = 50) -> int:
+    """Read the user's top_n_jobs preference, with a safe default."""
+    try:
+        return YamlUserProfileStore().get_user(user_id).top_n_jobs
+    except FileNotFoundError:
+        return default
 
 
 # ----- Dependency factories -----
@@ -94,14 +106,16 @@ def get_pipeline_runner() -> PipelineRunner:
 
     def run(
         user_id: str, queries: list[SavedQuery], resume_text: str
-    ) -> list[ScoredJob]:
-        # Pull exclusion lists from the legacy YAML profile (until we add
-        # a settings endpoint to manage them in the UI).
+    ) -> MatchingResult:
+        # Pull exclusion lists + the user's top_n preference from the
+        # YAML profile. Defaults if the user hasn't created one yet.
+        top_n = 50
         try:
             user = user_store.get_user(user_id)
             exclude_companies = user.exclude_companies
             exclude_title_keywords = user.exclude_title_keywords
             exclude_publishers = user.exclude_publishers
+            top_n = user.top_n_jobs
         except FileNotFoundError:
             exclude_companies = []
             exclude_title_keywords = []
@@ -117,8 +131,8 @@ def get_pipeline_runner() -> PipelineRunner:
             exclude_companies=exclude_companies,
             exclude_title_keywords=exclude_title_keywords,
             exclude_publishers=exclude_publishers,
-            limit_per_query=20,
-            top_n=10,
+            limit_per_query=50,
+            top_n=top_n,
         )
 
     return run
@@ -157,6 +171,9 @@ def list_jobs(
             total_unfiltered=0,
             hidden_by_filters=0,
             last_refreshed_at=None,
+            candidates_seen=0,
+            queries_run=0,
+            top_n_cap=0,
         )
 
     applied_ids = applied_store.list_applied(user_id)
@@ -197,6 +214,9 @@ def list_jobs(
         total_unfiltered=total_unfiltered,
         hidden_by_filters=max(0, total_unfiltered - len(summaries)),
         last_refreshed_at=snapshot.last_refreshed_at,
+        candidates_seen=snapshot.candidates_seen,
+        queries_run=snapshot.queries_run,
+        top_n_cap=snapshot.top_n_cap,
     )
 
 
@@ -243,7 +263,16 @@ def get_refresh_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Refresh '{refresh_id}' not found for user '{user_id}'",
         )
-    return RefreshStatusResponse(**record.model_dump())
+    return RefreshStatusResponse(
+        refresh_id=record.refresh_id,
+        status=record.status,
+        started_at=record.started_at,
+        completed_at=record.completed_at,
+        jobs_added=record.jobs_added,
+        candidates_seen=record.candidates_seen,
+        queries_run=record.queries_run,
+        error=record.error,
+    )
 
 
 @router.get("/{job_id}", response_model=JobDetailResponse)
@@ -402,9 +431,21 @@ def _run_refresh_in_background(
         finally:
             tmp_path.unlink(missing_ok=True)
 
-        scored = pipeline(user_id, queries, resume_text)
-        cache.save_snapshot(user_id, scored)
-        refresh_store.mark_done(user_id, refresh_id, jobs_added=len(scored))
+        result = pipeline(user_id, queries, resume_text)
+        cache.save_snapshot(
+            user_id,
+            result.jobs,
+            candidates_seen=result.candidates_seen,
+            queries_run=result.queries_run,
+            top_n_cap=_user_top_n(user_id),
+        )
+        refresh_store.mark_done(
+            user_id,
+            refresh_id,
+            jobs_added=len(result.jobs),
+            candidates_seen=result.candidates_seen,
+            queries_run=result.queries_run,
+        )
 
     except Exception as exc:  # noqa: BLE001
         refresh_store.mark_failed(user_id, refresh_id, error=str(exc))

@@ -23,7 +23,10 @@ class UserProfile(BaseModel):
     github_url: str = ""
     portfolio_url: str = ""
     resume_path: Path
-    top_n_jobs: int = 5
+    # How many ranked matches to keep per refresh. Default chosen for a
+    # browseable list — past ~100 the long tail is mostly low-similarity
+    # noise. Capped in the API at 200.
+    top_n_jobs: int = 50
 
     # Per-field "show in cover-letter header" flags. All default True; the
     # contact_header() builder respects them. Empty fields are skipped

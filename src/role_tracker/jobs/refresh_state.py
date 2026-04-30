@@ -38,6 +38,8 @@ class RefreshRecord(BaseModel):
     started_at: datetime
     completed_at: datetime | None = None
     jobs_added: int | None = None
+    candidates_seen: int | None = None
+    queries_run: int | None = None
     error: str | None = None
 
 
@@ -46,7 +48,13 @@ class RefreshTaskStore(Protocol):
     def get(self, user_id: str, refresh_id: str) -> RefreshRecord | None: ...
     def mark_running(self, user_id: str, refresh_id: str) -> None: ...
     def mark_done(
-        self, user_id: str, refresh_id: str, jobs_added: int
+        self,
+        user_id: str,
+        refresh_id: str,
+        jobs_added: int,
+        *,
+        candidates_seen: int = 0,
+        queries_run: int = 0,
     ) -> None: ...
     def mark_failed(self, user_id: str, refresh_id: str, error: str) -> None: ...
 
@@ -80,13 +88,23 @@ class FileRefreshTaskStore:
     def mark_running(self, user_id: str, refresh_id: str) -> None:
         self._update(user_id, refresh_id, status="running")
 
-    def mark_done(self, user_id: str, refresh_id: str, jobs_added: int) -> None:
+    def mark_done(
+        self,
+        user_id: str,
+        refresh_id: str,
+        jobs_added: int,
+        *,
+        candidates_seen: int = 0,
+        queries_run: int = 0,
+    ) -> None:
         self._update(
             user_id,
             refresh_id,
             status="done",
             completed_at=datetime.now(UTC),
             jobs_added=jobs_added,
+            candidates_seen=candidates_seen,
+            queries_run=queries_run,
         )
 
     def mark_failed(self, user_id: str, refresh_id: str, error: str) -> None:

@@ -47,11 +47,14 @@ def _job(job_id: str, title: str, company: str) -> JobPosting:
     )
 
 
-def _fake_pipeline_results() -> list[ScoredJob]:
-    return [
+def _fake_pipeline_results() -> "MatchingResult":
+    from role_tracker.jobs.pipeline import MatchingResult
+
+    jobs = [
         ScoredJob(job=_job("j1", "Senior Data Scientist", "Shopify"), score=0.92),
         ScoredJob(job=_job("j2", "ML Engineer", "Stripe"), score=0.81),
     ]
+    return MatchingResult(jobs=jobs, candidates_seen=len(jobs), queries_run=1)
 
 
 @pytest.fixture

@@ -64,6 +64,7 @@ def get_profile(
         show_linkedin_in_header=profile.show_linkedin_in_header,
         show_github_in_header=profile.show_github_in_header,
         show_portfolio_in_header=profile.show_portfolio_in_header,
+        top_n_jobs=profile.top_n_jobs,
     )
 
 

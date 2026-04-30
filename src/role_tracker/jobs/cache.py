@@ -44,12 +44,23 @@ class JobsSnapshot(BaseModel):
 
     last_refreshed_at: datetime
     jobs: list[StoredScoredJob]
+    # Pipeline transparency stats. Default 0 for backward-compat with
+    # snapshots written before these fields existed.
+    candidates_seen: int = 0
+    queries_run: int = 0
+    top_n_cap: int = 0
 
 
 class JobsCache(Protocol):
     def get_snapshot(self, user_id: str) -> JobsSnapshot | None: ...
     def save_snapshot(
-        self, user_id: str, scored_jobs: list[ScoredJob]
+        self,
+        user_id: str,
+        scored_jobs: list[ScoredJob],
+        *,
+        candidates_seen: int = 0,
+        queries_run: int = 0,
+        top_n_cap: int = 0,
     ) -> JobsSnapshot: ...
 
 
@@ -66,11 +77,20 @@ class FileJobsCache:
         return JobsSnapshot.model_validate(json.loads(path.read_text()))
 
     def save_snapshot(
-        self, user_id: str, scored_jobs: list[ScoredJob]
+        self,
+        user_id: str,
+        scored_jobs: list[ScoredJob],
+        *,
+        candidates_seen: int = 0,
+        queries_run: int = 0,
+        top_n_cap: int = 0,
     ) -> JobsSnapshot:
         snapshot = JobsSnapshot(
             last_refreshed_at=datetime.now(UTC),
             jobs=[StoredScoredJob.from_scored(s) for s in scored_jobs],
+            candidates_seen=candidates_seen,
+            queries_run=queries_run,
+            top_n_cap=top_n_cap,
         )
         path = self._path(user_id)
         path.parent.mkdir(parents=True, exist_ok=True)

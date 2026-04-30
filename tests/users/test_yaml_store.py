@@ -71,7 +71,7 @@ def test_get_user_unknown_id_raises(sample_user_dir: Path) -> None:
 def test_user_with_defaults(sample_user_dir: Path) -> None:
     store = YamlUserProfileStore(root=sample_user_dir)
     bob = store.get_user("bob")
-    assert bob.top_n_jobs == 5  # default
+    assert bob.top_n_jobs == 50  # default (browsable list)
     assert bob.exclude_companies == []
     assert bob.email == ""
 

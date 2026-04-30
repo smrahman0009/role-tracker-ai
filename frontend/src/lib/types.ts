@@ -61,6 +61,9 @@ export interface JobListResponse {
   hidden_by_filters: number;
   last_refreshed_at: string | null;
   next_refresh_allowed_at: string | null;
+  candidates_seen: number;
+  queries_run: number;
+  top_n_cap: number;
 }
 
 export interface JobDetailResponse {
@@ -90,6 +93,8 @@ export interface RefreshStatusResponse {
   started_at: string;
   completed_at: string | null;
   jobs_added: number | null;
+  candidates_seen: number | null;
+  queries_run: number | null;
   error: string | null;
 }
 
@@ -212,6 +217,7 @@ export interface ProfileResponse {
   show_linkedin_in_header: boolean;
   show_github_in_header: boolean;
   show_portfolio_in_header: boolean;
+  top_n_jobs: number;
 }
 
 export type UpdateProfileRequest = Partial<ProfileResponse>;

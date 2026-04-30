@@ -280,6 +280,39 @@ function ProfileSection() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-5 pt-5 border-t border-slate-100">
+              <div className="flex items-baseline justify-between gap-3">
+                <Label htmlFor="top_n_jobs">Max jobs to keep per refresh</Label>
+                <span className="text-[11px] text-slate-500 tabular-nums">
+                  {draft.top_n_jobs}
+                </span>
+              </div>
+              <Input
+                id="top_n_jobs"
+                type="number"
+                min={1}
+                max={200}
+                step={5}
+                value={draft.top_n_jobs}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) {
+                    setDraft({
+                      ...draft,
+                      top_n_jobs: Math.max(1, Math.min(200, Math.round(n))),
+                    });
+                  }
+                }}
+                className="mt-1 max-w-[140px]"
+              />
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                After fetching, jobs are ranked by similarity to your resume
+                and the top N are kept. Higher = more browsing freedom; lower
+                = only the best matches. Range 1–200.
+              </p>
+            </div>
+
             <div className="flex justify-end mt-5 gap-2">
               <Button
                 variant="ghost"
