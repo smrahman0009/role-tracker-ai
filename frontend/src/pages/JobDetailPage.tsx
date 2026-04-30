@@ -51,7 +51,7 @@ import {
   useRegenerateLetter,
 } from "@/hooks/useLetters";
 import { ApiClientError } from "@/lib/api";
-import { formatSalary } from "@/lib/format";
+import { formatMatchScore, formatSalary } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Letter } from "@/lib/types";
 
@@ -274,7 +274,7 @@ function JobHeader({
                 {job.title}
               </h1>
               <span className="text-sm font-mono text-slate-500 tabular-nums">
-                {job.match_score}/100
+                {formatMatchScore(job.match_score)}
               </span>
               <FitBadge fit={job.fit_assessment} />
               {job.applied && (

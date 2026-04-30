@@ -14,7 +14,7 @@ import { useNavigate } from "react-router";
 import { FitBadge } from "@/components/FitBadge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { formatPostedAt, formatSalary } from "@/lib/format";
+import { formatMatchScore, formatPostedAt, formatSalary } from "@/lib/format";
 import type { JobSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -47,9 +47,9 @@ export function JobCard({ job, onToggleApplied, isToggling = false }: JobCardPro
             </h2>
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-900 tabular-nums"
-              title="Match score (cosine similarity 0-1)"
+              title="Match score — cosine similarity to your resume, scaled 0–100"
             >
-              ★ {job.match_score.toFixed(2)}
+              ★ {formatMatchScore(job.match_score)}
             </span>
             <FitBadge fit={job.fit_assessment} />
           </div>

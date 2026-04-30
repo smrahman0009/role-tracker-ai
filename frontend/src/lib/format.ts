@@ -49,3 +49,14 @@ export function formatBytes(b: number): string {
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
   return `${(b / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+/**
+ * Render a cosine-similarity match score (0–1 from the backend) as a
+ * compact 0–100 figure. We round to a whole number so the header doesn't
+ * blow out with `0.5313932765029047/100` style noise.
+ */
+export function formatMatchScore(score: number): string {
+  if (!Number.isFinite(score)) return "—";
+  const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+  return `${pct}/100`;
+}
