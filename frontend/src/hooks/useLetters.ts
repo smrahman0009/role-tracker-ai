@@ -32,7 +32,8 @@ export function useGenerateLetter(jobId: string | undefined) {
   return useMutation({
     mutationFn: () =>
       api.post<GenerateLetterResponse>(
-        `/users/${userId}/jobs/${jobId}/letter/generate`,
+        `/users/${userId}/jobs/${jobId}/letters`,
+        {},
       ),
   });
 }
@@ -42,7 +43,7 @@ export function useRegenerateLetter(jobId: string | undefined) {
   return useMutation({
     mutationFn: () =>
       api.post<GenerateLetterResponse>(
-        `/users/${userId}/jobs/${jobId}/letter/regenerate`,
+        `/users/${userId}/jobs/${jobId}/regenerate`,
       ),
   });
 }
@@ -70,7 +71,7 @@ export function useLetterGeneration(
     queryKey: ["letter-gen", userId, jobId, generationId],
     queryFn: () =>
       api.get<LetterGenerationStatus>(
-        `/users/${userId}/jobs/${jobId}/letter/generations/${generationId}`,
+        `/users/${userId}/letter-jobs/${generationId}`,
       ),
     enabled: Boolean(userId && jobId && generationId),
     refetchInterval: (query) => {
@@ -105,5 +106,5 @@ export function letterDownloadUrl(
   jobId: string,
   version: number,
 ): string {
-  return `/api/users/${userId}/jobs/${jobId}/letters/${version}/download`;
+  return `/api/users/${userId}/jobs/${jobId}/letters/${version}/download.md`;
 }
