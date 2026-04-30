@@ -79,7 +79,16 @@ function ResumeSection() {
     const file = e.target.files?.[0];
     if (!file) return;
     upload.mutate(file, {
-      onSuccess: () => toast.success("Resume uploaded"),
+      onSuccess: (data) => {
+        const filled = data.prefilled_fields ?? [];
+        if (filled.length > 0) {
+          toast.success(
+            `Resume uploaded · pre-filled ${formatPrefilledList(filled)} below`,
+          );
+        } else {
+          toast.success("Resume uploaded");
+        }
+      },
       onError: (err) => toast.error(`Upload failed: ${err.message}`),
     });
     e.target.value = ""; // allow re-selecting the same file
@@ -737,3 +746,18 @@ function HiddenListEditor({
   );
 }
 
+
+const _FIELD_LABELS: Record<string, string> = {
+  name: "name",
+  email: "email",
+  phone: "phone",
+  linkedin_url: "LinkedIn",
+  github_url: "GitHub",
+};
+
+function formatPrefilledList(fields: string[]): string {
+  const labels = fields.map((f) => _FIELD_LABELS[f] ?? f);
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}

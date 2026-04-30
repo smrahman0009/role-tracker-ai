@@ -31,6 +31,11 @@ export interface ResumeMetadata {
   sha256: string;
 }
 
+/** POST /resume returns metadata + the contact fields we auto-filled. */
+export interface ResumeUploadResponse extends ResumeMetadata {
+  prefilled_fields: string[];
+}
+
 // ---------- Jobs ----------
 
 export type JobFilter = "all" | "unapplied" | "applied";
