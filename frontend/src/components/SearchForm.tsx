@@ -4,7 +4,7 @@
  * supplied onSubmit; the parent handles polling and rendering.
  */
 
-import { CalendarPlus, ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import { CalendarPlus, ChevronDown, ChevronUp, Loader2, Search, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toaster";
 import { useCreateQuery } from "@/hooks/useQueries";
+import { MAX_WHAT_TERMS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { EmploymentType, SearchJobsRequest } from "@/lib/types";
 
@@ -45,7 +46,8 @@ export function SearchForm({
   isSearching,
   onSubmit,
 }: SearchFormProps) {
-  const [what, setWhat] = useState(initial?.what ?? "");
+  const [whatTerms, setWhatTerms] = useState<string[]>(initial?.what ?? []);
+  const [whatDraft, setWhatDraft] = useState("");
   const [where, setWhere] = useState(initial?.where ?? "");
   const [salaryMin, setSalaryMin] = useState<string>(
     initial?.salary_min != null ? String(initial.salary_min) : "",
@@ -59,20 +61,57 @@ export function SearchForm({
   const [showMore, setShowMore] = useState(false);
   const createDaily = useCreateQuery();
 
-  const ready = !disabled && !isSearching && what.trim() && where.trim();
+  const commitWhat = () => {
+    const v = whatDraft.trim();
+    if (!v) return;
+    if (whatTerms.length >= MAX_WHAT_TERMS) return;
+    if (whatTerms.some((t) => t.toLowerCase() === v.toLowerCase())) {
+      setWhatDraft("");
+      return;
+    }
+    setWhatTerms([...whatTerms, v]);
+    setWhatDraft("");
+  };
+
+  // Treat the still-uncommitted draft as a term so users don't have to
+  // press Enter before clicking Find jobs.
+  const effectiveTerms = whatDraft.trim()
+    ? [...whatTerms, whatDraft.trim()].slice(0, MAX_WHAT_TERMS)
+    : whatTerms;
+
+  const ready =
+    !disabled &&
+    !isSearching &&
+    effectiveTerms.length > 0 &&
+    where.trim().length > 0;
   const canSaveDaily =
-    !!what.trim() && !!where.trim() && !isSearching && !createDaily.isPending;
+    effectiveTerms.length > 0 &&
+    !!where.trim() &&
+    !isSearching &&
+    !createDaily.isPending;
 
   const saveAsDaily = () => {
-    createDaily.mutate(
-      { what: what.trim(), where: where.trim() },
-      {
-        onSuccess: () =>
-          toast.success("Added to daily auto-search. Manage in Settings."),
-        onError: (err) =>
-          toast.error(`Couldn't save: ${err.message}`),
-      },
-    );
+    // Daily auto-search rows are still single-term (the SavedQuery model
+    // hasn't grown multi-term yet). Save one row per term.
+    Promise.all(
+      effectiveTerms.map(
+        (term) =>
+          new Promise<void>((resolve, reject) => {
+            createDaily.mutate(
+              { what: term, where: where.trim() },
+              { onSuccess: () => resolve(), onError: (e) => reject(e) },
+            );
+          }),
+      ),
+    )
+      .then(() =>
+        toast.success(
+          `Added ${effectiveTerms.length} daily search${effectiveTerms.length === 1 ? "" : "es"}. Manage in Settings.`,
+        ),
+      )
+      .catch((err: Error) =>
+        toast.error(`Couldn't save: ${err.message}`),
+      );
   };
 
   const submit = (e: React.FormEvent) => {
@@ -80,12 +119,13 @@ export function SearchForm({
     if (!ready) return;
     const salary = salaryMin.trim() ? Number(salaryMin) : undefined;
     onSubmit({
-      what: what.trim(),
+      what: effectiveTerms,
       where: where.trim(),
       salary_min: Number.isFinite(salary) ? salary : undefined,
       employment_types: employmentTypes.length ? employmentTypes : undefined,
       posted_within_days: postedWithin,
     });
+    setWhatDraft("");
   };
 
   const toggleEmployment = (v: EmploymentType) => {
@@ -100,16 +140,79 @@ export function SearchForm({
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_auto] gap-3 sm:items-end">
             <div>
-              <Label htmlFor="what">What</Label>
-              <Input
-                id="what"
-                placeholder="e.g. data scientist"
-                value={what}
-                onChange={(e) => setWhat(e.target.value)}
-                disabled={disabled || isSearching}
-                autoFocus
-                className="mt-1"
-              />
+              <Label htmlFor="what">
+                What{" "}
+                <span className="text-[10px] text-slate-400 font-normal">
+                  · up to {MAX_WHAT_TERMS} role terms
+                </span>
+              </Label>
+              <div
+                className={cn(
+                  "mt-1 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5",
+                  "focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500",
+                  (disabled || isSearching) && "bg-slate-50",
+                )}
+              >
+                {whatTerms.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-900"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      disabled={disabled || isSearching}
+                      onClick={() =>
+                        setWhatTerms(whatTerms.filter((t) => t !== tag))
+                      }
+                      className="hover:text-indigo-700"
+                      aria-label={`Remove ${tag}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="what"
+                  type="text"
+                  placeholder={
+                    whatTerms.length === 0
+                      ? "e.g. data scientist"
+                      : whatTerms.length < MAX_WHAT_TERMS
+                        ? "add another…"
+                        : ""
+                  }
+                  value={whatDraft}
+                  onChange={(e) => setWhatDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      commitWhat();
+                    } else if (
+                      e.key === "Backspace" &&
+                      !whatDraft &&
+                      whatTerms.length > 0
+                    ) {
+                      setWhatTerms(whatTerms.slice(0, -1));
+                    }
+                  }}
+                  onBlur={commitWhat}
+                  disabled={
+                    disabled ||
+                    isSearching ||
+                    whatTerms.length >= MAX_WHAT_TERMS
+                  }
+                  autoFocus
+                  className={cn(
+                    "flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-slate-900",
+                    "placeholder:text-slate-400 disabled:cursor-not-allowed",
+                  )}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Press Enter to add a term. Each runs its own search and
+                results merge.
+              </p>
             </div>
             <div>
               <Label htmlFor="where">Where</Label>

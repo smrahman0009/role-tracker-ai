@@ -424,7 +424,7 @@ def test_search_returns_202_and_id(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": "data scientist", "where": "Halifax"},
+        json={"what": ["data scientist"], "where": "Halifax"},
     )
     assert response.status_code == 202
     body = response.json()
@@ -438,7 +438,7 @@ def test_search_writes_results_to_snapshot_and_seen_store(
     _seed_resume(client)
     search_response = client.post(
         "/users/alice/jobs/search",
-        json={"what": "data scientist", "where": "Halifax"},
+        json={"what": ["data scientist"], "where": "Halifax"},
     )
     search_id = search_response.json()["search_id"]
 
@@ -459,7 +459,7 @@ def test_search_writes_results_to_snapshot_and_seen_store(
 def test_search_fails_without_resume(client: TestClient) -> None:
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": "data scientist", "where": "Halifax"},
+        json={"what": ["data scientist"], "where": "Halifax"},
     )
     search_id = response.json()["search_id"]
     poll = client.get(f"/users/alice/jobs/search/{search_id}").json()
@@ -470,7 +470,7 @@ def test_search_fails_without_resume(client: TestClient) -> None:
 def test_search_validates_required_fields(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
-        "/users/alice/jobs/search", json={"what": "", "where": "Halifax"}
+        "/users/alice/jobs/search", json={"what": [], "where": "Halifax"}
     )
     assert response.status_code == 422
 
@@ -478,3 +478,29 @@ def test_search_validates_required_fields(client: TestClient) -> None:
 def test_search_status_404_for_unknown_id(client: TestClient) -> None:
     response = client.get("/users/alice/jobs/search/nonexistent")
     assert response.status_code == 404
+
+
+def test_search_accepts_multiple_what_terms(client: TestClient) -> None:
+    """The pipeline fans out across each `what` term and merges results."""
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={
+            "what": ["machine learning engineer", "data scientist"],
+            "where": "Halifax, Canada",
+        },
+    )
+    assert response.status_code == 202
+
+
+def test_search_rejects_more_than_three_what_terms(client: TestClient) -> None:
+    """Cap is 3 to keep the JSearch quota cost bounded."""
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={
+            "what": ["one", "two", "three", "four"],
+            "where": "Halifax",
+        },
+    )
+    assert response.status_code == 422

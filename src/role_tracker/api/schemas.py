@@ -175,11 +175,18 @@ class RefreshStatusResponse(BaseModel):
 class SearchJobsRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/search.
 
-    Ad-hoc search spec. `what` and `where` are required; everything else
-    is an optional refinement that mirrors the chip-filter shape.
+    Ad-hoc search spec. `what` is a list of role terms (1-3) — each runs
+    its own JSearch query and results are merged + deduped + ranked
+    against the resume. `where` is a single free-text location string;
+    JSearch hands it to Google for Jobs which resolves geo naturally
+    ("Halifax, Canada", "Toronto, ON", "Remote", etc.). Other fields
+    are optional refinements that mirror the chip-filter shape.
+
+    Cap of 3 terms keeps the JSearch quota cost bounded — each search
+    costs `2 * len(what)` requests at limit_per_query=20.
     """
 
-    what: str = Field(min_length=1, max_length=200)
+    what: list[str] = Field(min_length=1, max_length=3)
     where: str = Field(min_length=1, max_length=200)
     salary_min: int | None = Field(default=None, ge=0)
     employment_types: list[

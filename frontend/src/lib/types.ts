@@ -100,12 +100,16 @@ export interface RefreshStatusResponse {
 
 /** Body for POST /jobs/search — the ad-hoc search spec. */
 export interface SearchJobsRequest {
-  what: string;
+  /** 1-3 role terms; each runs its own JSearch query and results merge. */
+  what: string[];
   where: string;
   salary_min?: number | null;
   employment_types?: EmploymentType[];
   posted_within_days?: number | null;
 }
+
+/** Cap matches the backend SearchJobsRequest schema. */
+export const MAX_WHAT_TERMS = 3;
 
 /** Body of the 202 response from POST /jobs/search. */
 export interface SearchJobsResponse {

@@ -563,20 +563,26 @@ def _run_search_in_background(
         finally:
             tmp_path.unlink(missing_ok=True)
 
-        # Build a one-off SavedQuery from the spec. The optional fields
+        # Build one SavedQuery per `what` term — the pipeline already
+        # handles multi-query fan-out, dedupe, and merge. Optional fields
         # (salary, employment, posted_within) are post-rank narrowers
         # surfaced via /jobs query params, not pipeline inputs — so they
         # don't affect the pipeline call here.
-        ad_hoc_query = SavedQuery(
-            query_id="search:" + search_id,
-            what=spec.what,
-            where=spec.where,
-            enabled=True,
-            created_at=datetime.now(UTC),
-        )
+        terms = [t.strip() for t in spec.what if t.strip()]
+        now = datetime.now(UTC)
+        ad_hoc_queries = [
+            SavedQuery(
+                query_id=f"search:{search_id}:{i}",
+                what=term,
+                where=spec.where,
+                enabled=True,
+                created_at=now,
+            )
+            for i, term in enumerate(terms)
+        ]
 
         result = pipeline(
-            user_id, [ad_hoc_query], resume_text, limit_per_query=20
+            user_id, ad_hoc_queries, resume_text, limit_per_query=20
         )
         cache.save_snapshot(
             user_id,

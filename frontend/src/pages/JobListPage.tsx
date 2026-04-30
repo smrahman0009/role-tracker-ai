@@ -271,7 +271,7 @@ function ResultsHeader({
       <p className="text-sm text-slate-700">
         {spec ? (
           <>
-            <span className="font-medium">{spec.what}</span>
+            <span className="font-medium">{spec.what.join(", ")}</span>
             <span className="text-slate-400 mx-1.5">in</span>
             <span className="font-medium">{spec.where}</span>
           </>
@@ -302,9 +302,23 @@ function loadLastSpec(): SearchJobsRequest | null {
   try {
     const raw = localStorage.getItem(LAST_SEARCH_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SearchJobsRequest;
-    if (!parsed.what || !parsed.where) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Migrate old single-string `what` from before the multi-term change.
+    const rawWhat = parsed.what;
+    let whatList: string[] | null = null;
+    if (Array.isArray(rawWhat)) {
+      whatList = rawWhat.filter(
+        (t): t is string => typeof t === "string" && t.length > 0,
+      );
+    } else if (typeof rawWhat === "string" && rawWhat.length > 0) {
+      whatList = [rawWhat];
+    }
+    const where =
+      typeof parsed.where === "string" && parsed.where.length > 0
+        ? parsed.where
+        : null;
+    if (!whatList || whatList.length === 0 || !where) return null;
+    return { ...parsed, what: whatList, where } as SearchJobsRequest;
   } catch {
     return null;
   }
