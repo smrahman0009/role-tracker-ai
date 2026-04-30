@@ -25,16 +25,26 @@ from fpdf import FPDF
 
 
 _BOLD_SPLIT = re.compile(r"(\*\*[^\n*]+?\*\*)")
+# Markdown link `[label](url)` — we keep only `label` since neither fpdf2's
+# basic API nor python-docx's `add_run` make hyperlinks easy. The URLs
+# already live elsewhere on the page (Apply Kit profile fields).
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
 
-def _split_bold(text: str) -> list[tuple[str, bool]]:
-    """Split a paragraph into (text, is_bold) chunks for run-by-run rendering.
+def _strip_md_links(text: str) -> str:
+    return _MD_LINK.sub(r"\1", text)
+
+
+def _split_bold(line: str) -> list[tuple[str, bool]]:
+    """Split a single line into (text, is_bold) chunks.
 
     Markdown `**X**` becomes a bold chunk; everything else stays plain.
-    Empty chunks are filtered out.
+    Empty chunks are filtered out. Caller is responsible for splitting
+    multi-line input on `\n` first — this function does not handle line
+    breaks itself.
     """
     parts: list[tuple[str, bool]] = []
-    for chunk in _BOLD_SPLIT.split(text):
+    for chunk in _BOLD_SPLIT.split(line):
         if not chunk:
             continue
         if chunk.startswith("**") and chunk.endswith("**") and len(chunk) > 4:
@@ -42,6 +52,23 @@ def _split_bold(text: str) -> list[tuple[str, bool]]:
         else:
             parts.append((chunk, False))
     return parts
+
+
+def _normalize(text: str) -> list[list[str]]:
+    """Turn the letter text into a list of paragraphs, each a list of lines.
+
+    Letters use blank lines between paragraphs, and single newlines inside
+    the contact header to separate `**Name**`, the contact line, and the
+    links line. We need to honour both.
+    """
+    raw_paragraphs = [p for p in text.split("\n\n") if p.strip()]
+    paragraphs: list[list[str]] = []
+    for para in raw_paragraphs:
+        para = _strip_md_links(para)
+        lines = [ln for ln in para.split("\n") if ln.strip()]
+        if lines:
+            paragraphs.append(lines)
+    return paragraphs
 
 
 # ----- PDF -----
@@ -55,18 +82,19 @@ def letter_to_pdf(text: str) -> bytes:
     pdf.add_page()
     pdf.set_font("Helvetica", size=11)
 
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    paragraphs = _normalize(text)
     line_height = 14  # ~1.27 leading at 11pt
     paragraph_gap = 8
 
-    for i, para in enumerate(paragraphs):
-        for run_text, is_bold in _split_bold(para):
-            # multi_cell wraps; for inline runs we use write() so bold
-            # spans flow with surrounding plain text on the same line.
-            pdf.set_font("Helvetica", style="B" if is_bold else "", size=11)
-            pdf.write(line_height, run_text)
-        # End of paragraph — newline, then a small gap.
-        pdf.ln(line_height)
+    for i, lines in enumerate(paragraphs):
+        for j, line in enumerate(lines):
+            for run_text, is_bold in _split_bold(line):
+                pdf.set_font("Helvetica", style="B" if is_bold else "", size=11)
+                pdf.write(line_height, run_text)
+            # End of line — drop to the next baseline. This handles both
+            # the single-line breaks inside the header (Name / contacts /
+            # links) and the end-of-paragraph break for body paragraphs.
+            pdf.ln(line_height)
         if i < len(paragraphs) - 1:
             pdf.ln(paragraph_gap)
 
@@ -90,12 +118,17 @@ def letter_to_docx(text: str) -> bytes:
     style.font.name = "Calibri"
     style.font.size = Pt(11)
 
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    for para in paragraphs:
+    for lines in _normalize(text):
         p = doc.add_paragraph()
-        for run_text, is_bold in _split_bold(para):
-            run = p.add_run(run_text)
-            run.bold = is_bold
+        for j, line in enumerate(lines):
+            if j > 0:
+                # Soft line break inside the same paragraph — preserves
+                # the multi-line contact header without inserting the
+                # extra spacing of a fresh <w:p>.
+                p.add_run().add_break()
+            for run_text, is_bold in _split_bold(line):
+                run = p.add_run(run_text)
+                run.bold = is_bold
 
     buf = BytesIO()
     doc.save(buf)
