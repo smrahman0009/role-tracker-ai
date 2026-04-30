@@ -118,18 +118,22 @@ def get_pipeline_runner() -> PipelineRunner:
         resume_text: str,
         *,
         limit_per_query: int = 50,
+        top_n_override: int | None = None,
     ) -> MatchingResult:
         # Pull exclusion lists + the user's top_n preference from the
         # YAML profile. Defaults if the user hasn't created one yet.
         # `limit_per_query` is caller-controlled so the daily refresh
         # (50) and ad-hoc search (20) can use different JSearch budgets.
-        top_n = 50
+        # `top_n_override` lets ad-hoc searches choose a different cap
+        # than the user's profile default.
+        top_n = top_n_override if top_n_override is not None else 50
         try:
             user = user_store.get_user(user_id)
             exclude_companies = user.exclude_companies
             exclude_title_keywords = user.exclude_title_keywords
             exclude_publishers = user.exclude_publishers
-            top_n = user.top_n_jobs
+            if top_n_override is None:
+                top_n = user.top_n_jobs
         except FileNotFoundError:
             exclude_companies = []
             exclude_title_keywords = []
@@ -231,6 +235,50 @@ def list_jobs(
         candidates_seen=snapshot.candidates_seen,
         queries_run=snapshot.queries_run,
         top_n_cap=snapshot.top_n_cap,
+    )
+
+
+@router.get("/applications", response_model=JobListResponse)
+def list_applications(
+    user_id: str,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    applied_store: AppliedStore = Depends(get_applied_store),
+) -> JobListResponse:
+    """List every job the user has marked as applied, across all searches.
+
+    Reads from seen_jobs (the long-lived index) so applications from
+    previous searches stay reachable after the snapshot rotates.
+    Sorted by match_score descending.
+    """
+    applied_ids = applied_store.list_applied(user_id)
+    if not applied_ids:
+        return JobListResponse(
+            jobs=[],
+            total=0,
+            total_unfiltered=0,
+            hidden_by_filters=0,
+            last_refreshed_at=None,
+        )
+
+    summaries: list[JobSummary] = []
+    for job_id in applied_ids:
+        stored = seen_store.get(user_id, job_id)
+        if stored is None:
+            # The user applied to a job that no longer exists in the
+            # index (extremely rare — shouldn't happen since we never
+            # delete from seen_store). Skip silently.
+            continue
+        summaries.append(
+            _to_summary_from_job(stored.job, score=stored.score, applied=True)
+        )
+    summaries.sort(key=lambda s: s.match_score, reverse=True)
+
+    return JobListResponse(
+        jobs=summaries,
+        total=len(summaries),
+        total_unfiltered=len(summaries),
+        hidden_by_filters=0,
+        last_refreshed_at=None,
     )
 
 
@@ -582,14 +630,18 @@ def _run_search_in_background(
         ]
 
         result = pipeline(
-            user_id, ad_hoc_queries, resume_text, limit_per_query=20
+            user_id,
+            ad_hoc_queries,
+            resume_text,
+            limit_per_query=20,
+            top_n_override=spec.top_n,
         )
         cache.save_snapshot(
             user_id,
             result.jobs,
             candidates_seen=result.candidates_seen,
             queries_run=result.queries_run,
-            top_n_cap=_user_top_n(user_id),
+            top_n_cap=spec.top_n if spec.top_n is not None else _user_top_n(user_id),
         )
         seen_store.upsert_many(user_id, result.jobs)
         refresh_store.mark_done(

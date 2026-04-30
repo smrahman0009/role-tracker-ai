@@ -106,6 +106,8 @@ export interface SearchJobsRequest {
   salary_min?: number | null;
   employment_types?: EmploymentType[];
   posted_within_days?: number | null;
+  /** Override the user's profile default. 1-200, optional. */
+  top_n?: number | null;
 }
 
 /** Cap matches the backend SearchJobsRequest schema. */

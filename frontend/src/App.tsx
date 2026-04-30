@@ -23,6 +23,7 @@ import { RequireAuth } from "@/auth/RequireAuth";
 import { Layout } from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toaster";
 import { queryClient } from "@/lib/queryClient";
+import ApplicationsPage from "@/pages/ApplicationsPage";
 import JobDetailPage from "@/pages/JobDetailPage";
 import JobListPage from "@/pages/JobListPage";
 import LoginPage from "@/pages/LoginPage";
@@ -45,6 +46,7 @@ export default function App() {
             >
               <Route path="/" element={<JobListPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+              <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

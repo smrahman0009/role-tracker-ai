@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toaster";
-import { useCreateQuery } from "@/hooks/useQueries";
+import { useCreateQuery, useSavedQueries } from "@/hooks/useQueries";
 import { MAX_WHAT_TERMS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { EmploymentType, SearchJobsRequest } from "@/lib/types";
@@ -58,8 +58,12 @@ export function SearchForm({
   const [postedWithin, setPostedWithin] = useState<number | undefined>(
     initial?.posted_within_days ?? undefined,
   );
+  const [topN, setTopN] = useState<string>(
+    initial?.top_n != null ? String(initial.top_n) : "",
+  );
   const [showMore, setShowMore] = useState(false);
   const createDaily = useCreateQuery();
+  const savedQueriesQuery = useSavedQueries();
 
   const commitWhat = () => {
     const v = whatDraft.trim();
@@ -91,10 +95,28 @@ export function SearchForm({
     !createDaily.isPending;
 
   const saveAsDaily = () => {
-    // Daily auto-search rows are still single-term (the SavedQuery model
-    // hasn't grown multi-term yet). Save one row per term.
+    // Daily auto-search rows are still single-term (SavedQuery model
+    // hasn't grown multi-term yet). Save one row per term, skipping any
+    // that already exist with the same what/where.
+    const existing = savedQueriesQuery.data?.queries ?? [];
+    const trimmedWhere = where.trim().toLowerCase();
+    const isDup = (term: string) =>
+      existing.some(
+        (q) =>
+          q.what.trim().toLowerCase() === term.toLowerCase() &&
+          q.where.trim().toLowerCase() === trimmedWhere,
+      );
+
+    const toAdd = effectiveTerms.filter((t) => !isDup(t));
+    const skipped = effectiveTerms.length - toAdd.length;
+
+    if (toAdd.length === 0) {
+      toast(`Already in your daily searches${skipped > 1 ? "" : ""}.`);
+      return;
+    }
+
     Promise.all(
-      effectiveTerms.map(
+      toAdd.map(
         (term) =>
           new Promise<void>((resolve, reject) => {
             createDaily.mutate(
@@ -104,11 +126,13 @@ export function SearchForm({
           }),
       ),
     )
-      .then(() =>
-        toast.success(
-          `Added ${effectiveTerms.length} daily search${effectiveTerms.length === 1 ? "" : "es"}. Manage in Settings.`,
-        ),
-      )
+      .then(() => {
+        const summary =
+          skipped > 0
+            ? `Added ${toAdd.length}, skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}.`
+            : `Added ${toAdd.length} daily search${toAdd.length === 1 ? "" : "es"}. Manage in Settings.`;
+        toast.success(summary);
+      })
       .catch((err: Error) =>
         toast.error(`Couldn't save: ${err.message}`),
       );
@@ -118,12 +142,14 @@ export function SearchForm({
     e.preventDefault();
     if (!ready) return;
     const salary = salaryMin.trim() ? Number(salaryMin) : undefined;
+    const top = topN.trim() ? Number(topN) : undefined;
     onSubmit({
       what: effectiveTerms,
       where: where.trim(),
       salary_min: Number.isFinite(salary) ? salary : undefined,
       employment_types: employmentTypes.length ? employmentTypes : undefined,
       posted_within_days: postedWithin,
+      top_n: Number.isFinite(top) ? top : undefined,
     });
     setWhatDraft("");
   };
@@ -271,7 +297,7 @@ export function SearchForm({
           </div>
 
           {showMore && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
               <div>
                 <Label htmlFor="salary_min">Min salary (USD)</Label>
                 <Input
@@ -286,6 +312,26 @@ export function SearchForm({
                   disabled={disabled || isSearching}
                   className="mt-1"
                 />
+              </div>
+              <div>
+                <Label htmlFor="top_n">Max results</Label>
+                <Input
+                  id="top_n"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={200}
+                  step={5}
+                  placeholder="50"
+                  value={topN}
+                  onChange={(e) => setTopN(e.target.value)}
+                  disabled={disabled || isSearching}
+                  className="mt-1"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Default 50. Higher = more browsing freedom; lower = only
+                  the best matches.
+                </p>
               </div>
               <div>
                 <Label>Employment type</Label>

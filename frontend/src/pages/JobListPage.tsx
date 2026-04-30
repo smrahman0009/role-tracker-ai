@@ -12,6 +12,7 @@ import { Loader2, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { JobCard } from "@/components/JobCard";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { ResumeCard } from "@/components/ResumeCard";
 import { SearchForm } from "@/components/SearchForm";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -131,6 +132,16 @@ export default function JobListPage() {
       </div>
 
       <ResumeCard onResumeChange={() => resumeQuery.refetch()} />
+
+      <OnboardingChecklist
+        hasSearched={!!lastRefreshedAt}
+        onJumpToSearch={() => {
+          // Scroll the search form into view + autofocus What input.
+          const el = document.getElementById("what");
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLInputElement | null)?.focus();
+        }}
+      />
 
       <SearchForm
         initial={lastSpec}

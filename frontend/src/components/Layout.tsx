@@ -36,6 +36,16 @@ export function Layout() {
           </div>
           <nav className="flex items-center gap-3">
             <NavLink
+              to="/applications"
+              className={({ isActive }) =>
+                isActive
+                  ? "text-xs font-medium text-slate-900"
+                  : "text-xs text-slate-500 hover:text-slate-700 transition-colors"
+              }
+            >
+              My applications
+            </NavLink>
+            <NavLink
               to="/settings"
               className={({ isActive }) =>
                 isActive

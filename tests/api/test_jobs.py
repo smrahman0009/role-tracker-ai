@@ -504,3 +504,74 @@ def test_search_rejects_more_than_three_what_terms(client: TestClient) -> None:
         },
     )
     assert response.status_code == 422
+
+
+def test_search_accepts_top_n_override(client: TestClient) -> None:
+    """`top_n` in the body overrides the user's profile default."""
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": ["data scientist"], "where": "Halifax", "top_n": 25},
+    )
+    assert response.status_code == 202
+
+
+def test_search_rejects_top_n_out_of_range(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": ["data scientist"], "where": "Halifax", "top_n": 999},
+    )
+    assert response.status_code == 422
+
+
+# ----- /applications -----
+
+
+def test_applications_empty_when_nothing_applied(client: TestClient) -> None:
+    body = client.get("/users/alice/jobs/applications").json()
+    assert body["jobs"] == []
+    assert body["total"] == 0
+
+
+def test_applications_returns_applied_from_seen_store(
+    client: TestClient,
+) -> None:
+    """Apply a job from a search; it should show up in /applications."""
+    _seed_resume(client)
+    _seed_query(client)
+    refresh_response = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
+    client.post("/users/alice/jobs/j1/applied")
+
+    body = client.get("/users/alice/jobs/applications").json()
+    assert body["total"] == 1
+    assert body["jobs"][0]["job_id"] == "j1"
+    assert body["jobs"][0]["applied"] is True
+
+
+def test_applications_survives_snapshot_rotation(client: TestClient) -> None:
+    """Applied jobs stay reachable even after a new search clobbers the snapshot.
+
+    This is the whole point of the seen_jobs index — applications shouldn't
+    disappear because the user ran another search.
+    """
+    _seed_resume(client)
+    _seed_query(client)
+    # First refresh: cache j1 + j2, apply j1.
+    r1 = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{r1.json()['refresh_id']}")
+    client.post("/users/alice/jobs/j1/applied")
+
+    # Run an ad-hoc search — same fake pipeline returns j1 + j2 again, but
+    # in real life this would rotate the snapshot to a new set of jobs.
+    s = client.post(
+        "/users/alice/jobs/search",
+        json={"what": ["data scientist"], "where": "Halifax"},
+    )
+    client.get(f"/users/alice/jobs/search/{s.json()['search_id']}")
+
+    # j1 is still in /applications regardless of what's in the snapshot now.
+    body = client.get("/users/alice/jobs/applications").json()
+    assert body["total"] == 1
+    assert body["jobs"][0]["job_id"] == "j1"

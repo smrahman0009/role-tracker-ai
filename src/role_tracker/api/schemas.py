@@ -193,6 +193,9 @@ class SearchJobsRequest(BaseModel):
         Literal["FULLTIME", "PARTTIME", "CONTRACTOR", "INTERN"]
     ] = []
     posted_within_days: int | None = Field(default=None, ge=1, le=365)
+    # Optional per-search override for the ranking cap. None falls back
+    # to the user's profile default (UserProfile.top_n_jobs).
+    top_n: int | None = Field(default=None, ge=1, le=200)
 
 
 class SearchJobsResponse(BaseModel):
