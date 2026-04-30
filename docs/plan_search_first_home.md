@@ -50,3 +50,106 @@ explicit inputs and removes the "why isn't X in the dropdown" trap.
 - Search history beyond "last search".
 - Cosmos DB / Blob Storage migration (Phase 7 deploy).
 - Daily scheduler — the cron/timer that actually runs saved searches automatically. The reframe in step 4 is preparation for this.
+
+---
+
+# Plan: Apply Kit
+
+A side panel on the Job Detail page that surfaces resume, cover letter,
+and profile fields as copy-paste-ready chunks while the employer's
+apply page is open in a side window. **Manual apply, but with the
+friction removed.** Not browser automation, not auto-submit.
+
+## Why this and not full autopilot
+
+We considered a Claude computer-use / browser-use agent that drives the
+employer page automatically. Decision: **out of scope for this project.**
+- Brittle: Workday and custom employer ATSes break agentic flows ~30%
+  of the time.
+- Costly: $0.20–$2 per submission in tokens; needs a paid Azure tier
+  to host headless Chromium.
+- TOS exposure: LinkedIn/Indeed forbid automation; many employers flag
+  obvious bot submissions and auto-reject.
+- Bad reputation tradeoff: low-quality auto-apps waste recruiter time
+  and hurt the user.
+
+The Apply Kit gets ~80% of the daily-life benefit (no tab-switching,
+no retyping, no hunting for the resume file) without any of those
+risks. User stays in control; employer never sees automation.
+
+## Shape
+
+Two-column layout on the Job Detail page (lg breakpoint and up). Left
+column unchanged (JD + cover letter workspace). New right column:
+**ApplyKitPanel** with three sections:
+
+1. **Resume** — filename + Download button + "Open in new tab" button.
+2. **Cover letter** — version selector dropdown + Copy text + Download .md.
+3. **Profile fields** — Name, Email, Phone, City, LinkedIn, GitHub,
+   Portfolio, each with a 📋 copy-to-clipboard button.
+
+Below the three sections: **"Open posting in side window"** button that
+opens `job.url` as a popup pinned next to the browser
+(`window.open(url, "posting", "popup,width=720,height=900")`), so the
+user can paste from the kit into the employer's form without losing
+the kit's context.
+
+## Architecture
+
+The panel is **read-only** over data the app already has:
+
+| Section          | Data source            | Already exists? |
+|------------------|------------------------|-----------------|
+| Resume           | `useResume()`          | yes (Settings)  |
+| Cover letter     | `useLetterVersions()`  | yes (workspace) |
+| Profile fields   | `useProfile()`         | yes (Settings)  |
+
+Copy buttons use `navigator.clipboard.writeText()` — browser-native, no
+backend. No new endpoints, no schema changes. Roughly one new component
+(`ApplyKitPanel.tsx`) and a layout tweak in `JobDetailPage.tsx`.
+
+## Build order
+
+1. **`ApplyKitPanel.tsx`** — render the three sections from existing
+   hooks. Copy-to-clipboard buttons with toast feedback. Disabled
+   states when data is missing (no resume → "Upload one in Settings").
+2. **JobDetailPage layout** — switch to `lg:grid-cols-3` (left col 2/3,
+   right col 1/3). Move existing Strategy + Critique into the
+   ApplyKitPanel column above the new sections, OR keep them separate
+   and stack.
+3. **"Open posting in side window" button** — replace or augment the
+   existing "View posting" button so it opens as a popup instead of a
+   tab. Keep the tab-open as a fallback for browsers that block popups.
+4. **Polish** — keyboard shortcut to copy each field (e.g., `c, e` for
+   email), "missing field" hints when profile is incomplete.
+
+## Status
+
+| Step | Status |
+|---|---|
+| 1. ApplyKitPanel component | not started |
+| 2. JobDetail two-column layout | not started |
+| 3. Side-window popup button | not started |
+| 4. Polish | not started |
+
+## Optional v2 add-ons (decide later)
+
+- **"Why are you interested?" generator** — small dialog calling Claude
+  with the JD + resume to draft a 3-sentence answer to the most common
+  screening question. Reuses the existing Anthropic client. Probably
+  $0.01 per generation.
+- **Greenhouse / Lever direct apply** — when `job.url` matches their
+  board patterns, show a "Direct apply available" badge and submit via
+  their public APIs from the backend. Skips the manual paste loop on
+  the ~10–20% of postings that use these ATSes.
+- **Browser extension** — same UI as the panel, but injected into the
+  employer page so paste happens automatically on focus. Only worth it
+  after the panel is proven daily-useful.
+
+## Out of scope (the autopilot path, revisit only if explicitly chosen)
+
+- Headless-browser agent that submits applications.
+- Captcha solving.
+- Login automation for LinkedIn / Indeed / etc.
+- Auto-answer to free-text screening questions beyond a single
+  one-shot generator with manual review.
