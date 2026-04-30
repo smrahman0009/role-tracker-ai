@@ -130,7 +130,8 @@ backend. No new endpoints, no schema changes. Roughly one new component
 | 1. ApplyKitPanel component | shipped |
 | 2. JobDetail two-column layout | shipped (existing layout reused) |
 | 3. Side-window popup button | shipped |
-| 4. Polish | not started |
+| 4. Floating kit (Document Picture-in-Picture) | shipped (Chrome/Edge) |
+| 5. Polish (keyboard shortcuts, missing-field hints) | not started |
 
 ## Optional v2 add-ons (decide later)
 

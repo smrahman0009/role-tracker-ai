@@ -18,13 +18,17 @@ import {
   FileText,
   Mail,
   PanelRight,
+  PictureInPicture2,
+  X,
 } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toaster";
 import { useLetterVersions, letterDownloadUrl } from "@/hooks/useLetters";
+import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
 import { cn } from "@/lib/utils";
@@ -40,6 +44,7 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
   const resumeQuery = useResume();
   const profileQuery = useProfile();
   const versionsQuery = useLetterVersions(jobId);
+  const pip = usePictureInPictureWindow();
 
   const versions = versionsQuery.data?.versions ?? [];
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
@@ -50,15 +55,13 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
     null;
 
   const openPostingInSideWindow = () => {
-    // Try popup first; if blocked, fall back to a new tab. Either way the
-    // user keeps the kit accessible.
+    // Try popup first; if blocked, fall back to a new tab.
     const popup = window.open(
       jobUrl,
       "role-tracker-posting",
       "popup,width=720,height=900,resizable=yes,scrollbars=yes",
     );
     if (!popup) {
-      // Browser blocked the popup — open as a normal tab instead.
       window.open(jobUrl, "_blank", "noopener,noreferrer");
       toast(
         "Popup blocked — opened in a new tab. Allow popups for side-by-side apply.",
@@ -66,6 +69,109 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
     }
   };
 
+  const openFloatingKit = async () => {
+    const w = await pip.open({ width: 380, height: 900 });
+    if (!w) {
+      toast.error("Picture-in-picture isn't supported in this browser.");
+      return;
+    }
+    if (w.document.title !== undefined) w.document.title = "Apply kit";
+  };
+
+  // The actual content lives in <ApplyKitBody />. When the PiP window is
+  // open, we render a placeholder card here and portal the body into the
+  // floating window instead. React context (auth, query cache) propagates
+  // across the portal automatically since it's the same React tree.
+  const body = (
+    <ApplyKitBody
+      userId={userId}
+      jobId={jobId}
+      onOpenPosting={openPostingInSideWindow}
+      resume={resumeQuery.data}
+      profile={profileQuery.data}
+      versions={sortedVersions}
+      currentLetter={currentLetter}
+      isLetterLoading={versionsQuery.isLoading}
+      onSelectVersion={setSelectedVersion}
+      isFloating={!!pip.pipWindow}
+      isPipSupported={pip.isSupported}
+      onOpenFloating={openFloatingKit}
+      onCloseFloating={pip.close}
+    />
+  );
+
+  if (pip.pipWindow) {
+    return (
+      <>
+        <FloatingPlaceholder onBringBack={pip.close} />
+        {createPortal(
+          <div className="p-4 max-w-md mx-auto">{body}</div>,
+          pip.pipWindow.document.body,
+        )}
+      </>
+    );
+  }
+
+  return body;
+}
+
+function FloatingPlaceholder({ onBringBack }: { onBringBack: () => void }) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="py-5 text-center">
+        <PictureInPicture2 className="h-5 w-5 text-indigo-500 mx-auto" />
+        <p className="text-sm font-medium text-slate-900 mt-2">
+          Apply kit is floating
+        </p>
+        <p className="text-[11px] text-slate-500 mt-1 max-w-[240px] mx-auto">
+          The kit is in its own always-on-top window. Drag it next to the
+          employer's apply page.
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBringBack}
+          className="mt-3"
+        >
+          <X />
+          Bring back
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface ApplyKitBodyProps {
+  userId: string;
+  jobId: string;
+  onOpenPosting: () => void;
+  resume: import("@/lib/types").ResumeMetadata | null | undefined;
+  profile: ProfileResponse | undefined;
+  versions: Letter[];
+  currentLetter: Letter | null;
+  isLetterLoading: boolean;
+  onSelectVersion: (v: number) => void;
+  isFloating: boolean;
+  isPipSupported: boolean;
+  onOpenFloating: () => void;
+  onCloseFloating: () => void;
+}
+
+function ApplyKitBody({
+  userId,
+  jobId,
+  onOpenPosting,
+  resume,
+  profile,
+  versions,
+  currentLetter,
+  isLetterLoading,
+  onSelectVersion,
+  isFloating,
+  isPipSupported,
+  onOpenFloating,
+  onCloseFloating,
+}: ApplyKitBodyProps) {
   return (
     <Card>
       <CardHeader>
@@ -73,13 +179,24 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
           <PanelRight className="h-4 w-4 text-indigo-600" />
           Apply kit
         </CardTitle>
+        {isPipSupported && (
+          <button
+            type="button"
+            onClick={isFloating ? onCloseFloating : onOpenFloating}
+            className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+            title={
+              isFloating
+                ? "Close the floating window"
+                : "Open as a floating, always-on-top window (Chrome/Edge)"
+            }
+          >
+            <PictureInPicture2 className="h-3 w-3" />
+            {isFloating ? "Dock" : "Float"}
+          </button>
+        )}
       </CardHeader>
       <CardContent className="space-y-5">
-        <Button
-          onClick={openPostingInSideWindow}
-          className="w-full"
-          variant="primary"
-        >
+        <Button onClick={onOpenPosting} className="w-full" variant="primary">
           <ExternalLink />
           Open posting in side window
         </Button>
@@ -88,16 +205,16 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
           fields below into their form.
         </p>
 
-        <ResumeBlock userId={userId} resume={resumeQuery.data} />
+        <ResumeBlock userId={userId} resume={resume} />
         <CoverLetterBlock
           userId={userId}
           jobId={jobId}
-          versions={sortedVersions}
+          versions={versions}
           current={currentLetter}
-          isLoading={versionsQuery.isLoading}
-          onSelectVersion={setSelectedVersion}
+          isLoading={isLetterLoading}
+          onSelectVersion={onSelectVersion}
         />
-        <ProfileBlock profile={profileQuery.data} />
+        <ProfileBlock profile={profile} />
       </CardContent>
     </Card>
   );
