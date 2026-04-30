@@ -127,9 +127,9 @@ backend. No new endpoints, no schema changes. Roughly one new component
 
 | Step | Status |
 |---|---|
-| 1. ApplyKitPanel component | not started |
-| 2. JobDetail two-column layout | not started |
-| 3. Side-window popup button | not started |
+| 1. ApplyKitPanel component | shipped |
+| 2. JobDetail two-column layout | shipped (existing layout reused) |
+| 3. Side-window popup button | shipped |
 | 4. Polish | not started |
 
 ## Optional v2 add-ons (decide later)

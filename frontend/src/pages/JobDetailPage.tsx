@@ -32,6 +32,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { useAuth } from "@/auth/AuthContext";
+import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { FitBadge } from "@/components/FitBadge";
 import { RefineDialog } from "@/components/RefineDialog";
@@ -224,6 +225,11 @@ export default function JobDetailPage() {
             </div>
 
             <div className="space-y-4">
+              <ApplyKitPanel
+                userId={userId ?? ""}
+                jobId={job.job_id}
+                jobUrl={job.url}
+              />
               {current?.strategy && <StrategyPanel strategy={current.strategy} />}
               {current?.critique && <CritiquePanel critique={current.critique} />}
               {current && (
