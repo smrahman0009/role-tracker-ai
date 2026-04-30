@@ -1,6 +1,6 @@
 /**
  * SettingsPage — resume, profile (with per-field show-in-letter toggles),
- * saved searches, and the three Hidden lists. Each section owns its
+ * daily auto-search, and the three Hidden lists. Each section owns its
  * own loading/error/save state; the page just lays them out.
  */
 
@@ -52,7 +52,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Resume, contact info, saved searches, and hidden lists.
+          Resume, contact info, daily auto-search, and hidden lists.
         </p>
       </div>
 
@@ -335,7 +335,7 @@ function ProfileSection() {
   );
 }
 
-// ---------- Saved searches ----------
+// ---------- Daily auto-search ----------
 
 function SavedSearchesSection() {
   const queriesQuery = useSavedQueries();
@@ -352,10 +352,12 @@ function SavedSearchesSection() {
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Saved searches</CardTitle>
+          <CardTitle>Daily auto-search</CardTitle>
           <CardDescription>
-            The daily refresh fans out across every enabled search. Disable
-            a row to keep it on file without running it.
+            Searches that will run automatically once a day, in addition
+            to anything you search ad-hoc on the home page. Disable a row
+            to keep it on file without running it. (The scheduler ships
+            with deployment — for now these are dormant.)
           </CardDescription>
         </div>
         {!adding && (
@@ -374,7 +376,8 @@ function SavedSearchesSection() {
           <p className="text-xs text-slate-500">Loading…</p>
         ) : queries.length === 0 && !adding ? (
           <p className="text-xs text-slate-500">
-            No saved searches yet. Add one to start finding jobs.
+            No daily searches yet. Add one to have it run automatically
+            every day, or use the home-page search box for one-off queries.
           </p>
         ) : (
           <div className="space-y-2">

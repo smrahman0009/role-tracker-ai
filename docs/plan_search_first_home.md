@@ -38,11 +38,12 @@ explicit inputs and removes the "why isn't X in the dropdown" trap.
 
 | Step | Status |
 |---|---|
-| 1. `seen_jobs` store | not started |
-| 2. `POST /jobs/search` | not started |
-| 3. Home page rebuild | not started |
-| 4. Settings rename + "Save as daily" | not started |
-| 5. Quota awareness | deferred |
+| 1. `seen_jobs` store | shipped (1da8df5) |
+| 2. Detail/letter migrate | shipped (1da8df5) |
+| 3. `POST /jobs/search` | shipped (2f6cb1b) |
+| 4. Home page rebuild | shipped (9e794c9) |
+| 5. Settings rename + "Save as daily" | shipped |
+| 6. Quota awareness | deferred |
 
 ## Out of scope (revisit later)
 

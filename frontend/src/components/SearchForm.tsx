@@ -4,13 +4,15 @@
  * supplied onSubmit; the parent handles polling and rendering.
  */
 
-import { ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import { CalendarPlus, ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Label } from "@/components/ui/Input";
+import { toast } from "@/components/ui/Toaster";
+import { useCreateQuery } from "@/hooks/useQueries";
 import { cn } from "@/lib/utils";
 import type { EmploymentType, SearchJobsRequest } from "@/lib/types";
 
@@ -55,8 +57,23 @@ export function SearchForm({
     initial?.posted_within_days ?? undefined,
   );
   const [showMore, setShowMore] = useState(false);
+  const createDaily = useCreateQuery();
 
   const ready = !disabled && !isSearching && what.trim() && where.trim();
+  const canSaveDaily =
+    !!what.trim() && !!where.trim() && !isSearching && !createDaily.isPending;
+
+  const saveAsDaily = () => {
+    createDaily.mutate(
+      { what: what.trim(), where: where.trim() },
+      {
+        onSuccess: () =>
+          toast.success("Added to daily auto-search. Manage in Settings."),
+        onError: (err) =>
+          toast.error(`Couldn't save: ${err.message}`),
+      },
+    );
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,18 +137,35 @@ export function SearchForm({
             </Button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowMore((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
-          >
-            {showMore ? (
-              <ChevronUp className="h-3 w-3" />
-            ) : (
-              <ChevronDown className="h-3 w-3" />
-            )}
-            More filters
-          </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
+            >
+              {showMore ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+              More filters
+            </button>
+            <button
+              type="button"
+              onClick={saveAsDaily}
+              disabled={!canSaveDaily}
+              title="Add this what/where to Daily auto-search in Settings"
+              className={cn(
+                "inline-flex items-center gap-1 text-xs",
+                canSaveDaily
+                  ? "text-indigo-700 hover:text-indigo-900"
+                  : "text-slate-400 cursor-not-allowed",
+              )}
+            >
+              <CalendarPlus className="h-3 w-3" />
+              {createDaily.isPending ? "Saving…" : "Save as daily search"}
+            </button>
+          </div>
 
           {showMore && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
