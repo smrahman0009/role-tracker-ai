@@ -1,126 +1,107 @@
 /**
- * JobListPage — the home page.
+ * Home page — search-first.
  *
- * Tabs (Unapplied / All / Applied) with counts, a Refresh button that
- * kicks off a background refresh and polls until done, and a list of
- * JobCards that route to /jobs/:jobId on click.
- *
- * Filter chips (job type, location, salary, etc.) ship in the next
- * commit — this commit gets the basic list working first.
+ * Three blocks: ResumeCard → SearchForm → Results. Submitting the form
+ * fires POST /jobs/search; we poll until done, then re-fetch /jobs to
+ * render the snapshot the search wrote. The applied/unapplied tabs
+ * still filter the result list because users may have applied to some
+ * of these jobs from earlier searches.
  */
 
-import { RefreshCw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Loader2, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { FilterChips } from "@/components/FilterChips";
 import { JobCard } from "@/components/JobCard";
-import { formatDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/Button";
+import { ResumeCard } from "@/components/ResumeCard";
+import { SearchForm } from "@/components/SearchForm";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { toast } from "@/components/ui/Toaster";
 import {
   useApplyJob,
   useJobs,
-  useRefreshJobs,
-  useRefreshStatus,
+  useSearchJobs,
+  useSearchStatus,
   useUnapplyJob,
 } from "@/hooks/useJobs";
+import { useResume } from "@/hooks/useResume";
+import { formatDateTime } from "@/lib/format";
 import type {
-  EmploymentType,
   JobFilter,
-  JobListFilters,
   JobSummary,
+  SearchJobsRequest,
 } from "@/lib/types";
 
-export default function JobListPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const filter = (searchParams.get("filter") as JobFilter) ?? "unapplied";
-  const chipFilters = useMemo(() => parseFilters(searchParams), [searchParams]);
+const LAST_SEARCH_KEY = "role-tracker.last-search";
 
-  // Fetch jobs with chip filters applied server-side (filter=all so we
-  // can partition client-side for the tab counts). Tab counts then
-  // correctly reflect the active chip filters.
-  const allJobsQuery = useJobs({ ...chipFilters, filter: "all" });
+export default function JobListPage() {
+  const resumeQuery = useResume();
+  const hasResume = !!resumeQuery.data;
+
+  // The search spec we submitted most recently. Stored in localStorage so
+  // the form is pre-filled on return, matching plot-hole #3 in the plan.
+  const [lastSpec, setLastSpec] = useState<SearchJobsRequest | null>(() =>
+    loadLastSpec(),
+  );
+
+  // Active search task — null when idle.
+  const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
+  const searchStatus = useSearchStatus(activeSearchId);
+  const isSearching =
+    activeSearchId != null &&
+    searchStatus.data?.status !== "done" &&
+    searchStatus.data?.status !== "failed";
+
+  // Tab state — applied / unapplied / all over the result list.
+  const [filter, setFilter] = useState<JobFilter>("unapplied");
+
+  // Load the snapshot that the most recent search wrote.
+  const allJobsQuery = useJobs({ filter: "all" });
   const allJobs = allJobsQuery.data?.jobs ?? [];
-  const totalUnfiltered = allJobsQuery.data?.total_unfiltered ?? 0;
-  const hiddenByFilters = allJobsQuery.data?.hidden_by_filters ?? 0;
   const visibleJobs = allJobs.filter((j) =>
     filter === "applied" ? j.applied : filter === "unapplied" ? !j.applied : true,
   );
-
   const counts = {
     all: allJobs.length,
     unapplied: allJobs.filter((j) => !j.applied).length,
     applied: allJobs.filter((j) => j.applied).length,
   };
 
-  const locationOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const j of allJobs) if (j.location) set.add(j.location);
-    return Array.from(set).sort();
-  }, [allJobs]);
+  // Search lifecycle.
+  const searchMutation = useSearchJobs();
 
-  const setFilter = (next: JobFilter) => {
-    const sp = new URLSearchParams(searchParams);
-    if (next === "unapplied") sp.delete("filter");
-    else sp.set("filter", next);
-    setSearchParams(sp, { replace: true });
-  };
-
-  const setChipFilters = (next: JobListFilters) => {
-    const sp = new URLSearchParams();
-    if (filter !== "unapplied") sp.set("filter", filter);
-    writeFilters(sp, next);
-    setSearchParams(sp, { replace: true });
-  };
-
-  // Refresh flow.
-  const refreshMutation = useRefreshJobs();
-  const [activeRefreshId, setActiveRefreshId] = useState<string | null>(null);
-  const refreshStatus = useRefreshStatus(activeRefreshId);
-
-  const handleRefresh = () => {
-    refreshMutation.mutate(undefined, {
-      onSuccess: (data) => {
-        setActiveRefreshId(data.refresh_id);
-      },
-      onError: (err) => toast.error(`Refresh failed: ${err.message}`),
+  const submitSearch = (spec: SearchJobsRequest) => {
+    setLastSpec(spec);
+    saveLastSpec(spec);
+    searchMutation.mutate(spec, {
+      onSuccess: (d) => setActiveSearchId(d.search_id),
+      onError: (err) => toast.error(`Search failed: ${err.message}`),
     });
   };
 
-  // When the polled refresh completes, invalidate jobs + clear the polling.
+  // When the polled search completes, refetch the job list and clear polling.
   useEffect(() => {
-    const status = refreshStatus.data?.status;
+    if (!activeSearchId) return;
+    const status = searchStatus.data?.status;
     if (status === "done") {
-      const d = refreshStatus.data;
+      const d = searchStatus.data;
       const kept = d?.jobs_added ?? 0;
       const seen = d?.candidates_seen ?? 0;
-      const queries = d?.queries_run ?? 0;
       const detail =
-        seen > 0 && queries > 0
-          ? ` · kept top ${kept} of ${seen} candidates from ${queries} ${queries === 1 ? "search" : "searches"}`
-          : "";
-      toast.success(`Refresh complete${detail}`);
+        seen > 0 ? ` · kept top ${kept} of ${seen} candidates` : "";
+      toast.success(`Search complete${detail}`);
       allJobsQuery.refetch();
-      setActiveRefreshId(null);
+      setActiveSearchId(null);
     } else if (status === "failed") {
-      toast.error(`Refresh failed: ${refreshStatus.data?.error ?? "unknown"}`);
-      setActiveRefreshId(null);
+      toast.error(`Search failed: ${searchStatus.data?.error ?? "unknown"}`);
+      setActiveSearchId(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshStatus.data?.status]);
+  }, [searchStatus.data?.status]);
 
-  const isRefreshing =
-    refreshMutation.isPending ||
-    (refreshStatus.data?.status === "pending" ||
-      refreshStatus.data?.status === "running");
-
-  // Apply / unapply.
+  // Apply / unapply on cards.
   const applyMutation = useApplyJob();
   const unapplyMutation = useUnapplyJob();
-
   const handleToggleApplied = (job: JobSummary) => {
     if (job.applied) {
       unapplyMutation.mutate(job.job_id, {
@@ -135,130 +116,118 @@ export default function JobListPage() {
     }
   };
 
+  const lastRefreshedAt = allJobsQuery.data?.last_refreshed_at;
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
-      {/* Title row */}
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
-            Job matches
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Last refreshed{" "}
-            <span className="font-medium text-slate-700">
-              {formatDateTime(allJobsQuery.data?.last_refreshed_at)}
-            </span>
-          </p>
-          <PipelineSummary data={allJobsQuery.data} />
+    <div className="max-w-3xl mx-auto px-6 py-8 space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+          Find a job
+        </h1>
+        <p className="text-xs text-slate-500 mt-1">
+          Live search ranked against your resume. Saved daily searches live
+          in Settings.
+        </p>
+      </div>
+
+      <ResumeCard onResumeChange={() => resumeQuery.refetch()} />
+
+      <SearchForm
+        initial={lastSpec}
+        disabled={!hasResume}
+        disabledReason={
+          hasResume ? undefined : "Upload a resume above to enable search."
+        }
+        isSearching={isSearching || searchMutation.isPending}
+        onSubmit={submitSearch}
+      />
+
+      {/* Results section */}
+      {isSearching ? (
+        <SearchBanner status={searchStatus.data?.status} />
+      ) : allJobs.length === 0 ? (
+        <EmptyResults hasSearched={lastSpec != null} />
+      ) : (
+        <div className="space-y-4 pt-2">
+          <ResultsHeader
+            spec={lastSpec}
+            data={allJobsQuery.data}
+            lastRefreshedAt={lastRefreshedAt}
+          />
+
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as JobFilter)}>
+            <TabsList>
+              <TabsTrigger value="unapplied">
+                Unapplied{" "}
+                <span className="ml-1 text-slate-400 font-normal">
+                  {counts.unapplied}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="all">
+                All{" "}
+                <span className="ml-1 text-slate-400 font-normal">
+                  {counts.all}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="applied">
+                Applied{" "}
+                <span className="ml-1 text-slate-400 font-normal">
+                  {counts.applied}
+                </span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {filter === "unapplied" && counts.applied > 0 && (
+            <p className="text-[11px] text-slate-500 -mt-2">
+              {counts.applied} job{counts.applied === 1 ? "" : "s"} you've
+              already applied to are hidden in this tab.
+            </p>
+          )}
+
+          {visibleJobs.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-slate-600">
+                {filter === "applied"
+                  ? "Nothing marked applied yet."
+                  : "All jobs are marked applied."}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {visibleJobs.map((job) => (
+                <JobCard
+                  key={job.job_id}
+                  job={job}
+                  onToggleApplied={handleToggleApplied}
+                  isToggling={
+                    applyMutation.isPending || unapplyMutation.isPending
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
-        <Button
-          variant="secondary"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={isRefreshing ? "animate-spin" : ""} />
-          {isRefreshing ? "Refreshing…" : "Refresh jobs"}
-        </Button>
-      </div>
-
-      {/* Refresh banner */}
-      {isRefreshing && <RefreshBanner status={refreshStatus.data?.status} />}
-
-      {/* Filter chips */}
-      <div className="mb-4">
-        <FilterChips
-          filters={chipFilters}
-          onChange={setChipFilters}
-          locationOptions={locationOptions}
-        />
-        {hiddenByFilters > 0 && (
-          <p className="mt-2 text-xs text-slate-500">
-            Showing {allJobs.length} of {totalUnfiltered} ·{" "}
-            <span className="text-slate-700">{hiddenByFilters} hidden by filters</span>
-          </p>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as JobFilter)}>
-        <TabsList>
-          <TabsTrigger value="unapplied">
-            Unapplied{" "}
-            <span className="ml-1 text-slate-400 font-normal">{counts.unapplied}</span>
-          </TabsTrigger>
-          <TabsTrigger value="all">
-            All <span className="ml-1 text-slate-400 font-normal">{counts.all}</span>
-          </TabsTrigger>
-          <TabsTrigger value="applied">
-            Applied <span className="ml-1 text-slate-400 font-normal">{counts.applied}</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* List */}
-      <div className="mt-5">
-        {allJobsQuery.isLoading ? (
-          <LoadingState />
-        ) : allJobsQuery.isError ? (
-          <ErrorState message={allJobsQuery.error.message} onRetry={() => allJobsQuery.refetch()} />
-        ) : visibleJobs.length === 0 ? (
-          <EmptyState filter={filter} totalAll={counts.all} onRefresh={handleRefresh} />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {visibleJobs.map((job) => (
-              <JobCard
-                key={job.job_id}
-                job={job}
-                onToggleApplied={handleToggleApplied}
-                isToggling={
-                  applyMutation.isPending || unapplyMutation.isPending
-                }
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
+// ---------- pieces ----------
 
-function PipelineSummary({
-  data,
-}: {
-  data: import("@/lib/types").JobListResponse | undefined;
-}) {
-  if (!data || !data.last_refreshed_at) return null;
-  const { candidates_seen, queries_run, top_n_cap, total_unfiltered } = data;
-  if (candidates_seen <= 0 || queries_run <= 0) return null;
-  const cap = top_n_cap || total_unfiltered;
-  const tooltip =
-    "JSearch returns up to 50 jobs per saved search. We embed each JD plus your resume and keep the top matches by cosine similarity, then apply your hidden lists. The cap is your 'Max jobs to keep per refresh' setting.";
+function SearchBanner({ status }: { status?: string }) {
   return (
-    <p
-      className="text-xs text-slate-500 mt-0.5"
-      title={tooltip}
-    >
-      Top {Math.min(cap, total_unfiltered)} of {candidates_seen} candidates ·
-      ranked by resume match across {queries_run}{" "}
-      {queries_run === 1 ? "search" : "searches"}
-    </p>
-  );
-}
-
-function RefreshBanner({ status }: { status?: string }) {
-  return (
-    <Card className="mb-5 border-indigo-200 bg-indigo-50">
+    <Card className="border-indigo-200 bg-indigo-50">
       <CardContent className="py-3 px-5 flex items-center gap-3">
-        <RefreshCw className="h-4 w-4 text-indigo-600 animate-spin" />
+        <Loader2 className="h-4 w-4 text-indigo-600 animate-spin" />
         <div className="flex-1">
           <p className="text-sm font-medium text-indigo-900">
             {status === "running"
               ? "Searching, filtering, and ranking jobs…"
-              : "Starting refresh…"}
+              : "Starting search…"}
           </p>
           <p className="text-xs text-indigo-700 mt-0.5">
-            This usually takes 60-90 seconds.
+            Usually 30–60 seconds.
           </p>
         </div>
       </CardContent>
@@ -266,118 +235,85 @@ function RefreshBanner({ status }: { status?: string }) {
   );
 }
 
-
-function LoadingState() {
+function EmptyResults({ hasSearched }: { hasSearched: boolean }) {
   return (
-    <div className="flex flex-col gap-3">
-      {[0, 1, 2].map((i) => (
-        <Card key={i} className="p-5 animate-pulse">
-          <div className="h-4 bg-slate-200 rounded w-1/2 mb-3" />
-          <div className="h-3 bg-slate-200 rounded w-1/3 mb-2" />
-          <div className="h-3 bg-slate-100 rounded w-3/4" />
-        </Card>
-      ))}
+    <Card>
+      <CardContent className="py-12 text-center">
+        <Search className="h-6 w-6 text-slate-400 mx-auto" />
+        <p className="text-sm font-semibold text-slate-900 mt-3">
+          {hasSearched ? "No jobs matched that search" : "Search to find jobs"}
+        </p>
+        <p className="text-xs text-slate-600 mt-1.5 max-w-sm mx-auto">
+          {hasSearched
+            ? "Try broader terms, a wider location, or different filters."
+            : "Fill in what you're looking for and where, then hit Find jobs. We'll fetch live results and rank them by your resume."}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ResultsHeader({
+  spec,
+  data,
+  lastRefreshedAt,
+}: {
+  spec: SearchJobsRequest | null;
+  data: import("@/lib/types").JobListResponse | undefined;
+  lastRefreshedAt: string | null | undefined;
+}) {
+  if (!data) return null;
+  const { candidates_seen, queries_run, top_n_cap, total_unfiltered } = data;
+  const showStats = candidates_seen > 0 && queries_run > 0;
+  const cap = top_n_cap || total_unfiltered;
+  return (
+    <div>
+      <p className="text-sm text-slate-700">
+        {spec ? (
+          <>
+            <span className="font-medium">{spec.what}</span>
+            <span className="text-slate-400 mx-1.5">in</span>
+            <span className="font-medium">{spec.where}</span>
+          </>
+        ) : (
+          "Latest results"
+        )}
+      </p>
+      <p className="text-[11px] text-slate-500 mt-0.5">
+        Last searched{" "}
+        <span className="text-slate-700 font-medium">
+          {formatDateTime(lastRefreshedAt)}
+        </span>
+        {showStats && (
+          <>
+            {" · "}
+            Top {Math.min(cap, total_unfiltered)} of {candidates_seen}{" "}
+            candidates · ranked by resume match
+          </>
+        )}
+      </p>
     </div>
   );
 }
 
+// ---------- localStorage helpers ----------
 
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <Card className="py-12 px-6 text-center">
-      <p className="text-sm font-semibold text-slate-900">Couldn't load jobs</p>
-      <p className="text-xs text-slate-600 mt-1.5">{message}</p>
-      <Button onClick={onRetry} className="mt-4">
-        Try again
-      </Button>
-    </Card>
-  );
-}
-
-
-function EmptyState({
-  filter,
-  totalAll,
-  onRefresh,
-}: {
-  filter: JobFilter;
-  totalAll: number;
-  onRefresh: () => void;
-}) {
-  if (totalAll === 0) {
-    return (
-      <Card className="py-16 px-6 text-center">
-        <p className="text-sm font-semibold text-slate-900">No jobs cached yet</p>
-        <p className="text-xs text-slate-600 mt-1.5 max-w-sm mx-auto">
-          Click "Refresh jobs" to fetch matches from your saved searches. Make
-          sure you've uploaded a resume and saved at least one search in
-          Settings first.
-        </p>
-        <Button onClick={onRefresh} className="mt-4">
-          <RefreshCw />
-          Refresh jobs
-        </Button>
-      </Card>
-    );
+function loadLastSpec(): SearchJobsRequest | null {
+  try {
+    const raw = localStorage.getItem(LAST_SEARCH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SearchJobsRequest;
+    if (!parsed.what || !parsed.where) return null;
+    return parsed;
+  } catch {
+    return null;
   }
-  const label =
-    filter === "applied"
-      ? "Nothing marked applied yet."
-      : filter === "unapplied"
-        ? "All jobs are marked applied."
-        : "No jobs match.";
-  return (
-    <Card className="py-12 px-6 text-center">
-      <p className="text-sm text-slate-600">{label}</p>
-    </Card>
-  );
 }
 
-
-const EMPLOYMENT_VALUES: EmploymentType[] = [
-  "FULLTIME",
-  "PARTTIME",
-  "CONTRACTOR",
-  "INTERN",
-];
-
-function parseFilters(sp: URLSearchParams): JobListFilters {
-  const csv = (k: string): string[] | undefined => {
-    const raw = sp.get(k);
-    if (!raw) return undefined;
-    const parts = raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return parts.length ? parts : undefined;
-  };
-  const num = (k: string): number | undefined => {
-    const raw = sp.get(k);
-    if (raw == null) return undefined;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : undefined;
-  };
-  const employmentRaw = csv("employment_types");
-  const employment_types = employmentRaw?.filter((v): v is EmploymentType =>
-    (EMPLOYMENT_VALUES as string[]).includes(v),
-  );
-  return {
-    type: csv("type"),
-    location: csv("location"),
-    salary_min: num("salary_min"),
-    hide_no_salary: sp.get("hide_no_salary") === "1" ? true : undefined,
-    employment_types: employment_types?.length ? employment_types : undefined,
-    posted_within_days: num("posted_within_days"),
-  };
+function saveLastSpec(spec: SearchJobsRequest): void {
+  try {
+    localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(spec));
+  } catch {
+    // localStorage can be disabled / full — ignore.
+  }
 }
-
-function writeFilters(sp: URLSearchParams, f: JobListFilters): void {
-  if (f.type?.length) sp.set("type", f.type.join(","));
-  if (f.location?.length) sp.set("location", f.location.join(","));
-  if (f.salary_min != null) sp.set("salary_min", String(f.salary_min));
-  if (f.hide_no_salary) sp.set("hide_no_salary", "1");
-  if (f.employment_types?.length) sp.set("employment_types", f.employment_types.join(","));
-  if (f.posted_within_days != null)
-    sp.set("posted_within_days", String(f.posted_within_days));
-}
-

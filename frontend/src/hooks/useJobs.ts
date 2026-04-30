@@ -20,6 +20,8 @@ import type {
   JobListResponse,
   RefreshJobResponse,
   RefreshStatusResponse,
+  SearchJobsRequest,
+  SearchJobsResponse,
 } from "@/lib/types";
 
 export function useJobs(filters: JobListFilters = {}) {
@@ -62,6 +64,30 @@ export function useRefreshStatus(refreshId: string | null) {
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "done" || status === "failed" ? false : 3000;
+    },
+  });
+}
+
+export function useSearchJobs() {
+  const { userId } = useAuth();
+  return useMutation({
+    mutationFn: (spec: SearchJobsRequest) =>
+      api.post<SearchJobsResponse>(`/users/${userId}/jobs/search`, spec),
+  });
+}
+
+export function useSearchStatus(searchId: string | null) {
+  const { userId } = useAuth();
+  return useQuery<RefreshStatusResponse>({
+    queryKey: ["search", userId, searchId],
+    queryFn: () =>
+      api.get<RefreshStatusResponse>(
+        `/users/${userId}/jobs/search/${searchId}`,
+      ),
+    enabled: Boolean(userId && searchId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "done" || status === "failed" ? false : 2000;
     },
   });
 }
