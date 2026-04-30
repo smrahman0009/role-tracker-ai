@@ -98,6 +98,21 @@ export interface RefreshStatusResponse {
   error: string | null;
 }
 
+/** Body for POST /jobs/search — the ad-hoc search spec. */
+export interface SearchJobsRequest {
+  what: string;
+  where: string;
+  salary_min?: number | null;
+  employment_types?: EmploymentType[];
+  posted_within_days?: number | null;
+}
+
+/** Body of the 202 response from POST /jobs/search. */
+export interface SearchJobsResponse {
+  search_id: string;
+  status: "pending";
+}
+
 /** Query params for GET /jobs. Multi-value fields are joined with commas. */
 export interface JobListFilters {
   filter?: JobFilter;

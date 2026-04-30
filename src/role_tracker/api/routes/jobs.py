@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import tempfile
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -34,6 +35,8 @@ from role_tracker.api.schemas import (
     JobSummary,
     RefreshJobResponse,
     RefreshStatusResponse,
+    SearchJobsRequest,
+    SearchJobsResponse,
 )
 from role_tracker.applied.store import AppliedStore, FileAppliedStore
 from role_tracker.config import Settings
@@ -110,10 +113,16 @@ def get_pipeline_runner() -> PipelineRunner:
     user_store = YamlUserProfileStore()
 
     def run(
-        user_id: str, queries: list[SavedQuery], resume_text: str
+        user_id: str,
+        queries: list[SavedQuery],
+        resume_text: str,
+        *,
+        limit_per_query: int = 50,
     ) -> MatchingResult:
         # Pull exclusion lists + the user's top_n preference from the
         # YAML profile. Defaults if the user hasn't created one yet.
+        # `limit_per_query` is caller-controlled so the daily refresh
+        # (50) and ad-hoc search (20) can use different JSearch budgets.
         top_n = 50
         try:
             user = user_store.get_user(user_id)
@@ -136,7 +145,7 @@ def get_pipeline_runner() -> PipelineRunner:
             exclude_companies=exclude_companies,
             exclude_title_keywords=exclude_title_keywords,
             exclude_publishers=exclude_publishers,
-            limit_per_query=50,
+            limit_per_query=limit_per_query,
             top_n=top_n,
         )
 
@@ -264,11 +273,68 @@ def get_refresh_status(
     refresh_store: RefreshTaskStore = Depends(get_refresh_store),
 ) -> RefreshStatusResponse:
     """Poll the status of an in-flight refresh."""
-    record = refresh_store.get(user_id, refresh_id)
+    return _refresh_status_response(refresh_store, user_id, refresh_id)
+
+
+# ----- Ad-hoc search (powers the home page) -----
+
+
+@router.post(
+    "/search",
+    response_model=SearchJobsResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def search_jobs(
+    user_id: str,
+    body: SearchJobsRequest,
+    background_tasks: BackgroundTasks,
+    resume_store: ResumeStore = Depends(get_resume_store),
+    cache: JobsCache = Depends(get_jobs_cache),
+    refresh_store: RefreshTaskStore = Depends(get_refresh_store),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    pipeline: PipelineRunner = Depends(get_pipeline_runner),
+) -> SearchJobsResponse:
+    """Run an ad-hoc search using the supplied spec.
+
+    Mirrors /jobs/refresh but takes a one-off query in the body instead
+    of fanning out across saved searches. Uses a smaller per-query JSearch
+    budget (limit_per_query=20 vs 50 for refresh) so users don't burn
+    their monthly quota on exploratory searches.
+    """
+    search_id = uuid.uuid4().hex[:12]
+    refresh_store.create(user_id, search_id)
+    background_tasks.add_task(
+        _run_search_in_background,
+        user_id=user_id,
+        search_id=search_id,
+        spec=body,
+        resume_store=resume_store,
+        cache=cache,
+        refresh_store=refresh_store,
+        seen_store=seen_store,
+        pipeline=pipeline,
+    )
+    return SearchJobsResponse(search_id=search_id, status="pending")
+
+
+@router.get("/search/{search_id}", response_model=RefreshStatusResponse)
+def get_search_status(
+    user_id: str,
+    search_id: str,
+    refresh_store: RefreshTaskStore = Depends(get_refresh_store),
+) -> RefreshStatusResponse:
+    """Poll the status of an in-flight search. Same lifecycle as refresh."""
+    return _refresh_status_response(refresh_store, user_id, search_id)
+
+
+def _refresh_status_response(
+    refresh_store: RefreshTaskStore, user_id: str, task_id: str
+) -> RefreshStatusResponse:
+    record = refresh_store.get(user_id, task_id)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Refresh '{refresh_id}' not found for user '{user_id}'",
+            detail=f"Task '{task_id}' not found for user '{user_id}'",
         )
     return RefreshStatusResponse(
         refresh_id=record.refresh_id,
@@ -456,6 +522,80 @@ def _run_refresh_in_background(
 
     except Exception as exc:  # noqa: BLE001
         refresh_store.mark_failed(user_id, refresh_id, error=str(exc))
+
+
+def _run_search_in_background(
+    *,
+    user_id: str,
+    search_id: str,
+    spec: SearchJobsRequest,
+    resume_store: ResumeStore,
+    cache: JobsCache,
+    refresh_store: RefreshTaskStore,
+    seen_store: SeenJobsStore,
+    pipeline: PipelineRunner,
+) -> None:
+    """Ad-hoc search: build a one-off query from the spec and run the pipeline.
+
+    Same lifecycle as a refresh; reuses RefreshTaskStore for status tracking.
+    Uses limit_per_query=20 (vs 50 for refresh) to conserve JSearch quota
+    on exploratory searches.
+    """
+    try:
+        refresh_store.mark_running(user_id, search_id)
+
+        resume_bytes = resume_store.get_file_bytes(user_id)
+        if resume_bytes is None:
+            refresh_store.mark_failed(
+                user_id,
+                search_id,
+                error="No resume uploaded. Upload one before searching.",
+            )
+            return
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf", delete=False
+        ) as tmp:
+            tmp.write(resume_bytes)
+            tmp_path = Path(tmp.name)
+        try:
+            resume_text = parse_resume(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        # Build a one-off SavedQuery from the spec. The optional fields
+        # (salary, employment, posted_within) are post-rank narrowers
+        # surfaced via /jobs query params, not pipeline inputs — so they
+        # don't affect the pipeline call here.
+        ad_hoc_query = SavedQuery(
+            query_id="search:" + search_id,
+            what=spec.what,
+            where=spec.where,
+            enabled=True,
+            created_at=datetime.now(UTC),
+        )
+
+        result = pipeline(
+            user_id, [ad_hoc_query], resume_text, limit_per_query=20
+        )
+        cache.save_snapshot(
+            user_id,
+            result.jobs,
+            candidates_seen=result.candidates_seen,
+            queries_run=result.queries_run,
+            top_n_cap=_user_top_n(user_id),
+        )
+        seen_store.upsert_many(user_id, result.jobs)
+        refresh_store.mark_done(
+            user_id,
+            search_id,
+            jobs_added=len(result.jobs),
+            candidates_seen=result.candidates_seen,
+            queries_run=result.queries_run,
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        refresh_store.mark_failed(user_id, search_id, error=str(exc))
 
 
 # Re-export used by tests for dependency overrides.

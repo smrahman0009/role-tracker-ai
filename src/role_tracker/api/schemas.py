@@ -35,6 +35,8 @@ __all__ = [
     "RefreshStatusResponse",
     "ResumeMetadata",
     "SavedQuery",
+    "SearchJobsRequest",
+    "SearchJobsResponse",
     "Strategy",
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
@@ -154,7 +156,11 @@ class RefreshJobResponse(BaseModel):
 
 
 class RefreshStatusResponse(BaseModel):
-    """Body of GET /users/{user_id}/jobs/refresh/{refresh_id}."""
+    """Body of GET /users/{user_id}/jobs/refresh/{refresh_id}.
+
+    Also used for /jobs/search/{search_id} — same shape, same lifecycle.
+    The frontend treats them identically; only the kickoff endpoint differs.
+    """
 
     refresh_id: str
     status: Literal["pending", "running", "done", "failed"]
@@ -164,6 +170,33 @@ class RefreshStatusResponse(BaseModel):
     candidates_seen: int | None = None
     queries_run: int | None = None
     error: str | None = None
+
+
+class SearchJobsRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/search.
+
+    Ad-hoc search spec. `what` and `where` are required; everything else
+    is an optional refinement that mirrors the chip-filter shape.
+    """
+
+    what: str = Field(min_length=1, max_length=200)
+    where: str = Field(min_length=1, max_length=200)
+    salary_min: int | None = Field(default=None, ge=0)
+    employment_types: list[
+        Literal["FULLTIME", "PARTTIME", "CONTRACTOR", "INTERN"]
+    ] = []
+    posted_within_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class SearchJobsResponse(BaseModel):
+    """Body of POST /users/{user_id}/jobs/search — returned 202 immediately.
+
+    Frontend polls /jobs/search/{search_id} (RefreshStatusResponse shape)
+    until status="done", then re-fetches /jobs to render the results.
+    """
+
+    search_id: str
+    status: Literal["pending"]
 
 
 # ----- Cover letters -----

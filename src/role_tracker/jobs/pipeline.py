@@ -117,4 +117,6 @@ def run_matching_pipeline(
 
 
 # Type alias used by the API layer for dependency injection.
-PipelineRunner = Callable[[str, list[SavedQuery], str], MatchingResult]
+# Callers pass user_id, queries, resume_text positionally and may pass
+# limit_per_query as a kwarg (default 50). Search endpoints use 20.
+PipelineRunner = Callable[..., MatchingResult]

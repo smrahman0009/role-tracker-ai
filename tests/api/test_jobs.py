@@ -91,7 +91,7 @@ def client(
         root=tmp_path / "seen"
     )
     app.dependency_overrides[get_pipeline_runner] = (
-        lambda: lambda _user_id, _queries, _resume: _fake_pipeline_results()
+        lambda: lambda _user_id, _queries, _resume, **_: _fake_pipeline_results()
     )
 
     with TestClient(app) as c:
@@ -415,3 +415,66 @@ def test_filters_on_empty_snapshot(client: TestClient) -> None:
     assert body["total"] == 0
     assert body["total_unfiltered"] == 0
     assert body["hidden_by_filters"] == 0
+
+
+# ----- ad-hoc search -----
+
+
+def test_search_returns_202_and_id(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": "data scientist", "where": "Halifax"},
+    )
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["search_id"]
+
+
+def test_search_writes_results_to_snapshot_and_seen_store(
+    client: TestClient,
+) -> None:
+    _seed_resume(client)
+    search_response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": "data scientist", "where": "Halifax"},
+    )
+    search_id = search_response.json()["search_id"]
+
+    # Background task ran synchronously after the response in TestClient.
+    poll = client.get(f"/users/alice/jobs/search/{search_id}").json()
+    assert poll["status"] == "done"
+    assert poll["jobs_added"] == 2
+
+    # Results visible via the regular /jobs endpoint.
+    listed = client.get("/users/alice/jobs?filter=all").json()
+    assert listed["total"] == 2
+
+    # And the seen_store is populated so detail/letter routes will work.
+    detail = client.get("/users/alice/jobs/j1")
+    assert detail.status_code == 200
+
+
+def test_search_fails_without_resume(client: TestClient) -> None:
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": "data scientist", "where": "Halifax"},
+    )
+    search_id = response.json()["search_id"]
+    poll = client.get(f"/users/alice/jobs/search/{search_id}").json()
+    assert poll["status"] == "failed"
+    assert "resume" in poll["error"].lower()
+
+
+def test_search_validates_required_fields(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search", json={"what": "", "where": "Halifax"}
+    )
+    assert response.status_code == 422
+
+
+def test_search_status_404_for_unknown_id(client: TestClient) -> None:
+    response = client.get("/users/alice/jobs/search/nonexistent")
+    assert response.status_code == 404
