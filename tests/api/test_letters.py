@@ -549,3 +549,63 @@ def test_manual_edit_does_not_count_toward_refinement_cap(
         json={"feedback": "Make it more technical"},
     )
     assert response.status_code == 202
+
+
+# ----- "Why interested?" -----
+
+
+def test_why_interested_returns_text_and_word_count(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    _seed_resume(client)
+    import role_tracker.api.routes.letters as letters_module
+
+    monkeypatch.setattr(
+        letters_module,
+        "generate_why_interested",
+        lambda **_: "Three sentences about why I want this role.",
+    )
+    response = client.post(
+        "/users/alice/jobs/j1/why-interested",
+        json={"target_words": 50},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "why I want this role" in body["text"]
+    assert body["word_count"] == 8
+
+
+def test_why_interested_404_when_job_unknown(
+    client: TestClient,
+) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/nonexistent/why-interested",
+        json={"target_words": 50},
+    )
+    assert response.status_code == 404
+
+
+def test_why_interested_400_when_no_resume(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/users/alice/jobs/j1/why-interested",
+        json={"target_words": 50},
+    )
+    assert response.status_code == 400
+    assert "resume" in response.json()["detail"].lower()
+
+
+def test_why_interested_validates_target_words(client: TestClient) -> None:
+    _seed_resume(client)
+    too_short = client.post(
+        "/users/alice/jobs/j1/why-interested",
+        json={"target_words": 5},
+    )
+    assert too_short.status_code == 422
+    too_long = client.post(
+        "/users/alice/jobs/j1/why-interested",
+        json={"target_words": 500},
+    )
+    assert too_long.status_code == 422

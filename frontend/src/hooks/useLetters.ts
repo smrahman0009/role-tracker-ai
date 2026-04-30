@@ -15,6 +15,8 @@ import type {
   LetterVersionList,
   ManualEditRequest,
   RefineLetterRequest,
+  WhyInterestedRequest,
+  WhyInterestedResponse,
 } from "@/lib/types";
 
 export function useLetterVersions(jobId: string | undefined) {
@@ -98,6 +100,17 @@ export function useEditLetter(
         queryKey: ["letters", userId, jobId],
       });
     },
+  });
+}
+
+export function useWhyInterested(jobId: string | undefined) {
+  const { userId } = useAuth();
+  return useMutation({
+    mutationFn: (body: WhyInterestedRequest) =>
+      api.post<WhyInterestedResponse>(
+        `/users/${userId}/jobs/${jobId}/why-interested`,
+        body,
+      ),
   });
 }
 

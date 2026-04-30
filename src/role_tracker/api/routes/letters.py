@@ -43,6 +43,8 @@ from role_tracker.api.schemas import (
     ManualEditRequest,
     RefineLetterRequest,
     Strategy,
+    WhyInterestedRequest,
+    WhyInterestedResponse,
 )
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
@@ -62,6 +64,7 @@ from role_tracker.letters.store import (
 )
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
+from role_tracker.screening.why_interested import generate_why_interested
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
@@ -431,6 +434,55 @@ def _require_letter(
             detail=f"Letter version {version} not found",
         )
     return stored
+
+
+# ----- "Why interested?" generator -----
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/why-interested",
+    response_model=WhyInterestedResponse,
+)
+def generate_why_interested_answer(
+    user_id: str,
+    job_id: str,
+    body: WhyInterestedRequest,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    resume_store: ResumeStore = Depends(get_resume_store),
+    client: Anthropic = Depends(get_anthropic_client),
+) -> WhyInterestedResponse:
+    """Generate a 2-3 sentence answer to "Why are you interested?" for the
+    employer's apply form. Synchronous — single Claude Haiku call, ~5s.
+    """
+    job = _find_job(seen_store, user_id, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    resume_bytes = resume_store.get_file_bytes(user_id)
+    if resume_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No resume uploaded. Upload one before generating.",
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resume_bytes)
+        tmp_path = Path(tmp.name)
+    try:
+        resume_text = parse_resume(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    answer = generate_why_interested(
+        job=job,
+        resume_text=resume_text,
+        target_words=body.target_words,
+        client=client,
+    )
+    return WhyInterestedResponse(text=answer, word_count=len(answer.split()))
 
 
 # ----- Helpers -----

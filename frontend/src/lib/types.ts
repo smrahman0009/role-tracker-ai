@@ -201,6 +201,15 @@ export interface ManualEditRequest {
   text: string;
 }
 
+export interface WhyInterestedRequest {
+  target_words: number;
+}
+
+export interface WhyInterestedResponse {
+  text: string;
+  word_count: number;
+}
+
 // ---------- Saved queries ----------
 
 export interface SavedQuery {

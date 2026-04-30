@@ -19,6 +19,7 @@ import {
   Mail,
   PanelRight,
   PictureInPicture2,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -28,6 +29,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toaster";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
+import { WhyInterestedDialog } from "@/components/WhyInterestedDialog";
 import { useLetterVersions } from "@/hooks/useLetters";
 import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
@@ -46,6 +48,7 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
   const profileQuery = useProfile();
   const versionsQuery = useLetterVersions(jobId);
   const pip = usePictureInPictureWindow();
+  const [whyOpen, setWhyOpen] = useState(false);
 
   const versions = versionsQuery.data?.versions ?? [];
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
@@ -88,6 +91,7 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
       userId={userId}
       jobId={jobId}
       onOpenPosting={openPostingInSideWindow}
+      onOpenWhy={() => setWhyOpen(true)}
       resume={resumeQuery.data}
       profile={profileQuery.data}
       versions={sortedVersions}
@@ -109,11 +113,25 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
           <div className="p-4 max-w-md mx-auto">{body}</div>,
           pip.pipWindow.document.body,
         )}
+        <WhyInterestedDialog
+          open={whyOpen}
+          onOpenChange={setWhyOpen}
+          jobId={jobId}
+        />
       </>
     );
   }
 
-  return body;
+  return (
+    <>
+      {body}
+      <WhyInterestedDialog
+        open={whyOpen}
+        onOpenChange={setWhyOpen}
+        jobId={jobId}
+      />
+    </>
+  );
 }
 
 function FloatingPlaceholder({ onBringBack }: { onBringBack: () => void }) {
@@ -146,6 +164,7 @@ interface ApplyKitBodyProps {
   userId: string;
   jobId: string;
   onOpenPosting: () => void;
+  onOpenWhy: () => void;
   resume: import("@/lib/types").ResumeMetadata | null | undefined;
   profile: ProfileResponse | undefined;
   versions: Letter[];
@@ -162,6 +181,7 @@ function ApplyKitBody({
   userId,
   jobId,
   onOpenPosting,
+  onOpenWhy,
   resume,
   profile,
   versions,
@@ -205,6 +225,16 @@ function ApplyKitBody({
           Opens the employer's apply page beside this one. Paste from the
           fields below into their form.
         </p>
+
+        <Button
+          onClick={onOpenWhy}
+          variant="secondary"
+          className="w-full"
+          title="Generate a 2-3 sentence answer for the apply form's screening question"
+        >
+          <Sparkles />
+          Draft "Why are you interested?"
+        </Button>
 
         <ResumeBlock userId={userId} resume={resume} />
         <CoverLetterBlock

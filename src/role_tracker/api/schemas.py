@@ -41,6 +41,8 @@ __all__ = [
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
     "UpdateQueryRequest",
+    "WhyInterestedRequest",
+    "WhyInterestedResponse",
 ]
 
 
@@ -349,6 +351,23 @@ class UpdateProfileRequest(BaseModel):
 
 
 # ----- Hidden lists -----
+
+
+class WhyInterestedRequest(BaseModel):
+    """Body of POST /jobs/{job_id}/why-interested.
+
+    Target word count drives length. 75 is roughly 3 sentences which
+    fits most apply-form text inputs without truncation.
+    """
+
+    target_words: int = Field(default=75, ge=20, le=200)
+
+
+class WhyInterestedResponse(BaseModel):
+    """Body of the why-interested generator response."""
+
+    text: str
+    word_count: int
 
 
 class HiddenListsResponse(BaseModel):
