@@ -101,10 +101,13 @@ export function useEditLetter(
   });
 }
 
+export type LetterFormat = "pdf" | "docx";
+
 export function letterDownloadUrl(
   userId: string,
   jobId: string,
   version: number,
+  format: LetterFormat = "pdf",
 ): string {
-  return `/api/users/${userId}/jobs/${jobId}/letters/${version}/download.md`;
+  return `/api/users/${userId}/jobs/${jobId}/letters/${version}/download.${format}`;
 }

@@ -27,7 +27,8 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toaster";
-import { useLetterVersions, letterDownloadUrl } from "@/hooks/useLetters";
+import { LetterDownloadButton } from "@/components/LetterDownloadButton";
+import { useLetterVersions } from "@/hooks/useLetters";
 import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
@@ -304,16 +305,12 @@ function CoverLetterBlock({
               label="Copy text"
               size="full"
             />
-            <Button asChild size="sm" variant="secondary">
-              <a
-                href={letterDownloadUrl(userId, jobId, current.version)}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Download as Markdown"
-              >
-                <Download />
-              </a>
-            </Button>
+            <LetterDownloadButton
+              userId={userId}
+              jobId={jobId}
+              version={current.version}
+              iconOnly
+            />
           </div>
           <p className="text-[11px] text-slate-500">
             {current.word_count} words · v{current.version}

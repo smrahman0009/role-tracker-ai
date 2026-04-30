@@ -255,20 +255,44 @@ def test_get_version_404_for_missing(client: TestClient) -> None:
 # ----- download -----
 
 
-def test_download_md(client: TestClient) -> None:
+def test_download_pdf(client: TestClient) -> None:
     _seed_resume(client)
     gen = client.post("/users/alice/jobs/j1/letters", json={})
     client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
 
-    response = client.get("/users/alice/jobs/j1/letters/1/download.md")
+    response = client.get("/users/alice/jobs/j1/letters/1/download.pdf")
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/markdown")
+    assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
-    assert b"Shaikh" in response.content
+    assert response.headers["content-disposition"].endswith('.pdf"')
+    # PDF magic header.
+    assert response.content.startswith(b"%PDF-")
 
 
-def test_download_404_for_missing(client: TestClient) -> None:
-    response = client.get("/users/alice/jobs/j1/letters/99/download.md")
+def test_download_docx(client: TestClient) -> None:
+    _seed_resume(client)
+    gen = client.post("/users/alice/jobs/j1/letters", json={})
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+
+    response = client.get("/users/alice/jobs/j1/letters/1/download.docx")
+    assert response.status_code == 200
+    assert (
+        "officedocument.wordprocessingml.document"
+        in response.headers["content-type"]
+    )
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.headers["content-disposition"].endswith('.docx"')
+    # DOCX is a zip archive.
+    assert response.content.startswith(b"PK")
+
+
+def test_download_pdf_404_for_missing(client: TestClient) -> None:
+    response = client.get("/users/alice/jobs/j1/letters/99/download.pdf")
+    assert response.status_code == 404
+
+
+def test_download_docx_404_for_missing(client: TestClient) -> None:
+    response = client.get("/users/alice/jobs/j1/letters/99/download.docx")
     assert response.status_code == 404
 
 

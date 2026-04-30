@@ -49,6 +49,7 @@ from role_tracker.cover_letter.agent import generate_cover_letter_agent
 from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.seen import SeenJobsStore
+from role_tracker.letters.formats import letter_to_docx, letter_to_pdf
 from role_tracker.letters.generation_state import (
     FileLetterGenerationStore,
     LetterGenerationStore,
@@ -375,27 +376,61 @@ def edit_letter(
 
 
 @router.get(
-    "/users/{user_id}/jobs/{job_id}/letters/{version}/download.md",
+    "/users/{user_id}/jobs/{job_id}/letters/{version}/download.pdf",
 )
-def download_letter_markdown(
+def download_letter_pdf(
     user_id: str,
     job_id: str,
     version: int,
     letter_store: LetterStore = Depends(get_letter_store),
 ) -> Response:
-    """Download the letter text as raw Markdown."""
+    """Download the letter as a US-Letter PDF (default — accepted everywhere)."""
+    stored = _require_letter(letter_store, user_id, job_id, version)
+    return Response(
+        content=letter_to_pdf(stored.text),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="cover_letter_v{version}.pdf"'
+            ),
+        },
+    )
+
+
+@router.get(
+    "/users/{user_id}/jobs/{job_id}/letters/{version}/download.docx",
+)
+def download_letter_docx(
+    user_id: str,
+    job_id: str,
+    version: int,
+    letter_store: LetterStore = Depends(get_letter_store),
+) -> Response:
+    """Download the letter as Word .docx (best for ATS text extraction)."""
+    stored = _require_letter(letter_store, user_id, job_id, version)
+    return Response(
+        content=letter_to_docx(stored.text),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="cover_letter_v{version}.docx"'
+            ),
+        },
+    )
+
+
+def _require_letter(
+    letter_store: LetterStore, user_id: str, job_id: str, version: int
+) -> StoredLetter:
     stored = letter_store.get_version(user_id, job_id, version)
     if stored is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Letter version {version} not found",
         )
-    filename = f"cover_letter_v{version}.md"
-    return Response(
-        content=stored.text,
-        media_type="text/markdown",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return stored
 
 
 # ----- Helpers -----

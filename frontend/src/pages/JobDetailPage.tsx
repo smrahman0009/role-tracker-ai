@@ -17,7 +17,6 @@
 import {
   ArrowLeft,
   Building2,
-  Download,
   ExternalLink,
   Loader2,
   MapPin,
@@ -34,6 +33,7 @@ import { Link, useParams } from "react-router";
 import { useAuth } from "@/auth/AuthContext";
 import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
+import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { FitBadge } from "@/components/FitBadge";
 import { RefineDialog } from "@/components/RefineDialog";
 import { StrategyPanel } from "@/components/StrategyPanel";
@@ -43,7 +43,6 @@ import { Textarea } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toaster";
 import { useApplyJob, useJobDetail, useUnapplyJob } from "@/hooks/useJobs";
 import {
-  letterDownloadUrl,
   useEditLetter,
   useGenerateLetter,
   useLetterGeneration,
@@ -452,20 +451,12 @@ function LetterWorkspace({
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            title="Download as Markdown"
-          >
-            <a
-              href={letterDownloadUrl(userId, jobId, current.version)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Download />
-            </a>
-          </Button>
+          <LetterDownloadButton
+            userId={userId}
+            jobId={jobId}
+            version={current.version}
+            iconOnly
+          />
           {editing ? (
             <>
               <Button
