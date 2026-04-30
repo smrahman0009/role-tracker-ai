@@ -41,6 +41,7 @@ from role_tracker.api.schemas import (
     LetterGenerationStatus,
     LetterVersionList,
     ManualEditRequest,
+    PolishWhyInterestedRequest,
     RefineLetterRequest,
     Strategy,
     WhyInterestedRequest,
@@ -64,7 +65,10 @@ from role_tracker.letters.store import (
 )
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
-from role_tracker.screening.why_interested import generate_why_interested
+from role_tracker.screening.why_interested import (
+    generate_why_interested,
+    polish_why_interested,
+)
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
@@ -483,6 +487,27 @@ def generate_why_interested_answer(
         client=client,
     )
     return WhyInterestedResponse(text=answer, word_count=len(answer.split()))
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/why-interested/polish",
+    response_model=WhyInterestedResponse,
+)
+def polish_why_interested_answer(
+    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    job_id: str,  # noqa: ARG001
+    body: PolishWhyInterestedRequest,
+    client: Anthropic = Depends(get_anthropic_client),
+) -> WhyInterestedResponse:
+    """Fix grammar / clarity in user-edited why-interested text.
+
+    Single Claude Haiku call, ~3s, ~$0.005. Preserves meaning and
+    length; doesn't introduce new ideas.
+    """
+    polished = polish_why_interested(text=body.text, client=client)
+    return WhyInterestedResponse(
+        text=polished, word_count=len(polished.split())
+    )
 
 
 # ----- Helpers -----

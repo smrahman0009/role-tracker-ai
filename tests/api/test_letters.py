@@ -609,3 +609,31 @@ def test_why_interested_validates_target_words(client: TestClient) -> None:
         json={"target_words": 500},
     )
     assert too_long.status_code == 422
+
+
+def test_polish_why_interested_returns_polished_text(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    import role_tracker.api.routes.letters as letters_module
+
+    monkeypatch.setattr(
+        letters_module,
+        "polish_why_interested",
+        lambda **_: "Polished version of the answer.",
+    )
+    response = client.post(
+        "/users/alice/jobs/j1/why-interested/polish",
+        json={"text": "this is the user edit. needs grammar fix."},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["text"] == "Polished version of the answer."
+    assert body["word_count"] == 5
+
+
+def test_polish_why_interested_validates_min_length(client: TestClient) -> None:
+    response = client.post(
+        "/users/alice/jobs/j1/why-interested/polish",
+        json={"text": "hi"},
+    )
+    assert response.status_code == 422

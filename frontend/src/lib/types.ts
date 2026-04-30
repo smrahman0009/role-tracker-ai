@@ -205,6 +205,10 @@ export interface WhyInterestedRequest {
   target_words: number;
 }
 
+export interface PolishWhyInterestedRequest {
+  text: string;
+}
+
 export interface WhyInterestedResponse {
   text: string;
   word_count: number;

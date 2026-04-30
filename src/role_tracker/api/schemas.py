@@ -41,6 +41,7 @@ __all__ = [
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
     "UpdateQueryRequest",
+    "PolishWhyInterestedRequest",
     "WhyInterestedRequest",
     "WhyInterestedResponse",
 ]
@@ -368,6 +369,16 @@ class WhyInterestedResponse(BaseModel):
 
     text: str
     word_count: int
+
+
+class PolishWhyInterestedRequest(BaseModel):
+    """Body of POST /jobs/{job_id}/why-interested/polish.
+
+    Fixes grammar / clarity in user-edited why-interested text without
+    changing meaning or length.
+    """
+
+    text: str = Field(min_length=10, max_length=2000)
 
 
 class HiddenListsResponse(BaseModel):
