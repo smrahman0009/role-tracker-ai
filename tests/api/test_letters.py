@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from role_tracker.api.main import create_app
-from role_tracker.api.routes.jobs import get_jobs_cache
+from role_tracker.api.routes.jobs import get_seen_jobs_store
 from role_tracker.api.routes.letters import (
     get_anthropic_client,
     get_letter_generation_store,
@@ -22,8 +22,8 @@ from role_tracker.api.routes.letters import (
     get_user_profile_store,
 )
 from role_tracker.api.routes.resume import get_resume_store
-from role_tracker.jobs.cache import FileJobsCache
 from role_tracker.jobs.models import JobPosting
+from role_tracker.jobs.seen import FileSeenJobsStore
 from role_tracker.letters.generation_state import FileLetterGenerationStore
 from role_tracker.letters.store import FileLetterStore
 from role_tracker.matching.scorer import ScoredJob
@@ -117,14 +117,14 @@ def client(
     monkeypatch.setattr(letters_module, "parse_resume", lambda _: "fake resume text")
 
     app = create_app()
-    cache = FileJobsCache(root=tmp_path / "jobs")
-    # Seed a snapshot so the /jobs/{job_id} lookup finds a job.
-    cache.save_snapshot("alice", [ScoredJob(job=_job("j1"), score=0.9)])
+    seen_store = FileSeenJobsStore(root=tmp_path / "seen")
+    # Seed the long-lived index so the /jobs/{job_id} lookup finds a job.
+    seen_store.upsert_many("alice", [ScoredJob(job=_job("j1"), score=0.9)])
 
     app.dependency_overrides[get_resume_store] = lambda: FileResumeStore(
         root=tmp_path / "resumes"
     )
-    app.dependency_overrides[get_jobs_cache] = lambda: cache
+    app.dependency_overrides[get_seen_jobs_store] = lambda: seen_store
     app.dependency_overrides[get_letter_store] = lambda: FileLetterStore(
         root=tmp_path / "letters"
     )
@@ -325,13 +325,13 @@ def client_with_refine_stub(
     monkeypatch.setattr(letters_module, "parse_resume", lambda _: "fake resume text")
 
     app = create_app()
-    cache = FileJobsCache(root=tmp_path / "jobs")
-    cache.save_snapshot("alice", [ScoredJob(job=_job("j1"), score=0.9)])
+    seen_store = FileSeenJobsStore(root=tmp_path / "seen")
+    seen_store.upsert_many("alice", [ScoredJob(job=_job("j1"), score=0.9)])
 
     app.dependency_overrides[get_resume_store] = lambda: FileResumeStore(
         root=tmp_path / "resumes"
     )
-    app.dependency_overrides[get_jobs_cache] = lambda: cache
+    app.dependency_overrides[get_seen_jobs_store] = lambda: seen_store
     app.dependency_overrides[get_letter_store] = lambda: FileLetterStore(
         root=tmp_path / "letters"
     )

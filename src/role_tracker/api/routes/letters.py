@@ -31,7 +31,7 @@ from anthropic import Anthropic
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 
-from role_tracker.api.routes.jobs import get_jobs_cache
+from role_tracker.api.routes.jobs import get_seen_jobs_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
     CritiqueScore,
@@ -47,8 +47,8 @@ from role_tracker.api.schemas import (
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
 from role_tracker.cover_letter.refine import refine_cover_letter
-from role_tracker.jobs.cache import JobsCache
 from role_tracker.jobs.models import JobPosting
+from role_tracker.jobs.seen import SeenJobsStore
 from role_tracker.letters.generation_state import (
     FileLetterGenerationStore,
     LetterGenerationStore,
@@ -106,7 +106,7 @@ def generate_letter(
     job_id: str,
     body: GenerateLetterRequest,  # noqa: ARG001 — reserved for future fields
     background_tasks: BackgroundTasks,
-    cache: JobsCache = Depends(get_jobs_cache),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     resume_store: ResumeStore = Depends(get_resume_store),
     letter_store: LetterStore = Depends(get_letter_store),
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
@@ -118,7 +118,7 @@ def generate_letter(
         user_id=user_id,
         job_id=job_id,
         background_tasks=background_tasks,
-        cache=cache,
+        seen_store=seen_store,
         resume_store=resume_store,
         letter_store=letter_store,
         generation_store=generation_store,
@@ -136,7 +136,7 @@ def regenerate_letter(
     user_id: str,
     job_id: str,
     background_tasks: BackgroundTasks,
-    cache: JobsCache = Depends(get_jobs_cache),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     resume_store: ResumeStore = Depends(get_resume_store),
     letter_store: LetterStore = Depends(get_letter_store),
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
@@ -155,7 +155,7 @@ def regenerate_letter(
         user_id=user_id,
         job_id=job_id,
         background_tasks=background_tasks,
-        cache=cache,
+        seen_store=seen_store,
         resume_store=resume_store,
         letter_store=letter_store,
         generation_store=generation_store,
@@ -252,7 +252,7 @@ def refine_letter(
     version: int,
     body: RefineLetterRequest,
     background_tasks: BackgroundTasks,
-    cache: JobsCache = Depends(get_jobs_cache),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     resume_store: ResumeStore = Depends(get_resume_store),
     letter_store: LetterStore = Depends(get_letter_store),
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
@@ -301,7 +301,7 @@ def refine_letter(
         source_version=version,
         feedback=body.feedback,
         generation_id=generation_id,
-        cache=cache,
+        seen_store=seen_store,
         resume_store=resume_store,
         letter_store=letter_store,
         generation_store=generation_store,
@@ -406,7 +406,7 @@ def _start_generation(
     user_id: str,
     job_id: str,
     background_tasks: BackgroundTasks,
-    cache: JobsCache,
+    seen_store: SeenJobsStore,
     resume_store: ResumeStore,
     letter_store: LetterStore,
     generation_store: LetterGenerationStore,
@@ -420,7 +420,7 @@ def _start_generation(
         user_id=user_id,
         job_id=job_id,
         generation_id=generation_id,
-        cache=cache,
+        seen_store=seen_store,
         resume_store=resume_store,
         letter_store=letter_store,
         generation_store=generation_store,
@@ -481,7 +481,7 @@ def _run_generation_in_background(
     user_id: str,
     job_id: str,
     generation_id: str,
-    cache: JobsCache,
+    seen_store: SeenJobsStore,
     resume_store: ResumeStore,
     letter_store: LetterStore,
     generation_store: LetterGenerationStore,
@@ -493,7 +493,7 @@ def _run_generation_in_background(
         generation_store.mark_running(user_id, generation_id)
 
         # 1. Find the JobPosting in the cached snapshot.
-        job = _find_job(cache, user_id, job_id)
+        job = _find_job(seen_store, user_id, job_id)
         if job is None:
             generation_store.mark_failed(
                 user_id,
@@ -563,15 +563,11 @@ def _run_generation_in_background(
 
 
 def _find_job(
-    cache: JobsCache, user_id: str, job_id: str
+    seen_store: SeenJobsStore, user_id: str, job_id: str
 ) -> JobPosting | None:
-    snapshot = cache.get_snapshot(user_id)
-    if snapshot is None:
-        return None
-    for stored in snapshot.jobs:
-        if stored.job.id == job_id:
-            return stored.job
-    return None
+    """Look up a job in the long-lived per-user index."""
+    stored = seen_store.get(user_id, job_id)
+    return stored.job if stored else None
 
 
 def _run_refine_in_background(
@@ -581,7 +577,7 @@ def _run_refine_in_background(
     source_version: int,
     feedback: str,
     generation_id: str,
-    cache: JobsCache,
+    seen_store: SeenJobsStore,
     resume_store: ResumeStore,
     letter_store: LetterStore,
     generation_store: LetterGenerationStore,
@@ -612,7 +608,7 @@ def _run_refine_in_background(
             )
             return
 
-        job = _find_job(cache, user_id, job_id)
+        job = _find_job(seen_store, user_id, job_id)
         if job is None:
             generation_store.mark_failed(
                 user_id,

@@ -54,6 +54,7 @@ from role_tracker.jobs.refresh_state import (
     FileRefreshTaskStore,
     RefreshTaskStore,
 )
+from role_tracker.jobs.seen import FileSeenJobsStore, SeenJobsStore
 from role_tracker.matching.embeddings import Embedder
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.queries.base import QueryStore
@@ -89,6 +90,10 @@ def get_refresh_store() -> RefreshTaskStore:
 
 def get_applied_store() -> AppliedStore:
     return FileAppliedStore()
+
+
+def get_seen_jobs_store() -> SeenJobsStore:
+    return FileSeenJobsStore()
 
 
 def get_pipeline_runner() -> PipelineRunner:
@@ -232,6 +237,7 @@ def refresh_jobs(
     resume_store: ResumeStore = Depends(get_resume_store),
     cache: JobsCache = Depends(get_jobs_cache),
     refresh_store: RefreshTaskStore = Depends(get_refresh_store),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     pipeline: PipelineRunner = Depends(get_pipeline_runner),
 ) -> RefreshJobResponse:
     """Kick off a job-refresh as a background task. Returns immediately."""
@@ -240,6 +246,7 @@ def refresh_jobs(
     background_tasks.add_task(
         _run_refresh_in_background,
         user_id=user_id,
+        seen_store=seen_store,
         refresh_id=refresh_id,
         query_store=query_store,
         resume_store=resume_store,
@@ -279,25 +286,21 @@ def get_refresh_status(
 def get_job_detail(
     user_id: str,
     job_id: str,
-    cache: JobsCache = Depends(get_jobs_cache),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     applied_store: AppliedStore = Depends(get_applied_store),
 ) -> JobDetailResponse:
-    """Return one job's full details (including JD)."""
-    snapshot = cache.get_snapshot(user_id)
-    if snapshot is None:
+    """Return one job's full details (including JD).
+
+    Reads from seen_jobs (the long-lived per-user index) so the detail
+    page still works after a new search has rotated the current snapshot.
+    """
+    stored = seen_store.get(user_id, job_id)
+    if stored is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No jobs cached. Refresh first.",
+            detail=f"Job '{job_id}' not found",
         )
-    for stored in snapshot.jobs:
-        if stored.job.id == job_id:
-            return _to_detail(
-                stored, applied=applied_store.is_applied(user_id, job_id)
-            )
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Job '{job_id}' not found in current snapshot",
-    )
+    return _to_detail(stored, applied=applied_store.is_applied(user_id, job_id))
 
 
 @router.post(
@@ -399,6 +402,7 @@ def _run_refresh_in_background(
     resume_store: ResumeStore,
     cache: JobsCache,
     refresh_store: RefreshTaskStore,
+    seen_store: SeenJobsStore,
     pipeline: PipelineRunner,
 ) -> None:
     """The actual refresh work. Runs after the 202 response is sent."""
@@ -439,6 +443,9 @@ def _run_refresh_in_background(
             queries_run=result.queries_run,
             top_n_cap=_user_top_n(user_id),
         )
+        # Persist into the long-lived index so detail / letter routes
+        # still work after subsequent searches rotate the snapshot.
+        seen_store.upsert_many(user_id, result.jobs)
         refresh_store.mark_done(
             user_id,
             refresh_id,
@@ -457,5 +464,6 @@ __all__ = [
     "get_jobs_cache",
     "get_pipeline_runner",
     "get_refresh_store",
+    "get_seen_jobs_store",
     "router",
 ]

@@ -17,6 +17,7 @@ from role_tracker.api.routes.jobs import (
     get_jobs_cache,
     get_pipeline_runner,
     get_refresh_store,
+    get_seen_jobs_store,
 )
 from role_tracker.api.routes.queries import get_query_store
 from role_tracker.api.routes.resume import get_resume_store
@@ -24,6 +25,7 @@ from role_tracker.applied.store import FileAppliedStore
 from role_tracker.jobs.cache import FileJobsCache
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.refresh_state import FileRefreshTaskStore
+from role_tracker.jobs.seen import FileSeenJobsStore
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.queries.json_store import JsonQueryStore
 from role_tracker.resume.store import FileResumeStore
@@ -84,6 +86,9 @@ def client(
     )
     app.dependency_overrides[get_applied_store] = lambda: FileAppliedStore(
         root=tmp_path / "applied"
+    )
+    app.dependency_overrides[get_seen_jobs_store] = lambda: FileSeenJobsStore(
+        root=tmp_path / "seen"
     )
     app.dependency_overrides[get_pipeline_runner] = (
         lambda: lambda _user_id, _queries, _resume: _fake_pipeline_results()
