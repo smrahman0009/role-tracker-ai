@@ -73,12 +73,20 @@ export default function JobListPage() {
   const allJobsQuery = useJobs({ filter: "all" });
   const allJobs = allJobsQuery.data?.jobs ?? [];
 
-  // Apply the live tag filter (what tag → title substring; where tag →
-  // location substring). Both checks are case-insensitive. If a dimension
-  // has no terms, it doesn't filter on that axis.
-  const tagFilteredJobs = allJobs.filter((j) =>
-    matchesTagFilter(j, activeFilterTerms),
-  );
+  // Apply the live tag filter ONLY when the user has actually removed
+  // tags from the last search. JSearch's title matching is fuzzier than
+  // our literal substring check, so applying the filter on a fresh
+  // search would hide results JSearch correctly returned (e.g., a
+  // "Senior AI & NLP Scientist" role wouldn't substring-match
+  // "data scientist"). When activeFilterTerms equals lastSpec — or
+  // contains terms not in lastSpec (the user is staging a new search)
+  // — show every result.
+  const tagFilteredJobs = isFilterNarrowingResults(
+    activeFilterTerms,
+    lastSpec,
+  )
+    ? allJobs.filter((j) => matchesTagFilter(j, activeFilterTerms))
+    : allJobs;
   const visibleJobs = tagFilteredJobs.filter((j) =>
     filter === "applied" ? j.applied : filter === "unapplied" ? !j.applied : true,
   );
@@ -380,6 +388,33 @@ function saveLastSpec(spec: SearchJobsRequest): void {
   } catch {
     // localStorage can be disabled / full — ignore.
   }
+}
+
+/**
+ * The tag filter is "narrowing" when the active terms are a strict
+ * subset of the last search's terms in at least one dimension. That
+ * captures the "user removed a tag" intent. Equal terms or extra
+ * unsearched terms mean the user hasn't asked for narrowing yet.
+ */
+function isFilterNarrowingResults(
+  active: { what: string[]; where: string[] },
+  last: SearchJobsRequest | null,
+): boolean {
+  if (!last) return false;
+  const lower = (xs: string[]) => xs.map((s) => s.trim().toLowerCase());
+  const activeWhat = new Set(lower(active.what));
+  const activeWhere = new Set(lower(active.where));
+  const lastWhat = lower(last.what);
+  const lastWhere = lower(last.where);
+  // Active is a "removal" within a dimension if every active term was
+  // in the last search AND the active count is smaller.
+  const whatNarrowed =
+    [...activeWhat].every((t) => lastWhat.includes(t)) &&
+    activeWhat.size < lastWhat.length;
+  const whereNarrowed =
+    [...activeWhere].every((t) => lastWhere.includes(t)) &&
+    activeWhere.size < lastWhere.length;
+  return whatNarrowed || whereNarrowed;
 }
 
 function matchesTagFilter(
