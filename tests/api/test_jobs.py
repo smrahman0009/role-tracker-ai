@@ -610,3 +610,134 @@ def test_search_rejects_empty_where_list(client: TestClient) -> None:
         json={"what": ["data scientist"], "where": []},
     )
     assert response.status_code == 422
+
+
+# ----- manually-added jobs -----
+
+
+def test_create_manual_job_returns_201_and_detail(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """User pastes a JD; backend stores it in seen_jobs with source=manual
+    and returns the detail shape so the frontend can navigate."""
+    _seed_resume(client)
+    # Don't actually call OpenAI for embedding — the score path is
+    # caught by a broad except and returns 0.0, which is fine.
+    response = client.post(
+        "/users/alice/jobs/manual",
+        json={
+            "title": "Senior ML Engineer",
+            "company": "Acme Corp",
+            "description": (
+                "We're hiring an ML engineer to build production "
+                "recommendation systems. You'll own model training, "
+                "deployment, and monitoring. 5+ years experience."
+            ),
+            "location": "Halifax, NS",
+            "url": "https://acme.example.com/jobs/123",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["title"] == "Senior ML Engineer"
+    assert body["company"] == "Acme Corp"
+    assert body["job_id"].startswith("manual:")
+
+
+def test_create_manual_job_persists_to_seen_jobs(client: TestClient) -> None:
+    """Subsequent GET /jobs/{id} should find the manual job."""
+    _seed_resume(client)
+    create = client.post(
+        "/users/alice/jobs/manual",
+        json={
+            "title": "Senior ML Engineer",
+            "company": "Acme",
+            "description": "Build production ML systems. 5+ years experience required.",
+        },
+    )
+    job_id = create.json()["job_id"]
+    detail = client.get(f"/users/alice/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["title"] == "Senior ML Engineer"
+
+
+def test_create_manual_job_rejects_short_description(client: TestClient) -> None:
+    response = client.post(
+        "/users/alice/jobs/manual",
+        json={
+            "title": "ML Engineer",
+            "company": "Acme",
+            "description": "too short",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_create_manual_job_dedupes_by_url(client: TestClient) -> None:
+    """Re-adding the same URL should overwrite the prior entry, not
+    create a duplicate (deterministic id from url hash)."""
+    _seed_resume(client)
+    body = {
+        "title": "ML Engineer",
+        "company": "Acme",
+        "description": "Build production ML systems for recommendations team.",
+        "url": "https://acme.example.com/jobs/123",
+    }
+    first = client.post("/users/alice/jobs/manual", json=body).json()
+    second = client.post("/users/alice/jobs/manual", json=body).json()
+    assert first["job_id"] == second["job_id"]
+
+
+def test_list_manual_jobs_empty(client: TestClient) -> None:
+    body = client.get("/users/alice/jobs/manual").json()
+    assert body["jobs"] == []
+    assert body["total"] == 0
+
+
+def test_list_manual_jobs_returns_only_manual_source(
+    client: TestClient,
+) -> None:
+    """seen_jobs may contain JSearch-sourced jobs (from refresh) too;
+    the manual list filters by source='manual'."""
+    _seed_resume(client)
+    _seed_query(client)
+    # Seed 2 jsearch jobs via refresh.
+    refresh = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{refresh.json()['refresh_id']}")
+    # Add 1 manual job.
+    client.post(
+        "/users/alice/jobs/manual",
+        json={
+            "title": "Custom Role",
+            "company": "Acme",
+            "description": (
+                "Job description for the manual-add flow test. "
+                "Build production ML systems for the recommendations team."
+            ),
+        },
+    )
+    body = client.get("/users/alice/jobs/manual").json()
+    assert body["total"] == 1
+    assert body["jobs"][0]["title"] == "Custom Role"
+
+
+def test_fetch_job_url_returns_empty_on_unreachable(
+    client: TestClient,
+) -> None:
+    """The fetch helper never raises — bad URLs just return empty fields
+    so the frontend can fall back to manual paste."""
+    response = client.post(
+        "/users/alice/jobs/manual/fetch",
+        json={"url": "https://this-does-not-resolve-12345.invalid/job"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["description"] == ""
+
+
+def test_fetch_job_url_validates_min_length(client: TestClient) -> None:
+    response = client.post(
+        "/users/alice/jobs/manual/fetch",
+        json={"url": "x"},
+    )
+    assert response.status_code == 422

@@ -29,10 +29,13 @@ from pydantic import BaseModel
 from role_tracker.api.routes.queries import get_query_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
+    FetchJobUrlRequest,
+    FetchJobUrlResponse,
     JobDetailResponse,
     JobFilter,
     JobListResponse,
     JobSummary,
+    ManualJobRequest,
     RefreshJobResponse,
     RefreshStatusResponse,
     SearchJobsRequest,
@@ -58,6 +61,7 @@ from role_tracker.jobs.refresh_state import (
     RefreshTaskStore,
 )
 from role_tracker.jobs.seen import FileSeenJobsStore, SeenJobsStore
+from role_tracker.jobs.url_extract import extract_job_from_url
 from role_tracker.matching.embeddings import Embedder
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.queries.base import QueryStore
@@ -394,6 +398,169 @@ def _refresh_status_response(
         queries_run=record.queries_run,
         error=record.error,
     )
+
+
+# ----- Manually-added jobs (URL paste / textbox flow) -----
+
+
+@router.post("/manual/fetch", response_model=FetchJobUrlResponse)
+def fetch_job_url(
+    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    body: FetchJobUrlRequest,
+) -> FetchJobUrlResponse:
+    """Best-effort extraction of title/company/JD from a URL.
+
+    Always returns 200 with a FetchJobUrlResponse — empty fields signal
+    the extractor couldn't pull that piece (Workday SPAs, login walls,
+    Cloudflare blocks). The frontend then asks the user to paste the JD
+    into the textarea instead.
+    """
+    extracted = extract_job_from_url(body.url)
+    return FetchJobUrlResponse(
+        title=extracted.title,
+        company=extracted.company,
+        description=extracted.description,
+    )
+
+
+@router.post(
+    "/manual",
+    response_model=JobDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_manual_job(
+    user_id: str,
+    body: ManualJobRequest,
+    resume_store: ResumeStore = Depends(get_resume_store),
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+) -> JobDetailResponse:
+    """Save a manually-added job into seen_jobs.
+
+    Embeds the JD against the user's resume so the match score is
+    real (same as JSearch jobs). source="manual" tags it for the
+    "My added jobs" filter. Detail/letter/Apply Kit flows then work
+    unchanged because they all read from seen_jobs.
+    """
+    job_id = "manual:" + _hash_for_manual_job(
+        url=body.url, title=body.title, company=body.company
+    )
+    posting = JobPosting(
+        id=job_id,
+        title=body.title.strip(),
+        company=body.company.strip(),
+        location=body.location.strip(),
+        description=body.description.strip(),
+        url=body.url.strip(),
+        posted_at="",
+        salary_min=body.salary_min,
+        salary_max=body.salary_max,
+        source="manual",
+        publisher="",
+        employment_type=body.employment_type.strip().upper(),
+    )
+
+    score = _score_manual_job(user_id, posting, resume_store)
+    seen_store.upsert_many(user_id, [ScoredJob(job=posting, score=score)])
+
+    return _to_detail(
+        StoredScoredJob(job=posting, score=score), applied=False
+    )
+
+
+@router.get("/manual", response_model=JobListResponse)
+def list_manual_jobs(
+    user_id: str,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    applied_store: AppliedStore = Depends(get_applied_store),
+) -> JobListResponse:
+    """Every job the user added manually, latest match-score first.
+
+    Independent of search snapshots — manual jobs live forever in
+    seen_jobs and are filtered by source=='manual' here.
+    """
+    applied_ids = applied_store.list_applied(user_id)
+    all_seen = _all_seen_for_user(seen_store, user_id)
+    manuals = [
+        s for s in all_seen if s.job.source == "manual"
+    ]
+    summaries = [
+        _to_summary_from_job(
+            s.job, score=s.score, applied=s.job.id in applied_ids
+        )
+        for s in sorted(manuals, key=lambda s: s.score, reverse=True)
+    ]
+    return JobListResponse(
+        jobs=summaries,
+        total=len(summaries),
+        total_unfiltered=len(summaries),
+        hidden_by_filters=0,
+        last_refreshed_at=None,
+    )
+
+
+def _hash_for_manual_job(*, url: str, title: str, company: str) -> str:
+    """Deterministic short id so re-adding the same posting overwrites
+    instead of duplicating. Falls back on title+company when no URL."""
+    import hashlib
+
+    seed = (url or f"{title}|{company}").strip().lower()
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+
+
+def _score_manual_job(
+    user_id: str, job: JobPosting, resume_store: ResumeStore
+) -> float:
+    """Embed the JD against the user's resume and return cosine
+    similarity. Returns 0.0 silently if anything goes wrong (no resume
+    uploaded, embedding API down, etc.) — the user can still create the
+    job, they just won't have a real score yet."""
+    try:
+        resume_bytes = resume_store.get_file_bytes(user_id)
+        if resume_bytes is None:
+            return 0.0
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(resume_bytes)
+            tmp_path = Path(tmp.name)
+        try:
+            resume_text = parse_resume(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        from role_tracker.matching.embeddings import (
+            Embedder,
+            load_or_embed_resume,
+        )
+        from role_tracker.matching.scorer import (
+            cosine_similarity,
+            job_to_embedding_text,
+        )
+
+        settings = Settings()
+        embedder = Embedder(
+            api_key=settings.openai_api_key,
+            model=settings.openai_embedding_model,
+        )
+        cache_path = Path(f"data/resumes/{user_id}.embedding.json")
+        resume_vec = load_or_embed_resume(embedder, resume_text, cache_path)
+        job_vec = embedder.embed([job_to_embedding_text(job)])[0]
+        return float(cosine_similarity(resume_vec, job_vec))
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+def _all_seen_for_user(
+    seen_store: SeenJobsStore, user_id: str
+) -> list[StoredScoredJob]:
+    """Read the full seen_jobs index for a user. Currently SeenJobsStore
+    only exposes get-by-id; for the manual-jobs list we need everything.
+    Wrap via the file backend's internal _load when available, else walk
+    by upserting nothing — for now we hit the file path directly which
+    is the only backend in use."""
+    if isinstance(seen_store, FileSeenJobsStore):
+        return seen_store._load(user_id)  # noqa: SLF001
+    # Other backends would need a list-all method. Cosmos swap (Phase 7)
+    # will get one; for now we only have the file backend in production.
+    return []
 
 
 @router.get("/{job_id}", response_model=JobDetailResponse)

@@ -103,6 +103,30 @@ export interface RefreshStatusResponse {
   error: string | null;
 }
 
+/** Body for POST /jobs/manual/fetch — best-effort URL extraction. */
+export interface FetchJobUrlRequest {
+  url: string;
+}
+
+/** Whatever we managed to pull from a URL. Empty fields = couldn't extract. */
+export interface FetchJobUrlResponse {
+  title: string;
+  company: string;
+  description: string;
+}
+
+/** Body for POST /jobs/manual — create a manually-added job. */
+export interface ManualJobRequest {
+  title: string;
+  company: string;
+  description: string;
+  location?: string;
+  url?: string;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  employment_type?: string;
+}
+
 /** Body for POST /jobs/search — the ad-hoc search spec. */
 export interface SearchJobsRequest {
   /** 1-3 role terms; each runs its own JSearch query and results merge. */

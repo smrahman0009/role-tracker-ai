@@ -15,9 +15,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/lib/api";
 import type {
+  FetchJobUrlRequest,
+  FetchJobUrlResponse,
   JobDetailResponse,
   JobListFilters,
   JobListResponse,
+  ManualJobRequest,
   RefreshJobResponse,
   RefreshStatusResponse,
   SearchJobsRequest,
@@ -113,5 +116,43 @@ export function useUnapplyJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs", userId] });
     },
+  });
+}
+
+// ----- Manually-added jobs -----
+
+export function useFetchJobUrl() {
+  const { userId } = useAuth();
+  return useMutation({
+    mutationFn: (url: string) =>
+      api.post<FetchJobUrlResponse>(
+        `/users/${userId}/jobs/manual/fetch`,
+        { url } satisfies FetchJobUrlRequest,
+      ),
+  });
+}
+
+export function useCreateManualJob() {
+  const { userId } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ManualJobRequest) =>
+      api.post<JobDetailResponse>(`/users/${userId}/jobs/manual`, body),
+    onSuccess: () => {
+      // Refresh both the manual list and the broader jobs cache so the
+      // new job shows up wherever it can appear.
+      queryClient.invalidateQueries({ queryKey: ["manual-jobs", userId] });
+      queryClient.invalidateQueries({ queryKey: ["applications", userId] });
+    },
+  });
+}
+
+export function useManualJobs() {
+  const { userId } = useAuth();
+  return useQuery<JobListResponse>({
+    queryKey: ["manual-jobs", userId],
+    queryFn: () =>
+      api.get<JobListResponse>(`/users/${userId}/jobs/manual`),
+    enabled: Boolean(userId),
   });
 }

@@ -27,6 +27,7 @@ import ApplicationsPage from "@/pages/ApplicationsPage";
 import JobDetailPage from "@/pages/JobDetailPage";
 import JobListPage from "@/pages/JobListPage";
 import LoginPage from "@/pages/LoginPage";
+import ManualJobsPage from "@/pages/ManualJobsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import SettingsPage from "@/pages/SettingsPage";
 
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="/" element={<JobListPage />} />
               <Route path="/jobs/:jobId" element={<JobDetailPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
+              <Route path="/added-jobs" element={<ManualJobsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

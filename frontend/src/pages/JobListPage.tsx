@@ -8,13 +8,15 @@
  * of these jobs from earlier searches.
  */
 
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { AddManualJobDialog } from "@/components/AddManualJobDialog";
 import { JobCard } from "@/components/JobCard";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { ResumeCard } from "@/components/ResumeCard";
 import { SearchForm } from "@/components/SearchForm";
+import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { toast } from "@/components/ui/Toaster";
@@ -150,17 +152,29 @@ export default function JobListPage() {
   };
 
   const lastRefreshedAt = allJobsQuery.data?.last_refreshed_at;
+  const [addingManual, setAddingManual] = useState(false);
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
-          Find a job
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Live search ranked against your resume. Saved daily searches live
-          in Settings.
-        </p>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+            Find a job
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Live search ranked against your resume. Saved daily searches live
+            in Settings.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setAddingManual(true)}
+          title="Paste a URL or job description for a posting JSearch didn't find"
+        >
+          <Plus />
+          Add a job manually
+        </Button>
       </div>
 
       <ResumeCard onResumeChange={() => resumeQuery.refetch()} />
@@ -261,6 +275,11 @@ export default function JobListPage() {
           )}
         </div>
       )}
+
+      <AddManualJobDialog
+        open={addingManual}
+        onOpenChange={setAddingManual}
+      />
     </div>
   );
 }

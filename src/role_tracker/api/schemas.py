@@ -41,6 +41,9 @@ __all__ = [
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
     "UpdateQueryRequest",
+    "FetchJobUrlRequest",
+    "FetchJobUrlResponse",
+    "ManualJobRequest",
     "PolishLetterRequest",
     "PolishLetterResponse",
     "PolishWhyInterestedRequest",
@@ -204,6 +207,44 @@ class SearchJobsRequest(BaseModel):
     # Optional per-search override for the ranking cap. None falls back
     # to the user's profile default (UserProfile.top_n_jobs).
     top_n: int | None = Field(default=None, ge=1, le=200)
+
+
+class FetchJobUrlRequest(BaseModel):
+    """Body of POST /jobs/manual/fetch — convenience for the Add Job
+    Manually dialog. Tries to extract title/company/description from the
+    URL using Trafilatura; returns empty strings on any failure so the
+    frontend can fall back to user-paste."""
+
+    url: str = Field(min_length=8, max_length=2000)
+
+
+class FetchJobUrlResponse(BaseModel):
+    """Whatever we managed to pull from the URL. Any field may be empty
+    (extraction is best-effort; caller treats empty `description` as a
+    signal to ask the user to paste it themselves)."""
+
+    title: str = ""
+    company: str = ""
+    description: str = ""
+
+
+class ManualJobRequest(BaseModel):
+    """Body of POST /jobs/manual — create a job from a URL the user
+    found themselves.
+
+    `description` is required (the agent needs JD text to write a letter
+    against). `url` is optional — if provided, it's persisted as the
+    job's link so the View posting button works on the detail page.
+    """
+
+    title: str = Field(min_length=1, max_length=300)
+    company: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=50, max_length=20_000)
+    location: str = ""
+    url: str = ""
+    salary_min: float | None = None
+    salary_max: float | None = None
+    employment_type: str = ""
 
 
 class SearchJobsResponse(BaseModel):
