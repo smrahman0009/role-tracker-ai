@@ -135,14 +135,12 @@ backend. No new endpoints, no schema changes. Roughly one new component
 
 ## Optional v2 add-ons (decide later)
 
-- **"Why are you interested?" generator** — small dialog calling Claude
-  with the JD + resume to draft a 3-sentence answer to the most common
-  screening question. Reuses the existing Anthropic client. Probably
-  $0.01 per generation.
-- **Greenhouse / Lever direct apply** — when `job.url` matches their
-  board patterns, show a "Direct apply available" badge and submit via
-  their public APIs from the backend. Skips the manual paste loop on
-  the ~10–20% of postings that use these ATSes.
+- **"Why are you interested?" generator** — *shipped* (commit 36f52a0).
+  Small dialog calling Claude Haiku for a 2-3 sentence answer to the
+  screening question, with inline edit + Polish for grammar fixes.
+- ~~**Greenhouse / Lever direct apply**~~ — **removed at user request.**
+  ATS-specific submission paths are out of scope; the manual Apply Kit
+  flow is sufficient.
 - **Browser extension** — same UI as the panel, but injected into the
   employer page so paste happens automatically on focus. Only worth it
   after the panel is proven daily-useful.
@@ -154,3 +152,80 @@ backend. No new endpoints, no schema changes. Roughly one new component
 - Login automation for LinkedIn / Indeed / etc.
 - Auto-answer to free-text screening questions beyond a single
   one-shot generator with manual review.
+
+---
+
+# Feedback round 2 (2026-05-01)
+
+After end-to-end usability testing on a real job application, four
+follow-up requests came in. Captured here so they survive across
+sessions and have explicit priority.
+
+## Items
+
+| Item | Status | Effort | Priority |
+|---|---|---|---|
+| 1. Multi-value `where` field (cap 3) | approved | ~45m | now |
+| 2. Live filter on tag remove (what + where) | approved | ~30m | now |
+| 3. Quota / usage dashboard (`/usage` page) | approved | 4-6h | next |
+| 4. Embedding cache (per-job vectors) | deferred | 2-3h | low |
+
+## Detail
+
+### 1. Multi-value `where`
+Mirror the `what` tag input pattern. Cap at 3 cities. Each
+`(what × where)` combination runs its own JSearch query, so 3×3 = 9
+calls per search. Free tier (200/mo) absorbs ~22 such searches/month.
+
+### 2. Live filter on tag remove
+After a search has run, clicking the X on a `what` or `where` pill
+should immediately re-filter the displayed results client-side
+(case-insensitive substring match against title / location). No
+re-fetch, no quota cost. If user removes ALL terms in a dimension,
+show empty state with "Add a term to filter" hint.
+
+### 3. Quota / usage dashboard
+New `/usage` page with three cards: JSearch (calls + monthly cap),
+OpenAI (embedding tokens + estimated cost), Anthropic (Sonnet +
+Haiku tokens + estimated cost, by feature: cover letter / refine /
+polish / why-interested). Backed by per-user JSON file
+(`data/usage/{user_id}.json`) accumulating monthly rollups. Each
+external client wrapped to log calls at the point of use.
+
+JSearch is the only provider with a hard server-enforced cap we
+warn against; OpenAI and Anthropic are billed metered. Costs are
+labelled "Estimated" — provider dashboards remain authoritative.
+
+### 4. Embedding cache (deferred)
+Add an `embedding: list[float]` field to the existing seen_jobs
+record. Pipeline embeds only the missing ones each search.
+Real saving is ~1-2s of latency per search; cost saving is
+trivial (~$0.001/search). Worth doing eventually but not before
+quota dashboard.
+
+## Decisions log
+
+- **Rejected: "stuffed-location" query approach** for multi-where
+  (one JSearch call with locations OR'd into the query string).
+  Google for Jobs biases toward the first city — accuracy loss
+  not worth the quota savings. Cartesian product (one query per
+  pair) chosen instead.
+- **Auto re-search on tag remove rejected.** Burns quota on every
+  click and adds 30s wait. Client-side filter is the right
+  UX-instinct match.
+- **Cost estimates labelled, not authoritative.** Anthropic /
+  OpenAI dashboards are the source of truth. Our numbers are
+  derived from response token counts × published rates and don't
+  reflect prompt-caching discounts.
+- **Embedding cache deprioritised** because the headline savings
+  are latency, not money. JSearch quota visibility is more useful
+  to the user day-to-day.
+
+## Status
+
+| Step | Status |
+|---|---|
+| 1. Multi-value `where` (cap 3) | not started |
+| 2. Live tag-remove filter | not started |
+| 3. Quota dashboard | not started |
+| 4. Embedding cache | deferred |
