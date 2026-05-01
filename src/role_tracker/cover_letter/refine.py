@@ -45,6 +45,13 @@ WHAT YOU MAY NOT CHANGE:
 - The fit assessment
 - Any factual claims — these must still trace to the resume
 
+GREETING:
+- Use "Dear {Company} Team," — substitute the actual company name from
+  the job (e.g., "Dear Acme Team,"). If awkward (company contains
+  "Inc." / "Corporation" / commas / already ends in "Team"), use
+  "Dear Hiring Team,". Never "Hello," or "To whom it may concern,".
+- If the previous letter has a different greeting, replace it.
+
 If the user's feedback implies a STRATEGY change ("focus on the audio ML
 work instead of NLP", "switch the angle to recsys"), do NOT honour it.
 Produce a revision that addresses the feedback as best you can within

@@ -34,8 +34,31 @@ _HEADER_LETTER = (
 
 def test_pdf_renders_and_returns_bytes() -> None:
     pdf_bytes = letter_to_pdf(_HEADER_LETTER)
+    assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF-")
     assert len(pdf_bytes) > 1000  # rough sanity — letter should be > 1KB
+
+
+def test_pdf_with_page_count_returns_tuple() -> None:
+    pdf_bytes, page_count = letter_to_pdf(
+        _HEADER_LETTER, with_page_count=True
+    )
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert page_count == 1  # the sample letter fits on one page
+
+
+def test_pdf_overflows_to_two_pages_with_long_text() -> None:
+    """A letter long enough to spill should report page_count >= 2 so
+    the route can surface a warning to the user."""
+    long_body = (
+        "**Jane Doe**\n"
+        "+1 555 0100 | jane@example.com\n\n"
+        "Dear Acme Team,\n\n"
+        + ("Lorem ipsum dolor sit amet. " * 200 + "\n\n") * 4
+        + "Best,\nJane"
+    )
+    _, page_count = letter_to_pdf(long_body, with_page_count=True)
+    assert page_count >= 2
 
 
 def test_pdf_strips_markdown_link_syntax() -> None:

@@ -122,7 +122,11 @@ PHASE 5 — SAVE
 LETTER STRUCTURE (put verbatim in save_letter text):
 1. Header block (provided in the initial message).
 2. Blank line.
-3. "Hello,"
+3. Greeting: "Dear {Company} Team," — substitute the actual company name
+   from the JD (e.g., "Dear Acme Team,"). If the company name is awkward
+   to pair with "Team" (e.g., contains "Inc." / "Corporation" / a comma /
+   already ends in "Team"), use "Dear Hiring Team," instead. Never use
+   "Hello," or "To whom it may concern,".
 4. Body paragraphs (see below).
 5. "Best," on its own line.
 6. Candidate's full name on the next line.
@@ -149,7 +153,6 @@ GROUNDING (zero tolerance):
 COLD APPLICATION RULES:
 - Do NOT explicitly name gaps ("I haven't done X", "I'll be upfront",
   "actively deepening", "ramping up"). Focus on the strengths you DO have.
-- Use "Hello," as the greeting (no fake first name).
 - Sign off with "Best,".
 - Length: 300-400 words total. Hard ceiling 420.
 

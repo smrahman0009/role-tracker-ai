@@ -74,8 +74,16 @@ def _normalize(text: str) -> list[list[str]]:
 # ----- PDF -----
 
 
-def letter_to_pdf(text: str) -> bytes:
-    """Render the letter text as a US-Letter PDF and return the bytes."""
+def letter_to_pdf(
+    text: str, *, with_page_count: bool = False
+) -> bytes | tuple[bytes, int]:
+    """Render the letter text as a US-Letter PDF.
+
+    Returns the PDF bytes by default. If `with_page_count=True`, returns
+    `(bytes, pages)` so callers can detect overflow and warn the user.
+    Auto-page-break is enabled, so a long letter will silently span two
+    pages — the page count is the only signal the caller has.
+    """
     pdf = FPDF(format="Letter", unit="pt")
     pdf.set_margins(left=72, top=72, right=72)  # 1 inch margins
     pdf.set_auto_page_break(auto=True, margin=72)
@@ -98,7 +106,10 @@ def letter_to_pdf(text: str) -> bytes:
         if i < len(paragraphs) - 1:
             pdf.ln(paragraph_gap)
 
-    return bytes(pdf.output())
+    output = bytes(pdf.output())
+    if with_page_count:
+        return output, pdf.page_no()
+    return output
 
 
 # ----- DOCX -----

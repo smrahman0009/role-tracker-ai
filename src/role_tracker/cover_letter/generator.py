@@ -72,7 +72,11 @@ BANNED LANGUAGE (do not use):
 STRUCTURE:
 - Header block provided by the user — put it verbatim at the top, then a blank
   line, then the greeting.
-- Greeting: "Hello," (no fake first name).
+- Greeting: "Dear {Company} Team," — substitute the actual company name
+  from the job description (e.g., "Dear Acme Team,"). If pairing with
+  "Team" reads awkwardly because the company name contains "Inc." /
+  "Corporation" / commas / already ends in "Team", use "Dear Hiring Team,"
+  instead. Never use "Hello," or "To whom it may concern,".
 - Three paragraphs:
   1. Hook that references the company and role by name, plus the single
      strongest bridge between the resume and the job.

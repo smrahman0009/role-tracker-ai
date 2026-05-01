@@ -56,6 +56,7 @@ from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.seen import SeenJobsStore
 from role_tracker.letters.formats import letter_to_docx, letter_to_pdf
+from role_tracker.letters.header import with_current_header
 from role_tracker.letters.generation_state import (
     FileLetterGenerationStore,
     LetterGenerationStore,
@@ -73,6 +74,7 @@ from role_tracker.screening.why_interested import (
     polish_why_interested,
 )
 from role_tracker.users.base import UserProfileStore
+from role_tracker.users.models import UserProfile
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(tags=["letters"])
@@ -184,6 +186,7 @@ def poll_letter_generation(
     generation_id: str,
     letter_store: LetterStore = Depends(get_letter_store),
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
 ) -> LetterGenerationStatus:
     """Poll the status of an in-flight letter generation."""
     record = generation_store.get(user_id, generation_id)
@@ -199,7 +202,7 @@ def poll_letter_generation(
             user_id, record.job_id, record.saved_version
         )
         if stored is not None:
-            letter = _to_response(stored)
+            letter = _to_response(stored, _user_or_none(user_store, user_id))
 
     return LetterGenerationStatus(
         generation_id=record.generation_id,
@@ -219,12 +222,14 @@ def list_letter_versions(
     user_id: str,
     job_id: str,
     letter_store: LetterStore = Depends(get_letter_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
 ) -> LetterVersionList:
     """List all letter versions for one job (latest first)."""
     versions = letter_store.list_versions(user_id, job_id)
     versions.sort(key=lambda lt: lt.version, reverse=True)
+    user = _user_or_none(user_store, user_id)
     return LetterVersionList(
-        versions=[_to_response(v) for v in versions],
+        versions=[_to_response(v, user) for v in versions],
         total=len(versions),
     )
 
@@ -238,6 +243,7 @@ def get_letter_version(
     job_id: str,
     version: int,
     letter_store: LetterStore = Depends(get_letter_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
 ) -> Letter:
     """Get one specific letter version."""
     stored = letter_store.get_version(user_id, job_id, version)
@@ -249,7 +255,7 @@ def get_letter_version(
                 f"user '{user_id}'"
             ),
         )
-    return _to_response(stored)
+    return _to_response(stored, _user_or_none(user_store, user_id))
 
 
 @router.post(
@@ -418,16 +424,33 @@ def download_letter_pdf(
     job_id: str,
     version: int,
     letter_store: LetterStore = Depends(get_letter_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
 ) -> Response:
-    """Download the letter as a US-Letter PDF (default — accepted everywhere)."""
+    """Download the letter as a US-Letter PDF (default — accepted everywhere).
+
+    Renders with the current profile's contact header (live header), then
+    measures page count. If the letter spills past one page, the response
+    includes an `X-Letter-Pages` header so the frontend can surface a
+    warning toast — we do NOT silently shrink the font, since that would
+    be inconsistent across letters and not what the user wants for an
+    important document.
+    """
     stored = _require_letter(letter_store, user_id, job_id, version)
+    rendered_text = with_current_header(
+        text=stored.text,
+        user=_user_or_none(user_store, user_id) or _placeholder_user(user_id),
+        edited_by_user=stored.edited_by_user,
+    )
+    pdf_bytes, page_count = letter_to_pdf(rendered_text, with_page_count=True)
     return Response(
-        content=letter_to_pdf(stored.text),
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={
             "Content-Disposition": (
                 f'attachment; filename="cover_letter_v{version}.pdf"'
             ),
+            "X-Letter-Pages": str(page_count),
+            "Access-Control-Expose-Headers": "X-Letter-Pages",
         },
     )
 
@@ -440,11 +463,24 @@ def download_letter_docx(
     job_id: str,
     version: int,
     letter_store: LetterStore = Depends(get_letter_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
 ) -> Response:
-    """Download the letter as Word .docx (best for ATS text extraction)."""
+    """Download the letter as Word .docx (best for ATS text extraction).
+
+    DOCX pagination depends on the user's Word/LibreOffice version, so we
+    don't try to enforce one-page in code — content discipline (the
+    300-400 word agent cap, the 200-words-per-paragraph manual-edit rule)
+    keeps it close. We still apply the live header so toggling fields in
+    Settings propagates to the file.
+    """
     stored = _require_letter(letter_store, user_id, job_id, version)
+    rendered_text = with_current_header(
+        text=stored.text,
+        user=_user_or_none(user_store, user_id) or _placeholder_user(user_id),
+        edited_by_user=stored.edited_by_user,
+    )
     return Response(
-        content=letter_to_docx(stored.text),
+        content=letter_to_docx(rendered_text),
         media_type=(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
@@ -454,6 +490,32 @@ def download_letter_docx(
             ),
         },
     )
+
+
+def _placeholder_user(user_id: str) -> UserProfile:
+    """Used when no profile exists yet — returns a profile whose name
+    won't match the agent-generated header pattern, so with_current_header
+    will leave the stored text alone rather than prepending an empty
+    header. Belt-and-braces: with_current_header also short-circuits when
+    contact_header() is empty."""
+    return UserProfile(
+        id=user_id,
+        name="",
+        resume_path=Path(""),
+        queries=[],
+    )
+
+
+def _user_or_none(
+    user_store: UserProfileStore, user_id: str
+) -> UserProfile | None:
+    """Look up the user profile, or None if it doesn't exist yet.
+    Used to drive the live header substitution; missing profile means
+    we render the stored letter text as-is."""
+    try:
+        return user_store.get_user(user_id)
+    except FileNotFoundError:
+        return None
 
 
 def _require_letter(
@@ -570,8 +632,15 @@ def _start_generation(
     return GenerateLetterResponse(generation_id=generation_id, status="pending")
 
 
-def _to_response(stored: StoredLetter) -> Letter:
-    """Convert StoredLetter (domain) → Letter (API response shape)."""
+def _to_response(
+    stored: StoredLetter, user: UserProfile | None = None
+) -> Letter:
+    """Convert StoredLetter (domain) → Letter (API response shape).
+
+    If `user` is provided, the contact header is substituted with the
+    user's *current* profile (skipped for letters with edited_by_user=True
+    — see letters/header.py for the contract).
+    """
     strategy = None
     if stored.strategy:
         try:
@@ -603,9 +672,17 @@ def _to_response(stored: StoredLetter) -> Letter:
         except Exception:  # noqa: BLE001
             critique = None
 
+    rendered_text = stored.text
+    if user is not None:
+        rendered_text = with_current_header(
+            text=stored.text,
+            user=user,
+            edited_by_user=stored.edited_by_user,
+        )
+
     return Letter(
         version=stored.version,
-        text=stored.text,
+        text=rendered_text,
         word_count=stored.word_count,
         strategy=strategy,
         critique=critique,

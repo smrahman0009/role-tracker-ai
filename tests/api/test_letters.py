@@ -35,9 +35,12 @@ class _StubUserProfileStore:
     """Returns a deterministic UserProfile for any user_id."""
 
     def get_user(self, user_id: str) -> UserProfile:
+        # Name matches the **Shaikh Mushfikur Rahman** header in _FAKE_LETTER
+        # so the live-header substitution recognises paragraph 1 as the
+        # header and replaces it in-place rather than prepending a duplicate.
         return UserProfile(
             id=user_id,
-            name=f"{user_id.title()} Test",
+            name="Shaikh Mushfikur Rahman",
             email=f"{user_id}@example.com",
             phone="555-0100",
             city="Toronto, ON",
@@ -267,6 +270,9 @@ def test_download_pdf(client: TestClient) -> None:
     assert response.headers["content-disposition"].endswith('.pdf"')
     # PDF magic header.
     assert response.content.startswith(b"%PDF-")
+    # Page-count signal so the frontend can warn on overflow.
+    assert "x-letter-pages" in response.headers
+    assert int(response.headers["x-letter-pages"]) >= 1
 
 
 def test_download_docx(client: TestClient) -> None:

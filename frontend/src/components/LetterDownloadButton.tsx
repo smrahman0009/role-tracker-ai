@@ -13,7 +13,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/Popover";
+import { toast } from "@/components/ui/Toaster";
 import { letterDownloadUrl } from "@/hooks/useLetters";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -30,6 +32,27 @@ export function LetterDownloadButton({
   version,
   iconOnly = false,
 }: Props) {
+  // PDF download goes through fetch so we can read X-Letter-Pages and
+  // toast a warning if the letter spilled past one page. The bytes are
+  // saved to disk via a blob URL + dynamic anchor click.
+  const downloadPdf = async () => {
+    try {
+      const path = `/users/${userId}/jobs/${jobId}/letters/${version}/download.pdf`;
+      const response = await api.raw(path);
+      const pages = Number(response.headers.get("X-Letter-Pages") ?? "1");
+      const blob = await response.blob();
+      saveBlob(blob, `cover_letter_v${version}.pdf`);
+      if (Number.isFinite(pages) && pages > 1) {
+        toast(
+          `Heads up: this letter prints to ${pages} pages. Consider shortening the body before sending.`,
+          { duration: 8000 },
+        );
+      }
+    } catch (err) {
+      toast.error(`Download failed: ${(err as Error).message}`);
+    }
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -48,11 +71,21 @@ export function LetterDownloadButton({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-44 p-1" align="end">
-        <DownloadOption
-          href={letterDownloadUrl(userId, jobId, version, "pdf")}
-          label="PDF"
-          hint="Universal"
-        />
+        <button
+          type="button"
+          onClick={downloadPdf}
+          className={cn(
+            "flex items-center justify-between gap-2 rounded px-2 py-1.5 w-full",
+            "text-xs text-slate-700 hover:bg-slate-100 text-left",
+            "focus:outline-none focus:bg-slate-100",
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <FileText className="h-3.5 w-3.5 text-slate-500" />
+            PDF
+          </span>
+          <span className="text-[10px] text-slate-500">Universal</span>
+        </button>
         <DownloadOption
           href={letterDownloadUrl(userId, jobId, version, "docx")}
           label="Word (.docx)"
@@ -61,6 +94,19 @@ export function LetterDownloadButton({
       </PopoverContent>
     </Popover>
   );
+}
+
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Release the object URL on the next tick so the browser has time to
+  // start the download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function DownloadOption({
