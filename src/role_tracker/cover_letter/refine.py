@@ -129,4 +129,24 @@ def refine_cover_letter(
         ],
         messages=[{"role": "user", "content": user_message}],
     )
-    return "".join(b.text for b in response.content if b.type == "text").strip()
+    revised = "".join(
+        b.text for b in response.content if b.type == "text"
+    ).strip()
+    # The agent sees both the fresh header_block and the previous letter's
+    # (possibly stale) header, and tends to preserve the old one. The header
+    # belongs to the profile — we own it deterministically. Strip whatever
+    # the agent put on top and substitute the current contact_header().
+    return _replace_header(revised, user.contact_header())
+
+
+def _replace_header(letter_text: str, fresh_header: str) -> str:
+    """Swap the letter's first paragraph (the header) with `fresh_header`.
+
+    The agent emits the contact header as paragraph 1, separated from
+    the body by a blank line. If the output has no `\n\n` we treat the
+    whole thing as body and prepend the fresh header — better than
+    silently skipping the substitution.
+    """
+    parts = letter_text.split("\n\n", 1)
+    body = parts[1] if len(parts) == 2 else letter_text
+    return f"{fresh_header.strip()}\n\n{body.lstrip()}"
