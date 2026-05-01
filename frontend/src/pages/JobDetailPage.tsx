@@ -35,6 +35,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
+import { LetterRenderer } from "@/components/LetterRenderer";
 import { FitBadge } from "@/components/FitBadge";
 import { RefineDialog } from "@/components/RefineDialog";
 import { StrategyPanel } from "@/components/StrategyPanel";
@@ -568,14 +569,10 @@ function LetterWorkspace({
             className="font-mono text-[13px] leading-relaxed"
           />
         ) : (
-          <pre
-            className={cn(
-              "whitespace-pre-wrap font-sans text-sm text-slate-800 leading-relaxed",
-              isGenerating && "opacity-50",
-            )}
-          >
-            {current.text}
-          </pre>
+          <LetterRenderer
+            text={current.text}
+            className={cn(isGenerating && "opacity-50")}
+          />
         )}
       </CardContent>
     </Card>

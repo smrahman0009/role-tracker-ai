@@ -60,3 +60,20 @@ export function formatMatchScore(score: number): string {
   const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
   return `${pct}/100`;
 }
+
+/**
+ * Convert the cover-letter's markdown source to clean plain text suitable
+ * for pasting into an employer's apply form (which won't render markdown).
+ * Mirrors the backend's _strip_md_links + _split_bold logic in formats.py.
+ *
+ *   `**Shaikh Mushfikur Rahman**`           → `Shaikh Mushfikur Rahman`
+ *   `[LinkedIn](https://linkedin.com/...)`  → `https://linkedin.com/...`
+ *
+ * For links we keep the URL (not the label) so contact-header URLs are
+ * actually pasteable. Labels would lose the destination.
+ */
+export function letterToPlainText(text: string): string {
+  return text
+    .replace(/\*\*([^\n*]+?)\*\*/g, "$1")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$2");
+}

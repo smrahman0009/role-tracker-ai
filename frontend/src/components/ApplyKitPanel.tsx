@@ -34,6 +34,7 @@ import { useLetterVersions } from "@/hooks/useLetters";
 import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
+import { letterToPlainText } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Letter, ProfileResponse } from "@/lib/types";
 
@@ -331,7 +332,7 @@ function CoverLetterBlock({
           )}
           <div className="flex gap-2">
             <CopyButton
-              value={current.text}
+              value={letterToPlainText(current.text)}
               label="Copy text"
               size="full"
             />

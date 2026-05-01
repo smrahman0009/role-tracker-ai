@@ -3,7 +3,7 @@ name: Shaikh Mushfikur Rahman
 email: smrahman0009@gmail.com
 phone: 782-882-0852
 city: Halifax, NS
-linkedin_url: ''
+linkedin_url: www.linkedin.com/in/mushfikurrahman
 github_url: ''
 portfolio_url: ''
 resume_path: data/resumes/smrah.pdf
@@ -12,8 +12,8 @@ show_phone_in_header: true
 show_email_in_header: true
 show_city_in_header: true
 show_linkedin_in_header: true
-show_github_in_header: true
-show_portfolio_in_header: true
+show_github_in_header: false
+show_portfolio_in_header: false
 queries:
 - what: data scientist
   where: canada
