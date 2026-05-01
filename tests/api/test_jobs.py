@@ -424,7 +424,7 @@ def test_search_returns_202_and_id(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax"},
+        json={"what": ["data scientist"], "where": ["Halifax"]},
     )
     assert response.status_code == 202
     body = response.json()
@@ -438,7 +438,7 @@ def test_search_writes_results_to_snapshot_and_seen_store(
     _seed_resume(client)
     search_response = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax"},
+        json={"what": ["data scientist"], "where": ["Halifax"]},
     )
     search_id = search_response.json()["search_id"]
 
@@ -459,7 +459,7 @@ def test_search_writes_results_to_snapshot_and_seen_store(
 def test_search_fails_without_resume(client: TestClient) -> None:
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax"},
+        json={"what": ["data scientist"], "where": ["Halifax"]},
     )
     search_id = response.json()["search_id"]
     poll = client.get(f"/users/alice/jobs/search/{search_id}").json()
@@ -470,7 +470,7 @@ def test_search_fails_without_resume(client: TestClient) -> None:
 def test_search_validates_required_fields(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
-        "/users/alice/jobs/search", json={"what": [], "where": "Halifax"}
+        "/users/alice/jobs/search", json={"what": [], "where": ["Halifax"]}
     )
     assert response.status_code == 422
 
@@ -487,7 +487,7 @@ def test_search_accepts_multiple_what_terms(client: TestClient) -> None:
         "/users/alice/jobs/search",
         json={
             "what": ["machine learning engineer", "data scientist"],
-            "where": "Halifax, Canada",
+            "where": ["Halifax, Canada"],
         },
     )
     assert response.status_code == 202
@@ -500,7 +500,7 @@ def test_search_rejects_more_than_three_what_terms(client: TestClient) -> None:
         "/users/alice/jobs/search",
         json={
             "what": ["one", "two", "three", "four"],
-            "where": "Halifax",
+            "where": ["Halifax"],
         },
     )
     assert response.status_code == 422
@@ -511,7 +511,7 @@ def test_search_accepts_top_n_override(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax", "top_n": 25},
+        json={"what": ["data scientist"], "where": ["Halifax"], "top_n": 25},
     )
     assert response.status_code == 202
 
@@ -520,7 +520,7 @@ def test_search_rejects_top_n_out_of_range(client: TestClient) -> None:
     _seed_resume(client)
     response = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax", "top_n": 999},
+        json={"what": ["data scientist"], "where": ["Halifax"], "top_n": 999},
     )
     assert response.status_code == 422
 
@@ -567,7 +567,7 @@ def test_applications_survives_snapshot_rotation(client: TestClient) -> None:
     # in real life this would rotate the snapshot to a new set of jobs.
     s = client.post(
         "/users/alice/jobs/search",
-        json={"what": ["data scientist"], "where": "Halifax"},
+        json={"what": ["data scientist"], "where": ["Halifax"]},
     )
     client.get(f"/users/alice/jobs/search/{s.json()['search_id']}")
 
@@ -575,3 +575,38 @@ def test_applications_survives_snapshot_rotation(client: TestClient) -> None:
     body = client.get("/users/alice/jobs/applications").json()
     assert body["total"] == 1
     assert body["jobs"][0]["job_id"] == "j1"
+
+
+def test_search_accepts_multi_value_where(client: TestClient) -> None:
+    """Multiple cities in `where`; pipeline runs cartesian × queries."""
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={
+            "what": ["data scientist"],
+            "where": ["Halifax", "Montreal", "Toronto"],
+        },
+    )
+    assert response.status_code == 202
+
+
+def test_search_rejects_more_than_three_wheres(client: TestClient) -> None:
+    """Same 3-cap as `what`, for the same JSearch-quota reason."""
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={
+            "what": ["data scientist"],
+            "where": ["A", "B", "C", "D"],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_search_rejects_empty_where_list(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/search",
+        json={"what": ["data scientist"], "where": []},
+    )
+    assert response.status_code == 422

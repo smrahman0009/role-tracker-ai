@@ -107,7 +107,8 @@ export interface RefreshStatusResponse {
 export interface SearchJobsRequest {
   /** 1-3 role terms; each runs its own JSearch query and results merge. */
   what: string[];
-  where: string;
+  /** 1-3 locations; each (what × where) pair runs its own JSearch query. */
+  where: string[];
   salary_min?: number | null;
   employment_types?: EmploymentType[];
   posted_within_days?: number | null;
@@ -115,8 +116,9 @@ export interface SearchJobsRequest {
   top_n?: number | null;
 }
 
-/** Cap matches the backend SearchJobsRequest schema. */
+/** Caps match the backend SearchJobsRequest schema. */
 export const MAX_WHAT_TERMS = 3;
+export const MAX_WHERE_TERMS = 3;
 
 /** Body of the 202 response from POST /jobs/search. */
 export interface SearchJobsResponse {

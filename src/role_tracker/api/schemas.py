@@ -192,7 +192,10 @@ class SearchJobsRequest(BaseModel):
     """
 
     what: list[str] = Field(min_length=1, max_length=3)
-    where: str = Field(min_length=1, max_length=200)
+    # Up to 3 locations. Each (what × where) combination becomes its
+    # own JSearch query, so 3×3=9 calls max per search. Free tier (200
+    # calls/month) absorbs ~22 such searches.
+    where: list[str] = Field(min_length=1, max_length=3)
     salary_min: int | None = Field(default=None, ge=0)
     employment_types: list[
         Literal["FULLTIME", "PARTTIME", "CONTRACTOR", "INTERN"]

@@ -56,17 +56,38 @@ export default function JobListPage() {
   // Tab state — applied / unapplied / all over the result list.
   const [filter, setFilter] = useState<JobFilter>("unapplied");
 
+  // Active filter terms — what the user has *currently* committed in the
+  // SearchForm. Removing a tag from the form tightens this; adding a new
+  // tag broadens it (but won't reach jobs not in the last search until
+  // the user clicks Find jobs again). Initialised from lastSpec so the
+  // pre-filled form on page load matches what's displayed.
+  const [activeFilterTerms, setActiveFilterTerms] = useState<{
+    what: string[];
+    where: string[];
+  }>(() => ({
+    what: lastSpec?.what ?? [],
+    where: lastSpec?.where ?? [],
+  }));
+
   // Load the snapshot that the most recent search wrote.
   const allJobsQuery = useJobs({ filter: "all" });
   const allJobs = allJobsQuery.data?.jobs ?? [];
-  const visibleJobs = allJobs.filter((j) =>
+
+  // Apply the live tag filter (what tag → title substring; where tag →
+  // location substring). Both checks are case-insensitive. If a dimension
+  // has no terms, it doesn't filter on that axis.
+  const tagFilteredJobs = allJobs.filter((j) =>
+    matchesTagFilter(j, activeFilterTerms),
+  );
+  const visibleJobs = tagFilteredJobs.filter((j) =>
     filter === "applied" ? j.applied : filter === "unapplied" ? !j.applied : true,
   );
   const counts = {
-    all: allJobs.length,
-    unapplied: allJobs.filter((j) => !j.applied).length,
-    applied: allJobs.filter((j) => j.applied).length,
+    all: tagFilteredJobs.length,
+    unapplied: tagFilteredJobs.filter((j) => !j.applied).length,
+    applied: tagFilteredJobs.filter((j) => j.applied).length,
   };
+  const hiddenByTagFilter = allJobs.length - tagFilteredJobs.length;
 
   // Search lifecycle.
   const searchMutation = useSearchJobs();
@@ -74,6 +95,9 @@ export default function JobListPage() {
   const submitSearch = (spec: SearchJobsRequest) => {
     setLastSpec(spec);
     saveLastSpec(spec);
+    // Reset the active tag filter so the new search results aren't
+    // immediately narrowed by the previous search's filter state.
+    setActiveFilterTerms({ what: spec.what, where: spec.where });
     searchMutation.mutate(spec, {
       onSuccess: (d) => setActiveSearchId(d.search_id),
       onError: (err) => toast.error(`Search failed: ${err.message}`),
@@ -151,6 +175,7 @@ export default function JobListPage() {
         }
         isSearching={isSearching || searchMutation.isPending}
         onSubmit={submitSearch}
+        onTagsChange={setActiveFilterTerms}
       />
 
       {/* Results section */}
@@ -188,6 +213,14 @@ export default function JobListPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+
+          {hiddenByTagFilter > 0 && (
+            <p className="text-[11px] text-slate-500 -mt-2">
+              {hiddenByTagFilter} job{hiddenByTagFilter === 1 ? "" : "s"}{" "}
+              hidden by your tag filter. Re-add a removed tag or click
+              Find jobs to broaden.
+            </p>
+          )}
 
           {filter === "unapplied" && counts.applied > 0 && (
             <p className="text-[11px] text-slate-500 -mt-2">
@@ -284,7 +317,7 @@ function ResultsHeader({
           <>
             <span className="font-medium">{spec.what.join(", ")}</span>
             <span className="text-slate-400 mx-1.5">in</span>
-            <span className="font-medium">{spec.where}</span>
+            <span className="font-medium">{spec.where.join(", ")}</span>
           </>
         ) : (
           "Latest results"
@@ -314,25 +347,31 @@ function loadLastSpec(): SearchJobsRequest | null {
     const raw = localStorage.getItem(LAST_SEARCH_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    // Migrate old single-string `what` from before the multi-term change.
-    const rawWhat = parsed.what;
-    let whatList: string[] | null = null;
-    if (Array.isArray(rawWhat)) {
-      whatList = rawWhat.filter(
-        (t): t is string => typeof t === "string" && t.length > 0,
-      );
-    } else if (typeof rawWhat === "string" && rawWhat.length > 0) {
-      whatList = [rawWhat];
-    }
-    const where =
-      typeof parsed.where === "string" && parsed.where.length > 0
-        ? parsed.where
-        : null;
-    if (!whatList || whatList.length === 0 || !where) return null;
-    return { ...parsed, what: whatList, where } as SearchJobsRequest;
+    // Migrate old single-string `what` and `where` from before the
+    // multi-term changes.
+    const whatList = _coerceStringList(parsed.what);
+    const whereList = _coerceStringList(parsed.where);
+    if (!whatList?.length || !whereList?.length) return null;
+    return {
+      ...parsed,
+      what: whatList,
+      where: whereList,
+    } as SearchJobsRequest;
   } catch {
     return null;
   }
+}
+
+function _coerceStringList(value: unknown): string[] | null {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (v): v is string => typeof v === "string" && v.length > 0,
+    );
+  }
+  if (typeof value === "string" && value.length > 0) {
+    return [value];
+  }
+  return null;
 }
 
 function saveLastSpec(spec: SearchJobsRequest): void {
@@ -341,4 +380,25 @@ function saveLastSpec(spec: SearchJobsRequest): void {
   } catch {
     // localStorage can be disabled / full — ignore.
   }
+}
+
+function matchesTagFilter(
+  job: JobSummary,
+  terms: { what: string[]; where: string[] },
+): boolean {
+  // A job passes the tag filter when EVERY active dimension has at least
+  // one matching term (case-insensitive substring). An empty dimension
+  // doesn't filter on that axis — useful right after the user removes
+  // every term in one dimension; we don't auto-shrink to nothing.
+  const titleMatches =
+    terms.what.length === 0 ||
+    terms.what.some((t) =>
+      job.title.toLowerCase().includes(t.toLowerCase()),
+    );
+  const locationMatches =
+    terms.where.length === 0 ||
+    terms.where.some((w) =>
+      job.location.toLowerCase().includes(w.toLowerCase()),
+    );
+  return titleMatches && locationMatches;
 }

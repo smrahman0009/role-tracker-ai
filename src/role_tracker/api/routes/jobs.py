@@ -617,16 +617,21 @@ def _run_search_in_background(
         # surfaced via /jobs query params, not pipeline inputs — so they
         # don't affect the pipeline call here.
         terms = [t.strip() for t in spec.what if t.strip()]
+        wheres = [w.strip() for w in spec.where if w.strip()]
         now = datetime.now(UTC)
+        # Cartesian product: one SavedQuery per (what × where) pair.
+        # The pipeline already dedupes by job_id across queries, so the
+        # same job appearing for multiple terms only embeds once.
         ad_hoc_queries = [
             SavedQuery(
-                query_id=f"search:{search_id}:{i}",
+                query_id=f"search:{search_id}:{i}:{j}",
                 what=term,
-                where=spec.where,
+                where=where,
                 enabled=True,
                 created_at=now,
             )
             for i, term in enumerate(terms)
+            for j, where in enumerate(wheres)
         ]
 
         result = pipeline(
