@@ -637,3 +637,61 @@ def test_polish_why_interested_validates_min_length(client: TestClient) -> None:
         json={"text": "hi"},
     )
     assert response.status_code == 422
+
+
+# ----- Polish cover letter -----
+
+
+def test_polish_letter_returns_polished_text(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    import role_tracker.api.routes.letters as letters_module
+
+    monkeypatch.setattr(
+        letters_module,
+        "polish_cover_letter",
+        lambda **_: "**Jane Doe**\n\nPolished body of the letter.\n\nBest,\nJane",
+    )
+    response = client.post(
+        "/users/alice/jobs/j1/letters/1/polish",
+        json={"text": "**Jane Doe**\n\nbody of the letter has typos\n\nBest,\nJane"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "Polished body" in body["text"]
+    assert body["word_count"] > 0
+
+
+def test_polish_letter_validates_min_length(client: TestClient) -> None:
+    response = client.post(
+        "/users/alice/jobs/j1/letters/1/polish",
+        json={"text": "too short"},
+    )
+    assert response.status_code == 422
+
+
+def test_polish_letter_does_not_save_new_version(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """Polish only returns text — the user has to click Save edit to persist."""
+    import role_tracker.api.routes.letters as letters_module
+
+    monkeypatch.setattr(
+        letters_module,
+        "polish_cover_letter",
+        lambda **_: "**Jane**\n\nPolished version of the body text here.\n\nBest,",
+    )
+    _seed_resume(client)
+    # Generate v1 so the version listing has something.
+    gen = client.post("/users/alice/jobs/j1/letters", json={})
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+    before = client.get("/users/alice/jobs/j1/letters").json()["total"]
+
+    client.post(
+        "/users/alice/jobs/j1/letters/1/polish",
+        json={
+            "text": "**Jane**\n\npolished version of the body text here\n\nBest,"
+        },
+    )
+    after = client.get("/users/alice/jobs/j1/letters").json()["total"]
+    assert before == after  # no new version created

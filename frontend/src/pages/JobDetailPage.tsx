@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Save,
   Sparkles,
+  Wand,
   Wand2,
   X,
 } from "lucide-react";
@@ -47,6 +48,7 @@ import {
   useGenerateLetter,
   useLetterGeneration,
   useLetterVersions,
+  usePolishLetter,
   useRefineLetter,
   useRegenerateLetter,
 } from "@/hooks/useLetters";
@@ -375,6 +377,25 @@ function LetterWorkspace({
 }: LetterWorkspaceProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const polishMutation = usePolishLetter(jobId, current?.version);
+
+  const polishDraft = () => {
+    const v = draft.trim();
+    if (!v) return;
+    polishMutation.mutate(v, {
+      onSuccess: (data) => {
+        setDraft(data.text);
+        toast.success("Polished — meaning preserved");
+      },
+      onError: (err) => {
+        if (err instanceof ApiClientError && err.status === 422) {
+          toast.error(err.message);
+        } else {
+          toast.error(`Polish failed: ${err.message}`);
+        }
+      },
+    });
+  };
 
   useEffect(() => {
     setEditing(false);
@@ -466,15 +487,33 @@ function LetterWorkspace({
                   setEditing(false);
                   setDraft(current.text);
                 }}
-                disabled={editMutation.isPending}
+                disabled={editMutation.isPending || polishMutation.isPending}
               >
                 <X />
                 Cancel
               </Button>
               <Button
+                variant="secondary"
+                size="sm"
+                onClick={polishDraft}
+                disabled={
+                  editMutation.isPending ||
+                  polishMutation.isPending ||
+                  !draft.trim()
+                }
+                title="Fix grammar and clarity in your edits without changing meaning"
+              >
+                {polishMutation.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Wand />
+                )}
+                {polishMutation.isPending ? "Polishing…" : "Polish"}
+              </Button>
+              <Button
                 size="sm"
                 onClick={saveEdit}
-                disabled={editMutation.isPending}
+                disabled={editMutation.isPending || polishMutation.isPending}
               >
                 <Save />
                 {editMutation.isPending ? "Saving…" : "Save edit"}

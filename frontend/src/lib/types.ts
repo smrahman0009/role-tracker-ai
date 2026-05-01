@@ -209,6 +209,15 @@ export interface PolishWhyInterestedRequest {
   text: string;
 }
 
+export interface PolishLetterRequest {
+  text: string;
+}
+
+export interface PolishLetterResponse {
+  text: string;
+  word_count: number;
+}
+
 export interface WhyInterestedResponse {
   text: string;
   word_count: number;

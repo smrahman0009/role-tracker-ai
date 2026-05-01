@@ -41,6 +41,8 @@ __all__ = [
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
     "UpdateQueryRequest",
+    "PolishLetterRequest",
+    "PolishLetterResponse",
     "PolishWhyInterestedRequest",
     "WhyInterestedRequest",
     "WhyInterestedResponse",
@@ -366,6 +368,24 @@ class WhyInterestedRequest(BaseModel):
 
 class WhyInterestedResponse(BaseModel):
     """Body of the why-interested generator response."""
+
+    text: str
+    word_count: int
+
+
+class PolishLetterRequest(BaseModel):
+    """Body of POST /jobs/{job_id}/letters/{version}/polish.
+
+    Cleans grammar and clarity in user-edited cover letter text without
+    changing meaning, length, or structure (paragraphs, bold markers,
+    link syntax all preserved).
+    """
+
+    text: str = Field(min_length=20, max_length=10_000)
+
+
+class PolishLetterResponse(BaseModel):
+    """Body of the cover-letter polish response."""
 
     text: str
     word_count: int

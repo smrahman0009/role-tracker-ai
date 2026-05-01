@@ -14,6 +14,8 @@ import type {
   LetterGenerationStatus,
   LetterVersionList,
   ManualEditRequest,
+  PolishLetterRequest,
+  PolishLetterResponse,
   PolishWhyInterestedRequest,
   RefineLetterRequest,
   WhyInterestedRequest,
@@ -111,6 +113,20 @@ export function useWhyInterested(jobId: string | undefined) {
       api.post<WhyInterestedResponse>(
         `/users/${userId}/jobs/${jobId}/why-interested`,
         body,
+      ),
+  });
+}
+
+export function usePolishLetter(
+  jobId: string | undefined,
+  version: number | undefined,
+) {
+  const { userId } = useAuth();
+  return useMutation({
+    mutationFn: (text: string) =>
+      api.post<PolishLetterResponse>(
+        `/users/${userId}/jobs/${jobId}/letters/${version}/polish`,
+        { text } satisfies PolishLetterRequest,
       ),
   });
 }

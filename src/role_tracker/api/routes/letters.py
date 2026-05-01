@@ -41,6 +41,8 @@ from role_tracker.api.schemas import (
     LetterGenerationStatus,
     LetterVersionList,
     ManualEditRequest,
+    PolishLetterRequest,
+    PolishLetterResponse,
     PolishWhyInterestedRequest,
     RefineLetterRequest,
     Strategy,
@@ -49,6 +51,7 @@ from role_tracker.api.schemas import (
 )
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.cover_letter.polish import polish_cover_letter
 from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.seen import SeenJobsStore
@@ -380,6 +383,31 @@ def edit_letter(
         edited_by_user=True,
     )
     return _to_response(saved)
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/letters/{version}/polish",
+    response_model=PolishLetterResponse,
+)
+def polish_letter(
+    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    job_id: str,  # noqa: ARG001
+    version: int,  # noqa: ARG001
+    body: PolishLetterRequest,
+    client: Anthropic = Depends(get_anthropic_client),
+) -> PolishLetterResponse:
+    """Fix grammar / clarity in user-edited cover letter text.
+
+    Single Claude Haiku call (~$0.005, ~3s). Preserves meaning, length,
+    paragraph breaks, bold markers, and link syntax. Does not save a new
+    version — the frontend wires this into the existing Edit textarea so
+    the user can polish, review, then click Save edit (which goes through
+    the manual-edit endpoint as before).
+    """
+    polished = polish_cover_letter(text=body.text, client=client)
+    return PolishLetterResponse(
+        text=polished, word_count=len(polished.split())
+    )
 
 
 @router.get(
