@@ -346,7 +346,7 @@ def search_jobs(
 
     Mirrors /jobs/refresh but takes a one-off query in the body instead
     of fanning out across saved searches. Uses a smaller per-query JSearch
-    budget (limit_per_query=20 vs 50 for refresh) so users don't burn
+    budget (limit_per_query=50, matching the refresh) so users don't burn
     their monthly quota on exploratory searches.
     """
     search_id = uuid.uuid4().hex[:12]
@@ -586,8 +586,9 @@ def _run_search_in_background(
     """Ad-hoc search: build a one-off query from the spec and run the pipeline.
 
     Same lifecycle as a refresh; reuses RefreshTaskStore for status tracking.
-    Uses limit_per_query=20 (vs 50 for refresh) to conserve JSearch quota
-    on exploratory searches.
+    Uses limit_per_query=50 (5 JSearch pages per pair). The user has
+    upgraded past the free tier so the conservative limit is no longer
+    necessary; more candidates means better top-N ranking quality.
     """
     try:
         refresh_store.mark_running(user_id, search_id)
@@ -638,7 +639,7 @@ def _run_search_in_background(
             user_id,
             ad_hoc_queries,
             resume_text,
-            limit_per_query=20,
+            limit_per_query=50,
             top_n_override=spec.top_n,
         )
         cache.save_snapshot(
