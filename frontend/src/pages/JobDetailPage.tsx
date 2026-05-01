@@ -439,9 +439,13 @@ function LetterWorkspace({
       return;
     }
     editMutation.mutate(v, {
-      onSuccess: () => {
-        toast.success("Edit saved");
+      onSuccess: (saved) => {
+        toast.success(`Edit saved as v${saved.version}`);
         setEditing(false);
+        // The edit endpoint creates a *new* version. Jump to it so the
+        // workspace shows the user's saved text instead of staying on
+        // the version they were editing (which still has the old text).
+        onSelectVersion(saved.version);
       },
       onError: (err) => {
         if (err instanceof ApiClientError && err.status === 422) {
