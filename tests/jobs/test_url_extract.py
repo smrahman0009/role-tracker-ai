@@ -216,3 +216,78 @@ def test_workable_url_pattern_with_trailing_slash() -> None:
         http_client=client,
     )
     assert out.title == "Test"
+
+
+# ----- JSON-LD JobPosting (schema.org) -----
+
+
+_JSONLD_HTML = '''<!doctype html><html><head>
+<title>Senior Consultant — KPMG</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "JobPosting",
+  "title": "Senior Consultant, ML/AI Engineer",
+  "hiringOrganization": {"@type": "Organization", "name": "KPMG"},
+  "description": "<p>At KPMG, you&rsquo;ll join a team.</p><ul><li>Build ML systems</li><li>Mentor juniors</li></ul>"
+}
+</script>
+</head><body>SPA shell</body></html>'''
+
+
+def test_jsonld_jobposting_extraction() -> None:
+    """Pages that embed schema.org JobPosting structured data should be
+    extracted via that block, not via Trafilatura's heuristic."""
+    client = _StubClient(
+        {"https://careers.kpmg.ca/jobs/123": {"text": _JSONLD_HTML}}
+    )
+    out = extract_job_from_url(
+        "https://careers.kpmg.ca/jobs/123", http_client=client
+    )
+    assert out.title == "Senior Consultant, ML/AI Engineer"
+    assert out.company == "KPMG"
+    # Entities decoded.
+    assert "you’ll" in out.description
+    # Tags stripped, list items preserved as bullets.
+    assert "Build ML systems" in out.description
+    assert "Mentor juniors" in out.description
+    assert "<" not in out.description
+
+
+def test_jsonld_array_with_breadcrumb_and_jobposting() -> None:
+    """Some sites ship JSON-LD as an array of multiple entities. We
+    pick the JobPosting out of the array."""
+    html = (
+        '<script type="application/ld+json">'
+        '[{"@type":"BreadcrumbList","itemListElement":[]},'
+        ' {"@type":"JobPosting","title":"Backend Engineer",'
+        '  "hiringOrganization":{"name":"Acme"},'
+        '  "description":"<p>Build distributed systems.</p>"}]'
+        "</script>"
+    )
+    client = _StubClient({"https://acme.example/jobs/9": {"text": html}})
+    out = extract_job_from_url(
+        "https://acme.example/jobs/9", http_client=client
+    )
+    assert out.title == "Backend Engineer"
+    assert out.company == "Acme"
+    assert "Build distributed systems" in out.description
+
+
+def test_jsonld_runs_before_trafilatura_fallback() -> None:
+    """When both JSON-LD and Trafilatura-extractable content are
+    present, the JSON-LD wins because it's structured and reliable."""
+    html = (
+        '<script type="application/ld+json">'
+        '{"@type":"JobPosting","title":"FromJsonLd",'
+        '"hiringOrganization":{"name":"Acme"},'
+        '"description":"<p>The structured JD has 60+ chars of body content here.</p>"}'
+        "</script>"
+        "<article>"
+        + ("<p>Trafilatura would find this article body too. </p>" * 10)
+        + "</article>"
+    )
+    client = _StubClient({"https://x/jobs/1": {"text": html}})
+    out = extract_job_from_url("https://x/jobs/1", http_client=client)
+    assert out.title == "FromJsonLd"
+    assert "structured JD" in out.description

@@ -17,6 +17,7 @@ Honest caveats:
 
 from __future__ import annotations
 
+import html as html_lib
 import json
 import re
 
@@ -44,14 +45,17 @@ def extract_job_from_url(
 ) -> ExtractedJob:
     """Fetch the URL and try to pull job-posting fields.
 
-    Strategy:
-      1. ATS-specific JSON endpoints first (Workable, Greenhouse, Lever).
+    Strategy (each step falls through to the next on no match):
+      1. ATS-specific JSON endpoints (Workable, Greenhouse, Lever).
          These ATSes render their public job pages with a React SPA — the
          server-side HTML is an empty shell and Trafilatura can't extract
          anything. But each ATS exposes a no-auth JSON API that the SPA
          itself uses, returning the full structured posting.
-      2. Fall back to Trafilatura on the rendered HTML for everything
-         else (static company career pages, blog-style postings).
+      2. Schema.org JSON-LD JobPosting embedded in the HTML. Common on
+         large-company career sites (KPMG, banks, consultancies). More
+         reliable than Trafilatura because the fields are explicit.
+      3. Trafilatura on the rendered HTML for everything else (static
+         company career pages, blog-style postings).
 
     Returns an ExtractedJob with whatever we found. Empty fields signal
     that we couldn't extract that piece — the frontend then asks the
@@ -78,17 +82,24 @@ def extract_job_from_url(
             if ats_result is not None:
                 return ats_result
 
-        # 2. Generic fallback — fetch + Trafilatura.
+        # 2. Fetch the page once for the remaining strategies.
         try:
             response = client.get(url)
             response.raise_for_status()
         except (httpx.HTTPError, httpx.InvalidURL):
             return ExtractedJob()
         html = response.text
+
+        # 3. JSON-LD JobPosting (schema.org) — works on KPMG, banks,
+        # consultancies, anything that bothered to ship structured data.
+        jsonld = _extract_from_jsonld(html)
+        if jsonld is not None and jsonld.description:
+            return jsonld
     finally:
         if http_client is None:
             client.close()
 
+    # 4. Trafilatura fallback for anything that got us this far.
     description = trafilatura.extract(html) or ""
     if len(description.strip()) < MIN_DESCRIPTION_CHARS:
         description = ""
@@ -119,12 +130,23 @@ _HTML_TAG_RE = re.compile(r"<[^>]+>")
 def _strip_html(s: str) -> str:
     """Convert ATS HTML field (description / requirements / benefits)
     to plain text. ATS APIs return HTML strings; we want clean prose
-    for the JD textarea + downstream LLM cleaning."""
+    for the JD textarea + downstream LLM cleaning.
+
+    Also decodes named entities (&rsquo; &nbsp; &amp; etc.) and
+    converts <br> / <p> / <li> into line breaks so paragraph structure
+    survives the strip.
+    """
     if not s:
         return ""
-    text = _HTML_TAG_RE.sub("", s)
-    # Collapse multiple blank lines that show up after tag stripping.
+    # Convert structural tags to whitespace BEFORE blanket-stripping the rest,
+    # so paragraph breaks and list bullets don't collapse into one big line.
+    text = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", s)
+    text = re.sub(r"(?i)</\s*(p|div|h[1-6]|li)\s*>", "\n\n", text)
+    text = re.sub(r"(?i)<\s*li[^>]*>", "• ", text)
+    text = _HTML_TAG_RE.sub("", text)
+    text = html_lib.unescape(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
     return text.strip()
 
 
@@ -233,6 +255,60 @@ def _extract_lever(url: str, client: httpx.Client) -> ExtractedJob | None:
 
 
 _ATS_EXTRACTORS = (_extract_workable, _extract_greenhouse, _extract_lever)
+
+
+# ----- JSON-LD JobPosting (schema.org) -----
+#
+# Many large company career sites (KPMG, Microsoft, banks, etc.) embed
+# schema.org JobPosting structured data in <script type="application/ld+json">
+# blocks. This is more reliable than Trafilatura's heuristic text
+# extraction because the fields are explicit. Runs AFTER ATS-specific
+# extractors (which return even cleaner data) but BEFORE generic
+# Trafilatura.
+
+_JSONLD_RE = re.compile(
+    r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _extract_from_jsonld(html: str) -> ExtractedJob | None:
+    """Find a JSON-LD JobPosting in the HTML and convert to ExtractedJob.
+
+    Handles two shapes:
+      - The block itself is a JobPosting object.
+      - The block is an array (e.g., BreadcrumbList + JobPosting); we
+        scan for the first object with @type == "JobPosting".
+    Returns None if no JobPosting block is found or if parsing fails.
+    """
+    for raw in _JSONLD_RE.findall(html):
+        try:
+            data = json.loads(raw.strip())
+        except json.JSONDecodeError:
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for entry in candidates:
+            if not isinstance(entry, dict):
+                continue
+            t = entry.get("@type")
+            if t == "JobPosting" or (isinstance(t, list) and "JobPosting" in t):
+                return _job_posting_to_extracted(entry)
+    return None
+
+
+def _job_posting_to_extracted(entry: dict) -> ExtractedJob:
+    title = (entry.get("title") or "").strip()
+    org = entry.get("hiringOrganization") or {}
+    if isinstance(org, dict):
+        company = (org.get("name") or "").strip()
+    elif isinstance(org, str):
+        company = org.strip()
+    else:
+        company = ""
+    description = _strip_html(entry.get("description") or "")
+    return ExtractedJob(
+        title=title, company=company, description=description.strip()
+    )
 
 
 def _clean_company(raw: str) -> str:
