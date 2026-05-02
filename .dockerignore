@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Local data — must NOT bake into the image. Mounted at runtime.
+data/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Docs / images / scratch
+docs/
+*.md
+!README.md
+
+# Tests — not needed in the runtime image
+tests/
+
+# Wireframe HTML mockups
+*.html
