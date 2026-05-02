@@ -25,14 +25,20 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /usr/local/bin/uv
 WORKDIR /app
 
 # Install dependencies first (cacheable) — only re-runs when
-# pyproject.toml or uv.lock changes.
+# pyproject.toml or uv.lock changes. We export the locked deps to
+# requirements.txt so `uv pip install` does the work — this is more
+# predictable than `uv sync` when we're not installing the project.
 COPY pyproject.toml uv.lock ./
 RUN uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv sync --frozen --no-dev --no-install-project
+    uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+        > /tmp/requirements.txt && \
+    VIRTUAL_ENV=/opt/venv uv pip install --no-cache -r /tmp/requirements.txt
 
-# Now copy the source and install the project itself.
+# Now copy the source and install the project itself (no deps —
+# they're already in the venv from the previous layer).
 COPY src/ ./src/
-RUN VIRTUAL_ENV=/opt/venv uv pip install --no-deps .
+COPY README.md ./
+RUN VIRTUAL_ENV=/opt/venv uv pip install --no-cache --no-deps .
 
 
 # ---------- Stage 3: runtime image ----------
