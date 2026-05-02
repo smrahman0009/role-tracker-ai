@@ -438,6 +438,8 @@ def fetch_job_url(
     extracted = extract_job_from_url(body.url)
     title = extracted.title
     company = extracted.company
+    location = ""
+    description = extracted.description
 
     # LLM refinement is only worthwhile when we have description text.
     # Without a body, Haiku has nothing to read past the page metadata
@@ -447,17 +449,24 @@ def fetch_job_url(
             description=extracted.description, client=client
         )
         # Prefer LLM extraction over page metadata: the JD body knows
-        # who's actually hiring; the page metadata only knows who's
-        # hosting the listing.
+        # who's actually hiring, where the role is, and which paragraphs
+        # are role-specific vs surrounding chrome.
         if refined["company"]:
             company = refined["company"]
         if refined["title"]:
             title = refined["title"]
+        if refined["location"]:
+            location = refined["location"]
+        # Keep the cleaned description if the LLM produced one;
+        # otherwise the raw Trafilatura text is better than nothing.
+        if refined["description"]:
+            description = refined["description"]
 
     return FetchJobUrlResponse(
         title=title,
         company=company,
-        description=extracted.description,
+        location=location,
+        description=description,
     )
 
 

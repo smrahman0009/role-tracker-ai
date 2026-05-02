@@ -106,48 +106,70 @@ def _clean_company(raw: str) -> str:
 _LLM_MODEL = "claude-haiku-4-5-20251001"
 
 _LLM_SYSTEM = """\
-You read a job description and pull out the actual hiring company plus
-a clean role title. The text often comes from a recruiter agency or job
-aggregator — "Robert Half", "Aerotek", "Insight Global", "LinkedIn",
-"Indeed", etc. — but the candidate cares about the COMPANY THAT WILL
-EMPLOY THEM, not the publisher.
+You read a job posting (often noisy — pulled from a recruiter
+agency, aggregator, or career page that includes surrounding chrome)
+and extract four clean fields. The candidate cares about the role,
+not the publisher.
 
 OUTPUT
-Return ONLY a JSON object with these two keys:
-  {"company": "...", "title": "..."}
+Return ONLY a JSON object with these four keys:
+  {"company": "...", "title": "...", "location": "...", "description": "..."}
 
 RULES
 - "company" = the actual employer mentioned in the JD body. If the JD
   says "Our client, ABC Corp, is hiring..." then company = "ABC Corp",
   NOT the recruiter agency. If the JD says "We at ABC Corp are looking
   for..." then company = "ABC Corp".
-- If the JD never names the actual employer (recruiter is keeping it
+  If the JD never names the actual employer (recruiter keeping it
   confidential), set company to "" — DO NOT guess.
+
 - "title" = the clean role title from the JD. Strip aggregator noise
   like "Job ID 12345 - ", "(Hybrid - Remote OK) - ", "Apply Now: ",
-  date prefixes, and leading/trailing whitespace.
-- If the JD doesn't have a clear title, set title to "".
-- Output the JSON object only — no preamble, no markdown fences.
+  date prefixes, leading/trailing whitespace.
+  If the JD doesn't have a clear title, set title to "".
+
+- "location" = where the role is based, as written. Examples: "Halifax,
+  NS", "Toronto, Canada", "Remote", "Remote, US", "London, UK (Hybrid)",
+  "San Francisco or Remote". Just the location string — no preamble.
+  If the JD doesn't specify, set location to "".
+
+- "description" = the cleaned job description. KEEP only role-specific
+  content: summary of the role, responsibilities, requirements,
+  qualifications, tech stack, what success looks like, salary if
+  mentioned. STRIP boilerplate that surrounds many postings:
+  · "About [Company]" / "Who we are" sections that read like marketing
+  · "Equal Opportunity Employer" / DEI statements
+  · "How to apply" / submission instructions
+  · "Other openings" / "More jobs at this company"
+  · cookie banners, nav links, footer text
+  · benefits boilerplate that's not specific to the role
+  Preserve paragraph structure. Keep specific benefits paragraphs
+  (e.g., "$X salary range, equity, healthcare") because they're
+  candidate-relevant.
+  If the input has no recognizable JD content (page was empty or
+  navigation-only), set description to "".
+
+- Output the JSON object only — no preamble, no markdown code fences.
 """
 
 
 def refine_with_llm(
     *, description: str, client: Anthropic, model: str = _LLM_MODEL
 ) -> dict[str, str]:
-    """Pull the hiring company + clean title from the JD body via Haiku.
+    """Pull company / title / location / cleaned description from the JD
+    body via Haiku.
 
-    Returns {"company": str, "title": str}. Either field may be empty
-    when the JD doesn't supply it (recruiter keeping employer
-    confidential, etc.). Returns empty values silently on any LLM
-    failure — caller decides whether to fall back to Trafilatura's
-    metadata-based extraction.
+    Returns a dict with all four keys; any value may be empty when the
+    JD doesn't supply that field. Returns all-empty silently on any LLM
+    failure — caller decides whether to fall back to Trafilatura's raw
+    output.
     """
     try:
         response = client.messages.create(
             model=model,
-            max_tokens=200,
+            max_tokens=2000,
             system=_LLM_SYSTEM,
-            messages=[{"role": "user", "content": description.strip()[:8000]}],
+            messages=[{"role": "user", "content": description.strip()[:12000]}],
         )
         text = "".join(
             b.text
@@ -161,6 +183,8 @@ def refine_with_llm(
         return {
             "company": str(parsed.get("company", "")).strip(),
             "title": str(parsed.get("title", "")).strip(),
+            "location": str(parsed.get("location", "")).strip(),
+            "description": str(parsed.get("description", "")).strip(),
         }
     except Exception:  # noqa: BLE001
-        return {"company": "", "title": ""}
+        return {"company": "", "title": "", "location": "", "description": ""}

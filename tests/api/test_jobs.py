@@ -773,7 +773,12 @@ def test_fetch_job_url_uses_llm_refinement_for_recruiter_pages(
     monkeypatch.setattr(
         jobs_module,
         "refine_with_llm",
-        lambda **_: {"company": "ABC Corp", "title": "Senior ML Engineer"},
+        lambda **_: {
+            "company": "ABC Corp",
+            "title": "Senior ML Engineer",
+            "location": "Halifax, NS",
+            "description": "Cleaned JD body — role-specific only.",
+        },
     )
 
     response = client.post(
@@ -783,6 +788,8 @@ def test_fetch_job_url_uses_llm_refinement_for_recruiter_pages(
     body = response.json()
     assert body["company"] == "ABC Corp"
     assert body["title"] == "Senior ML Engineer"
+    assert body["location"] == "Halifax, NS"
+    assert "About Us" not in body["description"]
 
 
 def test_fetch_job_url_keeps_metadata_when_llm_returns_blank(
@@ -805,7 +812,12 @@ def test_fetch_job_url_keeps_metadata_when_llm_returns_blank(
     monkeypatch.setattr(
         jobs_module,
         "refine_with_llm",
-        lambda **_: {"company": "", "title": ""},
+        lambda **_: {
+            "company": "",
+            "title": "",
+            "location": "",
+            "description": "",
+        },
     )
     response = client.post(
         "/users/alice/jobs/manual/fetch",
@@ -814,3 +826,49 @@ def test_fetch_job_url_keeps_metadata_when_llm_returns_blank(
     body = response.json()
     assert body["company"] == "Acme Direct"
     assert body["title"] == "ML Engineer"
+
+
+def test_fetch_job_url_uses_cleaned_description_from_llm(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """When the LLM produces a cleaned description, it replaces the raw
+    Trafilatura output that included noisy boilerplate."""
+    import role_tracker.api.routes.jobs as jobs_module
+    from role_tracker.jobs.url_extract import ExtractedJob
+
+    raw = (
+        "Senior ML Engineer at Acme Corp. " * 5
+        + "About Us: Acme is a great place to work. " * 3
+        + "Equal Opportunity Employer statement here. " * 2
+        + "How to apply: visit our careers page. " * 2
+    )
+    monkeypatch.setattr(
+        jobs_module,
+        "extract_job_from_url",
+        lambda _url: ExtractedJob(
+            title="ML Engineer",
+            company="Acme",
+            description=raw,
+        ),
+    )
+    monkeypatch.setattr(
+        jobs_module,
+        "refine_with_llm",
+        lambda **_: {
+            "company": "Acme",
+            "title": "Senior ML Engineer",
+            "location": "Halifax, NS",
+            "description": "Senior ML Engineer at Acme. Build production recsys.",
+        },
+    )
+
+    response = client.post(
+        "/users/alice/jobs/manual/fetch",
+        json={"url": "https://acme.example/job/9"},
+    )
+    body = response.json()
+    assert body["description"] == (
+        "Senior ML Engineer at Acme. Build production recsys."
+    )
+    assert "Equal Opportunity" not in body["description"]
+    assert "How to apply" not in body["description"]

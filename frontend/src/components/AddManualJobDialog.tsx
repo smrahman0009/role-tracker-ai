@@ -63,6 +63,7 @@ export function AddManualJobDialog({ open, onOpenChange }: Props) {
         // already made.
         if (data.title && !title.trim()) setTitle(data.title);
         if (data.company && !company.trim()) setCompany(data.company);
+        if (data.location && !location.trim()) setLocation(data.location);
         if (data.description && !description.trim()) {
           setDescription(data.description);
         }
@@ -72,7 +73,9 @@ export function AddManualJobDialog({ open, onOpenChange }: Props) {
             { duration: 6000 },
           );
         } else {
-          toast.success("Pulled the description — review and edit as needed.");
+          toast.success(
+            "Pulled the listing — review the fields and edit as needed.",
+          );
         }
       },
       onError: (err) =>

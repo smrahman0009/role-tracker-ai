@@ -112,6 +112,7 @@ export interface FetchJobUrlRequest {
 export interface FetchJobUrlResponse {
   title: string;
   company: string;
+  location: string;
   description: string;
 }
 

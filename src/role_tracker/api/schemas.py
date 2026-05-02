@@ -225,6 +225,7 @@ class FetchJobUrlResponse(BaseModel):
 
     title: str = ""
     company: str = ""
+    location: str = ""
     description: str = ""
 
 
