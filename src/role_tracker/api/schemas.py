@@ -495,3 +495,32 @@ class UpdateHiddenListRequest(BaseModel):
     """
 
     items: list[str]
+
+
+class FeatureCount(BaseModel):
+    """Per-feature call count + estimated cost for the Usage page."""
+
+    feature: str
+    count: int
+    estimated_cost_usd: float
+
+
+class UsageMonth(BaseModel):
+    """One month's usage rollup for a single user."""
+
+    year_month: str
+    jsearch_calls: int
+    feature_calls: list[FeatureCount]
+    estimated_anthropic_cost_usd: float
+    estimated_openai_cost_usd: float
+    estimated_total_cost_usd: float
+
+
+class UsageResponse(BaseModel):
+    """Body of GET /users/{user_id}/usage.
+
+    Returns the current month plus up to 5 prior months (newest first).
+    """
+
+    current: UsageMonth
+    history: list[UsageMonth] = []

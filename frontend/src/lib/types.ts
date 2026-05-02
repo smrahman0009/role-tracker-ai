@@ -330,3 +330,25 @@ export type HiddenListKind = "companies" | "title-keywords" | "publishers";
 export interface UpdateHiddenListRequest {
   items: string[];
 }
+
+// ---------- Usage ----------
+
+export interface FeatureCount {
+  feature: string;
+  count: number;
+  estimated_cost_usd: number;
+}
+
+export interface UsageMonth {
+  year_month: string;
+  jsearch_calls: number;
+  feature_calls: FeatureCount[];
+  estimated_anthropic_cost_usd: number;
+  estimated_openai_cost_usd: number;
+  estimated_total_cost_usd: number;
+}
+
+export interface UsageResponse {
+  current: UsageMonth;
+  history: UsageMonth[];
+}

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -42,6 +43,8 @@ def load_or_embed_resume(
     embedder: Embedder,
     resume_text: str,
     cache_path: Path,
+    *,
+    on_embed: Callable[[], None] | None = None,
 ) -> list[float]:
     """Return the resume embedding, recomputing only if the text changed.
 
@@ -56,6 +59,8 @@ def load_or_embed_resume(
             return cached["vector"]
 
     vector = embedder.embed([resume_text])[0]
+    if on_embed is not None:
+        on_embed()
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"hash": text_hash, "vector": vector}))
     return vector

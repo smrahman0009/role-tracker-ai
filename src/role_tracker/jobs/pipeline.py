@@ -27,6 +27,7 @@ from role_tracker.matching.scorer import (
     rank_jobs,
 )
 from role_tracker.queries.models import SavedQuery
+from role_tracker.usage import NullRecorder, UsageRecorder
 
 
 @dataclass
@@ -54,12 +55,14 @@ def run_matching_pipeline(
     exclude_publishers: list[str],
     limit_per_query: int,
     top_n: int,
+    usage_recorder: UsageRecorder | NullRecorder | None = None,
 ) -> MatchingResult:
     """Fetch → filter → embed → rank.
 
     Returns the top_n ranked ScoredJobs plus pipeline stats. May return
     fewer than top_n if not enough jobs survived filtering.
     """
+    recorder = usage_recorder or NullRecorder()
     enabled_queries = [q for q in queries if q.enabled]
     if not enabled_queries:
         return MatchingResult()
@@ -67,7 +70,10 @@ def run_matching_pipeline(
     # 1. Embed resume (hash-cached on disk to avoid re-embedding when text
     #    is unchanged).
     resume_vector = load_or_embed_resume(
-        embedder, resume_text, resume_embedding_cache_path
+        embedder,
+        resume_text,
+        resume_embedding_cache_path,
+        on_embed=lambda: recorder.feature("embedding"),
     )
 
     # 2. Fetch from each query, dedupe by (title, company).
@@ -78,6 +84,7 @@ def run_matching_pipeline(
             fetched = jsearch_client.fetch_jobs(
                 what=job_query.what, where=job_query.where, limit=limit_per_query
             )
+            recorder.jsearch()
         except Exception:  # noqa: BLE001
             # One query failing shouldn't kill the whole refresh.
             continue
@@ -108,6 +115,7 @@ def run_matching_pipeline(
 
     # 5. Embed jobs + rank.
     job_vectors = embedder.embed([job_to_embedding_text(j) for j in jobs])
+    recorder.feature("embedding")
     ranked = rank_jobs(resume_vector, jobs, job_vectors, top_n=top_n)
     return MatchingResult(
         jobs=ranked,

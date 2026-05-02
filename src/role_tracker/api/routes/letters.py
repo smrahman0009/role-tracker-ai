@@ -31,7 +31,7 @@ from anthropic import Anthropic
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 
-from role_tracker.api.routes.jobs import get_seen_jobs_store
+from role_tracker.api.routes.jobs import get_seen_jobs_store, get_usage_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
     CritiqueScore,
@@ -73,6 +73,7 @@ from role_tracker.screening.why_interested import (
     generate_why_interested,
     polish_why_interested,
 )
+from role_tracker.usage import UsageRecorder, UsageStore
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
 from role_tracker.users.yaml_store import YamlUserProfileStore
@@ -125,6 +126,7 @@ def generate_letter(
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
     user_store: UserProfileStore = Depends(get_user_profile_store),
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> GenerateLetterResponse:
     """Kick off a cover-letter generation. Returns immediately."""
     return _start_generation(
@@ -137,6 +139,7 @@ def generate_letter(
         generation_store=generation_store,
         user_store=user_store,
         client=client,
+        usage_store=usage_store,
     )
 
 
@@ -155,6 +158,7 @@ def regenerate_letter(
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
     user_store: UserProfileStore = Depends(get_user_profile_store),
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> GenerateLetterResponse:
     """Throw away the existing strategy and start over.
 
@@ -174,6 +178,7 @@ def regenerate_letter(
         generation_store=generation_store,
         user_store=user_store,
         client=client,
+        usage_store=usage_store,
     )
 
 
@@ -275,6 +280,7 @@ def refine_letter(
     generation_store: LetterGenerationStore = Depends(get_letter_generation_store),
     user_store: UserProfileStore = Depends(get_user_profile_store),
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> GenerateLetterResponse:
     """Refine an existing letter version with free-text feedback.
 
@@ -324,6 +330,7 @@ def refine_letter(
         generation_store=generation_store,
         user_store=user_store,
         client=client,
+        usage_store=usage_store,
     )
     return GenerateLetterResponse(generation_id=generation_id, status="pending")
 
@@ -396,11 +403,12 @@ def edit_letter(
     response_model=PolishLetterResponse,
 )
 def polish_letter(
-    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    user_id: str,
     job_id: str,  # noqa: ARG001
     version: int,  # noqa: ARG001
     body: PolishLetterRequest,
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> PolishLetterResponse:
     """Fix grammar / clarity in user-edited cover letter text.
 
@@ -411,6 +419,7 @@ def polish_letter(
     the manual-edit endpoint as before).
     """
     polished = polish_cover_letter(text=body.text, client=client)
+    UsageRecorder(usage_store, user_id).feature("cover_letter_polish")
     return PolishLetterResponse(
         text=polished, word_count=len(polished.split())
     )
@@ -544,6 +553,7 @@ def generate_why_interested_answer(
     seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     resume_store: ResumeStore = Depends(get_resume_store),
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> WhyInterestedResponse:
     """Generate a 2-3 sentence answer to "Why are you interested?" for the
     employer's apply form. Synchronous — single Claude Haiku call, ~5s.
@@ -576,6 +586,7 @@ def generate_why_interested_answer(
         target_words=body.target_words,
         client=client,
     )
+    UsageRecorder(usage_store, user_id).feature("why_interested_generate")
     return WhyInterestedResponse(text=answer, word_count=len(answer.split()))
 
 
@@ -584,10 +595,11 @@ def generate_why_interested_answer(
     response_model=WhyInterestedResponse,
 )
 def polish_why_interested_answer(
-    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    user_id: str,
     job_id: str,  # noqa: ARG001
     body: PolishWhyInterestedRequest,
     client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> WhyInterestedResponse:
     """Fix grammar / clarity in user-edited why-interested text.
 
@@ -595,6 +607,7 @@ def polish_why_interested_answer(
     length; doesn't introduce new ideas.
     """
     polished = polish_why_interested(text=body.text, client=client)
+    UsageRecorder(usage_store, user_id).feature("why_interested_polish")
     return WhyInterestedResponse(
         text=polished, word_count=len(polished.split())
     )
@@ -614,6 +627,7 @@ def _start_generation(
     generation_store: LetterGenerationStore,
     user_store: UserProfileStore,
     client: Anthropic,
+    usage_store: UsageStore,
 ) -> GenerateLetterResponse:
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
@@ -628,6 +642,7 @@ def _start_generation(
         generation_store=generation_store,
         user_store=user_store,
         client=client,
+        usage_store=usage_store,
     )
     return GenerateLetterResponse(generation_id=generation_id, status="pending")
 
@@ -704,6 +719,7 @@ def _run_generation_in_background(
     generation_store: LetterGenerationStore,
     user_store: UserProfileStore,
     client: Anthropic,
+    usage_store: UsageStore,
 ) -> None:
     """The agent run, executed after the 202 response is sent."""
     try:
@@ -774,6 +790,7 @@ def _run_generation_in_background(
         generation_store.mark_done(
             user_id, generation_id, saved_version=saved.version
         )
+        UsageRecorder(usage_store, user_id).feature("cover_letter_generate")
 
     except Exception as exc:  # noqa: BLE001
         generation_store.mark_failed(user_id, generation_id, error=str(exc))
@@ -800,6 +817,7 @@ def _run_refine_in_background(
     generation_store: LetterGenerationStore,
     user_store: UserProfileStore,
     client: Anthropic,
+    usage_store: UsageStore,
 ) -> None:
     """Run a single Sonnet call to refine the existing letter."""
     try:
@@ -892,6 +910,7 @@ def _run_refine_in_background(
         generation_store.mark_done(
             user_id, generation_id, saved_version=saved.version
         )
+        UsageRecorder(usage_store, user_id).feature("cover_letter_refine")
     except Exception as exc:  # noqa: BLE001
         generation_store.mark_failed(user_id, generation_id, error=str(exc))
 

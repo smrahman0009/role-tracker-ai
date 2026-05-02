@@ -56,6 +56,16 @@ export function Layout() {
               My applications
             </NavLink>
             <NavLink
+              to="/usage"
+              className={({ isActive }) =>
+                isActive
+                  ? "text-xs font-medium text-slate-900"
+                  : "text-xs text-slate-500 hover:text-slate-700 transition-colors"
+              }
+            >
+              Usage
+            </NavLink>
+            <NavLink
               to="/settings"
               className={({ isActive }) =>
                 isActive

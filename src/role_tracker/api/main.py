@@ -22,6 +22,7 @@ from role_tracker.api.routes import (
     profile,
     queries,
     resume,
+    usage,
 )
 from role_tracker.config import Settings
 
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(letters.router)
     app.include_router(profile.router)
+    app.include_router(usage.router)
 
     return app
 

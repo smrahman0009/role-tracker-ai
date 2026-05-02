@@ -30,6 +30,7 @@ import LoginPage from "@/pages/LoginPage";
 import ManualJobsPage from "@/pages/ManualJobsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import SettingsPage from "@/pages/SettingsPage";
+import UsagePage from "@/pages/UsagePage";
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
               <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/added-jobs" element={<ManualJobsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/usage" element={<UsagePage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

@@ -76,6 +76,7 @@ from role_tracker.queries.base import QueryStore
 from role_tracker.queries.models import SavedQuery
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
+from role_tracker.usage import FileUsageStore, UsageRecorder, UsageStore
 from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(
@@ -111,6 +112,11 @@ def get_seen_jobs_store() -> SeenJobsStore:
     return FileSeenJobsStore()
 
 
+def get_usage_store() -> UsageStore:
+    """UsageStore factory — overridden by tests with a tmp-rooted store."""
+    return FileUsageStore()
+
+
 def get_letter_store_for_cleanup() -> LetterStore:
     """LetterStore factory — local copy to avoid a circular import on
     letters.py (which imports get_seen_jobs_store from this module).
@@ -140,6 +146,7 @@ def get_pipeline_runner() -> PipelineRunner:
         country="ca",
     )
     user_store = YamlUserProfileStore()
+    usage_store = get_usage_store()
 
     def run(
         user_id: str,
@@ -169,6 +176,7 @@ def get_pipeline_runner() -> PipelineRunner:
             exclude_publishers = []
 
         cache_path = Path(f"data/resumes/{user_id}.embedding.json")
+        recorder = UsageRecorder(usage_store, user_id)
         return run_matching_pipeline(
             queries=queries,
             resume_text=resume_text,
@@ -180,6 +188,7 @@ def get_pipeline_runner() -> PipelineRunner:
             exclude_publishers=exclude_publishers,
             limit_per_query=limit_per_query,
             top_n=top_n,
+            usage_recorder=recorder,
         )
 
     return run
@@ -265,6 +274,21 @@ def list_jobs(
         queries_run=snapshot.queries_run,
         top_n_cap=snapshot.top_n_cap,
     )
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+def clear_jobs_snapshot(
+    user_id: str,
+    cache: JobsCache = Depends(get_jobs_cache),
+) -> Response:
+    """Clear the cached search snapshot.
+
+    Only the snapshot is affected — applied records, letters, manual
+    jobs, and seen_jobs all remain. The home page will show its empty
+    state until the next search or refresh.
+    """
+    cache.clear_snapshot(user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/applications", response_model=ApplicationListResponse)
@@ -437,9 +461,10 @@ def _refresh_status_response(
 
 @router.post("/manual/fetch", response_model=FetchJobUrlResponse)
 def fetch_job_url(
-    user_id: str,  # noqa: ARG001 — kept for path-shape consistency
+    user_id: str,
     body: FetchJobUrlRequest,
     client: Anthropic = Depends(get_extraction_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> FetchJobUrlResponse:
     """Best-effort extraction of title/company/JD from a URL.
 
@@ -466,6 +491,7 @@ def fetch_job_url(
         refined = refine_with_llm(
             description=extracted.description, client=client
         )
+        UsageRecorder(usage_store, user_id).feature("url_extract_llm_refine")
         # Prefer LLM extraction over page metadata: the JD body knows
         # who's actually hiring, where the role is, and which paragraphs
         # are role-specific vs surrounding chrome.
@@ -498,6 +524,7 @@ def create_manual_job(
     body: ManualJobRequest,
     resume_store: ResumeStore = Depends(get_resume_store),
     seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> JobDetailResponse:
     """Save a manually-added job into seen_jobs.
 
@@ -524,7 +551,9 @@ def create_manual_job(
         employment_type=body.employment_type.strip().upper(),
     )
 
-    score = _score_manual_job(user_id, posting, resume_store)
+    score = _score_manual_job(
+        user_id, posting, resume_store, UsageRecorder(usage_store, user_id)
+    )
     seen_store.upsert_many(user_id, [ScoredJob(job=posting, score=score)])
 
     return _to_detail(
@@ -615,7 +644,10 @@ def _hash_for_manual_job(*, url: str, title: str, company: str) -> str:
 
 
 def _score_manual_job(
-    user_id: str, job: JobPosting, resume_store: ResumeStore
+    user_id: str,
+    job: JobPosting,
+    resume_store: ResumeStore,
+    recorder: UsageRecorder,
 ) -> float:
     """Embed the JD against the user's resume and return cosine
     similarity. Returns 0.0 silently if anything goes wrong (no resume
@@ -648,8 +680,14 @@ def _score_manual_job(
             model=settings.openai_embedding_model,
         )
         cache_path = Path(f"data/resumes/{user_id}.embedding.json")
-        resume_vec = load_or_embed_resume(embedder, resume_text, cache_path)
+        resume_vec = load_or_embed_resume(
+            embedder,
+            resume_text,
+            cache_path,
+            on_embed=lambda: recorder.feature("embedding"),
+        )
         job_vec = embedder.embed([job_to_embedding_text(job)])[0]
+        recorder.feature("embedding")
         return float(cosine_similarity(resume_vec, job_vec))
     except Exception:  # noqa: BLE001
         return 0.0
