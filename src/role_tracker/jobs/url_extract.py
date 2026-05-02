@@ -17,7 +17,10 @@ Honest caveats:
 
 from __future__ import annotations
 
+import json
+
 import httpx
+from anthropic import Anthropic
 from pydantic import BaseModel
 import trafilatura
 
@@ -95,3 +98,69 @@ def _clean_company(raw: str) -> str:
         if s.lower().endswith(suffix.lower()):
             s = s[: -len(suffix)].strip()
     return s
+
+
+# ----- LLM-refined extraction (handles recruiter / aggregator pages) -----
+
+
+_LLM_MODEL = "claude-haiku-4-5-20251001"
+
+_LLM_SYSTEM = """\
+You read a job description and pull out the actual hiring company plus
+a clean role title. The text often comes from a recruiter agency or job
+aggregator — "Robert Half", "Aerotek", "Insight Global", "LinkedIn",
+"Indeed", etc. — but the candidate cares about the COMPANY THAT WILL
+EMPLOY THEM, not the publisher.
+
+OUTPUT
+Return ONLY a JSON object with these two keys:
+  {"company": "...", "title": "..."}
+
+RULES
+- "company" = the actual employer mentioned in the JD body. If the JD
+  says "Our client, ABC Corp, is hiring..." then company = "ABC Corp",
+  NOT the recruiter agency. If the JD says "We at ABC Corp are looking
+  for..." then company = "ABC Corp".
+- If the JD never names the actual employer (recruiter is keeping it
+  confidential), set company to "" — DO NOT guess.
+- "title" = the clean role title from the JD. Strip aggregator noise
+  like "Job ID 12345 - ", "(Hybrid - Remote OK) - ", "Apply Now: ",
+  date prefixes, and leading/trailing whitespace.
+- If the JD doesn't have a clear title, set title to "".
+- Output the JSON object only — no preamble, no markdown fences.
+"""
+
+
+def refine_with_llm(
+    *, description: str, client: Anthropic, model: str = _LLM_MODEL
+) -> dict[str, str]:
+    """Pull the hiring company + clean title from the JD body via Haiku.
+
+    Returns {"company": str, "title": str}. Either field may be empty
+    when the JD doesn't supply it (recruiter keeping employer
+    confidential, etc.). Returns empty values silently on any LLM
+    failure — caller decides whether to fall back to Trafilatura's
+    metadata-based extraction.
+    """
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=200,
+            system=_LLM_SYSTEM,
+            messages=[{"role": "user", "content": description.strip()[:8000]}],
+        )
+        text = "".join(
+            b.text
+            for b in response.content
+            if getattr(b, "type", None) == "text"
+        ).strip()
+        # Strip optional markdown fence the model occasionally produces.
+        if text.startswith("```"):
+            text = text.strip("`").lstrip("json").strip()
+        parsed = json.loads(text)
+        return {
+            "company": str(parsed.get("company", "")).strip(),
+            "title": str(parsed.get("title", "")).strip(),
+        }
+    except Exception:  # noqa: BLE001
+        return {"company": "", "title": ""}

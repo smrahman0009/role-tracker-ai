@@ -17,6 +17,7 @@ from role_tracker.api.routes.jobs import (
     get_jobs_cache,
     get_pipeline_runner,
     get_refresh_store,
+    get_extraction_anthropic_client,
     get_seen_jobs_store,
 )
 from role_tracker.api.routes.queries import get_query_store
@@ -90,6 +91,9 @@ def client(
     app.dependency_overrides[get_seen_jobs_store] = lambda: FileSeenJobsStore(
         root=tmp_path / "seen"
     )
+    # Stub Anthropic client used by the URL-extraction refine step.
+    # Tests that exercise the LLM path monkeypatch refine_with_llm directly.
+    app.dependency_overrides[get_extraction_anthropic_client] = lambda: object()
     app.dependency_overrides[get_pipeline_runner] = (
         lambda: lambda _user_id, _queries, _resume, **_: _fake_pipeline_results()
     )
@@ -741,3 +745,72 @@ def test_fetch_job_url_validates_min_length(client: TestClient) -> None:
         json={"url": "x"},
     )
     assert response.status_code == 422
+
+
+def test_fetch_job_url_uses_llm_refinement_for_recruiter_pages(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """When Trafilatura's metadata says the company is a recruiter,
+    LLM refinement on the JD body overrides it with the actual employer."""
+    import role_tracker.api.routes.jobs as jobs_module
+    from role_tracker.jobs.url_extract import ExtractedJob
+
+    # Pretend Trafilatura extracted a recruiter-flavoured page.
+    monkeypatch.setattr(
+        jobs_module,
+        "extract_job_from_url",
+        lambda _url: ExtractedJob(
+            title="Senior ML Engineer",
+            company="Robert Half",  # the recruiter, wrong
+            description=(
+                "Our client, ABC Corp, is looking for a Senior ML "
+                "Engineer to build production recommendation systems. "
+                "ABC Corp is a fintech based in Halifax. 5+ years required."
+            ),
+        ),
+    )
+    # Stub the LLM to return the actual employer.
+    monkeypatch.setattr(
+        jobs_module,
+        "refine_with_llm",
+        lambda **_: {"company": "ABC Corp", "title": "Senior ML Engineer"},
+    )
+
+    response = client.post(
+        "/users/alice/jobs/manual/fetch",
+        json={"url": "https://recruiter.example/job/123"},
+    )
+    body = response.json()
+    assert body["company"] == "ABC Corp"
+    assert body["title"] == "Senior ML Engineer"
+
+
+def test_fetch_job_url_keeps_metadata_when_llm_returns_blank(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """If the LLM can't identify the employer (fully confidential),
+    fall back to whatever Trafilatura's metadata gave us."""
+    import role_tracker.api.routes.jobs as jobs_module
+    from role_tracker.jobs.url_extract import ExtractedJob
+
+    monkeypatch.setattr(
+        jobs_module,
+        "extract_job_from_url",
+        lambda _url: ExtractedJob(
+            title="ML Engineer",
+            company="Acme Direct",
+            description="Description body that's longer than two hundred characters... " * 5,
+        ),
+    )
+    monkeypatch.setattr(
+        jobs_module,
+        "refine_with_llm",
+        lambda **_: {"company": "", "title": ""},
+    )
+    response = client.post(
+        "/users/alice/jobs/manual/fetch",
+        json={"url": "https://acme.example/job/9"},
+    )
+    body = response.json()
+    assert body["company"] == "Acme Direct"
+    assert body["title"] == "ML Engineer"

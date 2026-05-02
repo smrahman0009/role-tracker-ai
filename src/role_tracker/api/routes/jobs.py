@@ -19,6 +19,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from anthropic import Anthropic
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -61,7 +62,10 @@ from role_tracker.jobs.refresh_state import (
     RefreshTaskStore,
 )
 from role_tracker.jobs.seen import FileSeenJobsStore, SeenJobsStore
-from role_tracker.jobs.url_extract import extract_job_from_url
+from role_tracker.jobs.url_extract import (
+    extract_job_from_url,
+    refine_with_llm,
+)
 from role_tracker.matching.embeddings import Embedder
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.queries.base import QueryStore
@@ -101,6 +105,16 @@ def get_applied_store() -> AppliedStore:
 
 def get_seen_jobs_store() -> SeenJobsStore:
     return FileSeenJobsStore()
+
+
+def get_extraction_anthropic_client() -> Anthropic:
+    """Anthropic client used by the URL-extraction refine step. Mirrors
+    letters' factory but kept local to avoid a circular import. Tests
+    override with a stub."""
+    settings = Settings()
+    if not settings.anthropic_api_key:
+        return Anthropic(api_key="placeholder")
+    return Anthropic(api_key=settings.anthropic_api_key)
 
 
 def get_pipeline_runner() -> PipelineRunner:
@@ -407,18 +421,42 @@ def _refresh_status_response(
 def fetch_job_url(
     user_id: str,  # noqa: ARG001 — kept for path-shape consistency
     body: FetchJobUrlRequest,
+    client: Anthropic = Depends(get_extraction_anthropic_client),
 ) -> FetchJobUrlResponse:
     """Best-effort extraction of title/company/JD from a URL.
 
-    Always returns 200 with a FetchJobUrlResponse — empty fields signal
-    the extractor couldn't pull that piece (Workday SPAs, login walls,
-    Cloudflare blocks). The frontend then asks the user to paste the JD
-    into the textarea instead.
+    Two passes:
+      1. Trafilatura grabs the JD body + page metadata (fast, free).
+      2. If we got JD body text, send it to Claude Haiku to extract the
+         actual hiring company and clean role title from the body. This
+         handles recruiter / aggregator pages where the page metadata
+         points to the publisher, not the actual employer.
+
+    Always returns 200 — empty fields signal the extractor couldn't
+    pull that piece. The frontend then asks the user to paste manually.
     """
     extracted = extract_job_from_url(body.url)
+    title = extracted.title
+    company = extracted.company
+
+    # LLM refinement is only worthwhile when we have description text.
+    # Without a body, Haiku has nothing to read past the page metadata
+    # we already have.
+    if extracted.description:
+        refined = refine_with_llm(
+            description=extracted.description, client=client
+        )
+        # Prefer LLM extraction over page metadata: the JD body knows
+        # who's actually hiring; the page metadata only knows who's
+        # hosting the listing.
+        if refined["company"]:
+            company = refined["company"]
+        if refined["title"]:
+            title = refined["title"]
+
     return FetchJobUrlResponse(
-        title=extracted.title,
-        company=extracted.company,
+        title=title,
+        company=company,
         description=extracted.description,
     )
 
