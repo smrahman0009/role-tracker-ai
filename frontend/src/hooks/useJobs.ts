@@ -187,6 +187,17 @@ export function useDeleteManualJob() {
   });
 }
 
+export function useClearJobsSnapshot() {
+  const { userId } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.del<void>(`/users/${userId}/jobs`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs", userId] });
+    },
+  });
+}
+
 export function useApplications() {
   const { userId } = useAuth();
   return useQuery<ApplicationListResponse>({

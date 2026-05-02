@@ -8,7 +8,7 @@
  * of these jobs from earlier searches.
  */
 
-import { Loader2, Plus, Search } from "lucide-react";
+import { Eraser, Loader2, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AddManualJobDialog } from "@/components/AddManualJobDialog";
@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { toast } from "@/components/ui/Toaster";
 import {
   useApplyJob,
+  useClearJobsSnapshot,
   useJobs,
   useSearchJobs,
   useSearchStatus,
@@ -154,6 +155,20 @@ export default function JobListPage() {
   const lastRefreshedAt = allJobsQuery.data?.last_refreshed_at;
   const [addingManual, setAddingManual] = useState(false);
 
+  const clearMutation = useClearJobsSnapshot();
+  const handleClearResults = () => {
+    if (clearMutation.isPending) return;
+    clearMutation.mutate(undefined, {
+      onSuccess: () => {
+        setLastSpec(null);
+        saveLastSpec(null);
+        setActiveFilterTerms({ what: [], where: [] });
+        toast.success("Cleared results");
+      },
+      onError: (err) => toast.error(err.message),
+    });
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-4">
       <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -207,11 +222,23 @@ export default function JobListPage() {
         <EmptyResults hasSearched={lastSpec != null} />
       ) : (
         <div className="space-y-4 pt-2">
-          <ResultsHeader
-            spec={lastSpec}
-            data={allJobsQuery.data}
-            lastRefreshedAt={lastRefreshedAt}
-          />
+          <div className="flex items-start justify-between gap-3">
+            <ResultsHeader
+              spec={lastSpec}
+              data={allJobsQuery.data}
+              lastRefreshedAt={lastRefreshedAt}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearResults}
+              disabled={clearMutation.isPending}
+              title="Clear the cached search snapshot. Applied jobs and letters are kept."
+            >
+              <Eraser />
+              {clearMutation.isPending ? "Clearing…" : "Clear results"}
+            </Button>
+          </div>
 
           <Tabs value={filter} onValueChange={(v) => setFilter(v as JobFilter)}>
             <TabsList>
@@ -401,9 +428,13 @@ function _coerceStringList(value: unknown): string[] | null {
   return null;
 }
 
-function saveLastSpec(spec: SearchJobsRequest): void {
+function saveLastSpec(spec: SearchJobsRequest | null): void {
   try {
-    localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(spec));
+    if (spec === null) {
+      localStorage.removeItem(LAST_SEARCH_KEY);
+    } else {
+      localStorage.setItem(LAST_SEARCH_KEY, JSON.stringify(spec));
+    }
   } catch {
     // localStorage can be disabled / full — ignore.
   }

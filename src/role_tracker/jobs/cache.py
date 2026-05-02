@@ -62,6 +62,7 @@ class JobsCache(Protocol):
         queries_run: int = 0,
         top_n_cap: int = 0,
     ) -> JobsSnapshot: ...
+    def clear_snapshot(self, user_id: str) -> bool: ...
 
 
 class FileJobsCache:
@@ -98,6 +99,19 @@ class FileJobsCache:
         tmp.write_text(snapshot.model_dump_json(indent=2) + "\n")
         tmp.replace(path)
         return snapshot
+
+    def clear_snapshot(self, user_id: str) -> bool:
+        """Delete the cached snapshot. Returns True if a file was removed.
+
+        Only touches the snapshot — seen_jobs, applied records, letters,
+        and usage counters are unaffected, so anything the user has acted
+        on is preserved.
+        """
+        path = self._path(user_id)
+        if not path.exists():
+            return False
+        path.unlink()
+        return True
 
     def _path(self, user_id: str) -> Path:
         return self.root / user_id / "snapshot.json"
