@@ -18,6 +18,7 @@ Honest caveats:
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 from anthropic import Anthropic
@@ -43,17 +44,23 @@ def extract_job_from_url(
 ) -> ExtractedJob:
     """Fetch the URL and try to pull job-posting fields.
 
+    Strategy:
+      1. ATS-specific JSON endpoints first (Workable, Greenhouse, Lever).
+         These ATSes render their public job pages with a React SPA — the
+         server-side HTML is an empty shell and Trafilatura can't extract
+         anything. But each ATS exposes a no-auth JSON API that the SPA
+         itself uses, returning the full structured posting.
+      2. Fall back to Trafilatura on the rendered HTML for everything
+         else (static company career pages, blog-style postings).
+
     Returns an ExtractedJob with whatever we found. Empty fields signal
-    that we couldn't extract that piece — the frontend will show the
-    textarea prefilled with whatever description we got, blank if none.
-    Never raises on fetch / parse failure.
+    that we couldn't extract that piece — the frontend then asks the
+    user to paste manually. Never raises on fetch / parse failure.
     """
     client = http_client or httpx.Client(
         follow_redirects=True,
         timeout=15.0,
         headers={
-            # Some sites 403 on the default httpx UA. Generic Chrome UA
-            # is enough for the static-HTML targets we care about.
             "User-Agent": (
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -62,6 +69,16 @@ def extract_job_from_url(
         },
     )
     try:
+        # 1. ATS-specific extractors (no Trafilatura needed).
+        for matcher in _ATS_EXTRACTORS:
+            try:
+                ats_result = matcher(url, client)
+            except Exception:  # noqa: BLE001
+                ats_result = None
+            if ats_result is not None:
+                return ats_result
+
+        # 2. Generic fallback — fetch + Trafilatura.
         try:
             response = client.get(url)
             response.raise_for_status()
@@ -78,9 +95,6 @@ def extract_job_from_url(
 
     metadata = trafilatura.extract_metadata(html)
     title = (metadata.title if metadata and metadata.title else "") or ""
-    # Site-name often holds the company on career-page subdomains
-    # (e.g. "Acme Careers"). Strip the trailing " Careers" / " Jobs"
-    # noise so the user gets a sensible default.
     raw_company = (metadata.sitename if metadata and metadata.sitename else "") or ""
     company = _clean_company(raw_company)
 
@@ -89,6 +103,136 @@ def extract_job_from_url(
         company=company.strip(),
         description=description.strip(),
     )
+
+
+# ----- ATS-specific JSON extractors -----
+#
+# Each function takes (url, http_client) and returns ExtractedJob if it
+# matched its ATS pattern AND fetched the JSON successfully, else None.
+# Order in _ATS_EXTRACTORS doesn't matter since the URL patterns are
+# disjoint.
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(s: str) -> str:
+    """Convert ATS HTML field (description / requirements / benefits)
+    to plain text. ATS APIs return HTML strings; we want clean prose
+    for the JD textarea + downstream LLM cleaning."""
+    if not s:
+        return ""
+    text = _HTML_TAG_RE.sub("", s)
+    # Collapse multiple blank lines that show up after tag stripping.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+_WORKABLE_RE = re.compile(
+    r"^https?://apply\.workable\.com/([^/]+)/j/([^/?#]+)", re.IGNORECASE
+)
+
+
+def _extract_workable(url: str, client: httpx.Client) -> ExtractedJob | None:
+    m = _WORKABLE_RE.match(url)
+    if not m:
+        return None
+    tenant, shortcode = m.group(1), m.group(2)
+    api = (
+        f"https://apply.workable.com/api/v1/accounts/"
+        f"{tenant}/jobs/{shortcode}"
+    )
+    r = client.get(api, headers={"Accept": "application/json"})
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    title = (data.get("title") or "").strip()
+    loc = data.get("location") or {}
+    location_parts = [
+        loc.get("city") or "",
+        loc.get("region") or "",
+        loc.get("country") or "",
+    ]
+    # Compose the JD from description + requirements + benefits — these
+    # are separate HTML fields in Workable's schema. We strip tags here
+    # so the JD is plain text the LLM can clean further.
+    parts = [
+        _strip_html(data.get("description") or ""),
+        _strip_html(data.get("requirements") or ""),
+        _strip_html(data.get("benefits") or ""),
+    ]
+    description = "\n\n".join(p for p in parts if p)
+    return ExtractedJob(
+        title=title,
+        company=tenant.replace("-", " ").title(),
+        description=description,
+    )
+
+
+_GREENHOUSE_RE = re.compile(
+    r"^https?://boards\.greenhouse\.io/([^/]+)/jobs/(\d+)", re.IGNORECASE
+)
+
+
+def _extract_greenhouse(
+    url: str, client: httpx.Client
+) -> ExtractedJob | None:
+    m = _GREENHOUSE_RE.match(url)
+    if not m:
+        return None
+    board, job_id = m.group(1), m.group(2)
+    api = (
+        f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{job_id}"
+    )
+    r = client.get(api, headers={"Accept": "application/json"})
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    return ExtractedJob(
+        title=(data.get("title") or "").strip(),
+        company=board.replace("-", " ").title(),
+        description=_strip_html(data.get("content") or ""),
+    )
+
+
+_LEVER_RE = re.compile(
+    r"^https?://jobs\.lever\.co/([^/]+)/([^/?#]+)", re.IGNORECASE
+)
+
+
+def _extract_lever(url: str, client: httpx.Client) -> ExtractedJob | None:
+    m = _LEVER_RE.match(url)
+    if not m:
+        return None
+    company, posting_id = m.group(1), m.group(2)
+    api = f"https://api.lever.co/v0/postings/{company}/{posting_id}"
+    r = client.get(
+        api, params={"mode": "json"}, headers={"Accept": "application/json"}
+    )
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    # Lever splits the JD across descriptionPlain + lists[].content
+    parts: list[str] = []
+    if data.get("descriptionPlain"):
+        parts.append(data["descriptionPlain"].strip())
+    elif data.get("description"):
+        parts.append(_strip_html(data["description"]))
+    for lst in data.get("lists") or []:
+        text = (lst.get("text") or "").strip()
+        content = _strip_html(lst.get("content") or "")
+        if text or content:
+            parts.append(f"{text}\n{content}".strip())
+    if data.get("additionalPlain"):
+        parts.append(data["additionalPlain"].strip())
+    return ExtractedJob(
+        title=(data.get("text") or "").strip(),
+        company=company.replace("-", " ").title(),
+        description="\n\n".join(p for p in parts if p),
+    )
+
+
+_ATS_EXTRACTORS = (_extract_workable, _extract_greenhouse, _extract_lever)
 
 
 def _clean_company(raw: str) -> str:
