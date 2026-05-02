@@ -15,12 +15,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/lib/api";
 import type {
+  ApplicationListResponse,
   FetchJobUrlRequest,
   FetchJobUrlResponse,
   JobDetailResponse,
   JobListFilters,
   JobListResponse,
   ManualJobRequest,
+  MarkAppliedRequest,
   RefreshJobResponse,
   RefreshStatusResponse,
   SearchJobsRequest,
@@ -99,10 +101,22 @@ export function useApplyJob() {
   const { userId } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (jobId: string) =>
-      api.post<void>(`/users/${userId}/jobs/${jobId}/applied`),
+    mutationFn: ({
+      jobId,
+      letterVersionUsed,
+    }: {
+      jobId: string;
+      letterVersionUsed?: number | null;
+    }) =>
+      api.post<void>(
+        `/users/${userId}/jobs/${jobId}/applied`,
+        {
+          letter_version_used: letterVersionUsed ?? null,
+        } satisfies MarkAppliedRequest,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs", userId] });
+      queryClient.invalidateQueries({ queryKey: ["applications", userId] });
     },
   });
 }
@@ -115,6 +129,7 @@ export function useUnapplyJob() {
       api.del<void>(`/users/${userId}/jobs/${jobId}/applied`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs", userId] });
+      queryClient.invalidateQueries({ queryKey: ["applications", userId] });
     },
   });
 }
@@ -153,6 +168,33 @@ export function useManualJobs() {
     queryKey: ["manual-jobs", userId],
     queryFn: () =>
       api.get<JobListResponse>(`/users/${userId}/jobs/manual`),
+    enabled: Boolean(userId),
+  });
+}
+
+export function useDeleteManualJob() {
+  const { userId } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      api.del<void>(`/users/${userId}/jobs/manual/${encodeURIComponent(jobId)}`),
+    onSuccess: () => {
+      // Invalidate everywhere this job could appear.
+      queryClient.invalidateQueries({ queryKey: ["manual-jobs", userId] });
+      queryClient.invalidateQueries({ queryKey: ["applications", userId] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", userId] });
+    },
+  });
+}
+
+export function useApplications() {
+  const { userId } = useAuth();
+  return useQuery<ApplicationListResponse>({
+    queryKey: ["applications", userId],
+    queryFn: () =>
+      api.get<ApplicationListResponse>(
+        `/users/${userId}/jobs/applications`,
+      ),
     enabled: Boolean(userId),
   });
 }

@@ -41,9 +41,12 @@ __all__ = [
     "UpdateHiddenListRequest",
     "UpdateProfileRequest",
     "UpdateQueryRequest",
+    "ApplicationListResponse",
+    "ApplicationSummary",
     "FetchJobUrlRequest",
     "FetchJobUrlResponse",
     "ManualJobRequest",
+    "MarkAppliedRequest",
     "PolishLetterRequest",
     "PolishLetterResponse",
     "PolishWhyInterestedRequest",
@@ -207,6 +210,36 @@ class SearchJobsRequest(BaseModel):
     # Optional per-search override for the ranking cap. None falls back
     # to the user's profile default (UserProfile.top_n_jobs).
     top_n: int | None = Field(default=None, ge=1, le=200)
+
+
+class MarkAppliedRequest(BaseModel):
+    """Body of POST /jobs/{job_id}/applied — captures what the user
+    sent at the moment they clicked Mark Applied. All fields optional;
+    backend snapshots resume metadata server-side regardless of body."""
+
+    letter_version_used: int | None = None
+
+
+class ApplicationSummary(BaseModel):
+    """My Applications card shape — JobSummary plus the rich record
+    captured at apply time."""
+
+    job: JobSummary
+    applied_at: datetime | None = None
+    resume_filename: str = ""
+    resume_sha256: str = ""
+    letter_version_used: int | None = None
+    # `True` when the resume currently on file has a different sha256
+    # from the snapshot — meaning the user replaced their resume after
+    # applying. The frontend uses this to render a "now replaced" tag.
+    resume_replaced_since: bool = False
+
+
+class ApplicationListResponse(BaseModel):
+    """Body of GET /jobs/applications."""
+
+    applications: list[ApplicationSummary]
+    total: int
 
 
 class FetchJobUrlRequest(BaseModel):

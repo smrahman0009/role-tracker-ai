@@ -103,6 +103,26 @@ export interface RefreshStatusResponse {
   error: string | null;
 }
 
+/** Body for POST /jobs/{id}/applied — captured at apply time. */
+export interface MarkAppliedRequest {
+  letter_version_used?: number | null;
+}
+
+/** Per-application audit record on the My Applications page. */
+export interface ApplicationSummary {
+  job: JobSummary;
+  applied_at: string | null;
+  resume_filename: string;
+  resume_sha256: string;
+  letter_version_used: number | null;
+  resume_replaced_since: boolean;
+}
+
+export interface ApplicationListResponse {
+  applications: ApplicationSummary[];
+  total: number;
+}
+
 /** Body for POST /jobs/manual/fetch — best-effort URL extraction. */
 export interface FetchJobUrlRequest {
   url: string;

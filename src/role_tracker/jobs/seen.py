@@ -32,6 +32,9 @@ DEFAULT_ROOT = Path("data/seen_jobs")
 class SeenJobsStore(Protocol):
     def get(self, user_id: str, job_id: str) -> StoredScoredJob | None: ...
     def upsert_many(self, user_id: str, scored: list[ScoredJob]) -> None: ...
+    def remove(self, user_id: str, job_id: str) -> bool:
+        """Delete one job. Returns True if removed, False if it wasn't there."""
+        ...
 
 
 class FileSeenJobsStore:
@@ -53,6 +56,14 @@ class FileSeenJobsStore:
         for s in scored:
             existing[s.job.id] = StoredScoredJob.from_scored(s)
         self._save(user_id, list(existing.values()))
+
+    def remove(self, user_id: str, job_id: str) -> bool:
+        existing = self._load(user_id)
+        kept = [e for e in existing if e.job.id != job_id]
+        if len(kept) == len(existing):
+            return False
+        self._save(user_id, kept)
+        return True
 
     # ----- internals -----
 

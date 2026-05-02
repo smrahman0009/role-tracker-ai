@@ -144,7 +144,7 @@ export default function JobListPage() {
         onError: (err) => toast.error(err.message),
       });
     } else {
-      applyMutation.mutate(job.job_id, {
+      applyMutation.mutate({ jobId: job.job_id }, {
         onSuccess: () => toast.success(`Marked applied: ${job.title}`),
         onError: (err) => toast.error(err.message),
       });

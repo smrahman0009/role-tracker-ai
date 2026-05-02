@@ -4,7 +4,7 @@
  * filters seen_jobs by source='manual'.
  */
 
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -12,9 +12,18 @@ import { AddManualJobDialog } from "@/components/AddManualJobDialog";
 import { JobCard } from "@/components/JobCard";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toaster";
 import {
   useApplyJob,
+  useDeleteManualJob,
   useManualJobs,
   useUnapplyJob,
 } from "@/hooks/useJobs";
@@ -24,7 +33,9 @@ export default function ManualJobsPage() {
   const query = useManualJobs();
   const applyMutation = useApplyJob();
   const unapplyMutation = useUnapplyJob();
+  const deleteMutation = useDeleteManualJob();
   const [adding, setAdding] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null);
 
   const jobs = query.data?.jobs ?? [];
 
@@ -38,7 +49,7 @@ export default function ManualJobsPage() {
         onError: (err) => toast.error(err.message),
       });
     } else {
-      applyMutation.mutate(job.job_id, {
+      applyMutation.mutate({ jobId: job.job_id }, {
         onSuccess: () => {
           toast.success(`Marked applied: ${job.title}`);
           query.refetch();
@@ -46,6 +57,22 @@ export default function ManualJobsPage() {
         onError: (err) => toast.error(err.message),
       });
     }
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    deleteMutation.mutate(target.job_id, {
+      onSuccess: () => {
+        toast.success(`Removed ${target.title}`);
+        setDeleteTarget(null);
+        query.refetch();
+      },
+      onError: (err) => {
+        toast.error(`Couldn't delete: ${err.message}`);
+        setDeleteTarget(null);
+      },
+    });
   };
 
   return (
@@ -119,20 +146,77 @@ export default function ManualJobsPage() {
           </p>
           <div className="flex flex-col gap-3">
             {jobs.map((job) => (
-              <JobCard
-                key={job.job_id}
-                job={job}
-                onToggleApplied={handleToggleApplied}
-                isToggling={
-                  applyMutation.isPending || unapplyMutation.isPending
-                }
-              />
+              <div key={job.job_id} className="relative group">
+                <JobCard
+                  job={job}
+                  onToggleApplied={handleToggleApplied}
+                  isToggling={
+                    applyMutation.isPending || unapplyMutation.isPending
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(job);
+                  }}
+                  className="absolute top-3 right-3 p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+                  title="Remove this added job"
+                  aria-label={`Remove ${job.title}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ))}
           </div>
         </>
       )}
 
       <AddManualJobDialog open={adding} onOpenChange={setAdding} />
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove added job?</DialogTitle>
+            <DialogDescription>
+              This will delete the job, any cover letters generated for
+              it, and remove it from My Applications. This can't be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">
+                {deleteTarget.title}
+              </p>
+              <p className="text-xs text-slate-500">
+                {deleteTarget.company}
+                {deleteTarget.location ? ` · ${deleteTarget.location}` : ""}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              <Trash2 />
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

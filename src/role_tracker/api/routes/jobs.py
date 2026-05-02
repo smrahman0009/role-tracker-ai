@@ -30,6 +30,8 @@ from pydantic import BaseModel
 from role_tracker.api.routes.queries import get_query_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
+    ApplicationListResponse,
+    ApplicationSummary,
     FetchJobUrlRequest,
     FetchJobUrlResponse,
     JobDetailResponse,
@@ -37,6 +39,7 @@ from role_tracker.api.schemas import (
     JobListResponse,
     JobSummary,
     ManualJobRequest,
+    MarkAppliedRequest,
     RefreshJobResponse,
     RefreshStatusResponse,
     SearchJobsRequest,
@@ -66,6 +69,7 @@ from role_tracker.jobs.url_extract import (
     extract_job_from_url,
     refine_with_llm,
 )
+from role_tracker.letters.store import FileLetterStore, LetterStore
 from role_tracker.matching.embeddings import Embedder
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.queries.base import QueryStore
@@ -105,6 +109,13 @@ def get_applied_store() -> AppliedStore:
 
 def get_seen_jobs_store() -> SeenJobsStore:
     return FileSeenJobsStore()
+
+
+def get_letter_store_for_cleanup() -> LetterStore:
+    """LetterStore factory — local copy to avoid a circular import on
+    letters.py (which imports get_seen_jobs_store from this module).
+    Tests override this to point at a tmp-rooted store."""
+    return FileLetterStore()
 
 
 def get_extraction_anthropic_client() -> Anthropic:
@@ -256,48 +267,55 @@ def list_jobs(
     )
 
 
-@router.get("/applications", response_model=JobListResponse)
+@router.get("/applications", response_model=ApplicationListResponse)
 def list_applications(
     user_id: str,
     seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     applied_store: AppliedStore = Depends(get_applied_store),
-) -> JobListResponse:
-    """List every job the user has marked as applied, across all searches.
+    resume_store: ResumeStore = Depends(get_resume_store),
+) -> ApplicationListResponse:
+    """List every job the user has marked as applied, with the rich
+    record captured at apply time (applied_at, resume snapshot, letter
+    version). Sorted by applied_at descending — most recent first."""
+    applications = applied_store.list_applied(user_id)
+    if not applications:
+        return ApplicationListResponse(applications=[], total=0)
 
-    Reads from seen_jobs (the long-lived index) so applications from
-    previous searches stay reachable after the snapshot rotates.
-    Sorted by match_score descending.
-    """
-    applied_ids = applied_store.list_applied(user_id)
-    if not applied_ids:
-        return JobListResponse(
-            jobs=[],
-            total=0,
-            total_unfiltered=0,
-            hidden_by_filters=0,
-            last_refreshed_at=None,
-        )
+    current_resume = resume_store.get_metadata(user_id)
+    current_sha = current_resume.sha256 if current_resume else ""
 
-    summaries: list[JobSummary] = []
-    for job_id in applied_ids:
+    items: list[ApplicationSummary] = []
+    for job_id, record in applications.items():
         stored = seen_store.get(user_id, job_id)
         if stored is None:
-            # The user applied to a job that no longer exists in the
-            # index (extremely rare — shouldn't happen since we never
-            # delete from seen_store). Skip silently.
             continue
-        summaries.append(
-            _to_summary_from_job(stored.job, score=stored.score, applied=True)
+        # "now replaced" tag: the user replaced their resume after
+        # applying. Empty snapshot sha means the application predates
+        # the snapshot feature — don't claim replacement in that case.
+        replaced = bool(
+            record.resume_sha256
+            and current_sha
+            and record.resume_sha256 != current_sha
         )
-    summaries.sort(key=lambda s: s.match_score, reverse=True)
-
-    return JobListResponse(
-        jobs=summaries,
-        total=len(summaries),
-        total_unfiltered=len(summaries),
-        hidden_by_filters=0,
-        last_refreshed_at=None,
+        items.append(
+            ApplicationSummary(
+                job=_to_summary_from_job(
+                    stored.job, score=stored.score, applied=True
+                ),
+                applied_at=record.applied_at,
+                resume_filename=record.resume_filename,
+                resume_sha256=record.resume_sha256,
+                letter_version_used=record.letter_version_used,
+                resume_replaced_since=replaced,
+            )
+        )
+    # Most recent first — applications without a timestamp (legacy
+    # records) sort to the bottom.
+    items.sort(
+        key=lambda a: a.applied_at or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
     )
+    return ApplicationListResponse(applications=items, total=len(items))
 
 
 @router.post(
@@ -545,6 +563,48 @@ def list_manual_jobs(
     )
 
 
+@router.delete(
+    "/manual/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_manual_job(
+    user_id: str,
+    job_id: str,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    applied_store: AppliedStore = Depends(get_applied_store),
+    letter_store: LetterStore = Depends(get_letter_store_for_cleanup),
+) -> Response:
+    """Delete a manually-added job and clean up its associated state.
+
+    Scoped to manual jobs only (job_id starts with "manual:"). JSearch
+    jobs rotate naturally with searches and shouldn't be deleted ad-hoc
+    — refusing them keeps the user from accidentally nuking a result
+    they were going to apply to in the next refresh cycle.
+
+    Cleanup scope:
+      - seen_jobs entry        (the job itself)
+      - applied_store entry    (so it disappears from My Applications)
+      - letter_store entries   (every saved version of any cover letter
+                                generated for this job)
+    """
+    if not job_id.startswith("manual:"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Only manually-added jobs can be deleted. JSearch-sourced "
+                "jobs rotate with search results."
+            ),
+        )
+    if not seen_store.remove(user_id, job_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+    applied_store.unmark_applied(user_id, job_id)
+    letter_store.delete_all_versions(user_id, job_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 def _hash_for_manual_job(*, url: str, title: str, company: str) -> str:
     """Deterministic short id so re-adding the same posting overwrites
     instead of duplicating. Falls back on title+company when no URL."""
@@ -638,10 +698,23 @@ def get_job_detail(
 def mark_applied(
     user_id: str,
     job_id: str,
+    body: MarkAppliedRequest | None = None,
     applied_store: AppliedStore = Depends(get_applied_store),
+    resume_store: ResumeStore = Depends(get_resume_store),
 ) -> Response:
-    """Mark a job as applied — moves it to the 'Applied' filter."""
-    if not applied_store.mark_applied(user_id, job_id):
+    """Mark a job as applied. Captures an audit record: the timestamp,
+    a snapshot of the resume metadata at apply time (filename + sha256),
+    and the cover-letter version the user had selected (from body)."""
+    resume_meta = resume_store.get_metadata(user_id)
+    letter_version = body.letter_version_used if body else None
+
+    if not applied_store.mark_applied(
+        user_id,
+        job_id,
+        resume_filename=resume_meta.filename if resume_meta else "",
+        resume_sha256=resume_meta.sha256 if resume_meta else "",
+        letter_version_used=letter_version,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job '{job_id}' is already marked applied",

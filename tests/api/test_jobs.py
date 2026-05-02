@@ -534,51 +534,97 @@ def test_search_rejects_top_n_out_of_range(client: TestClient) -> None:
 
 def test_applications_empty_when_nothing_applied(client: TestClient) -> None:
     body = client.get("/users/alice/jobs/applications").json()
-    assert body["jobs"] == []
+    assert body["applications"] == []
     assert body["total"] == 0
 
 
 def test_applications_returns_applied_from_seen_store(
     client: TestClient,
 ) -> None:
-    """Apply a job from a search; it should show up in /applications."""
+    """Apply a job from a search; it should show up in /applications
+    with the rich record (applied_at, resume snapshot)."""
     _seed_resume(client)
     _seed_query(client)
     refresh_response = client.post("/users/alice/jobs/refresh")
     client.get(f"/users/alice/jobs/refresh/{refresh_response.json()['refresh_id']}")
-    client.post("/users/alice/jobs/j1/applied")
+    client.post("/users/alice/jobs/j1/applied", json={})
 
     body = client.get("/users/alice/jobs/applications").json()
     assert body["total"] == 1
-    assert body["jobs"][0]["job_id"] == "j1"
-    assert body["jobs"][0]["applied"] is True
+    app = body["applications"][0]
+    assert app["job"]["job_id"] == "j1"
+    assert app["job"]["applied"] is True
+    assert app["applied_at"] is not None
+    # Resume sha was captured at apply time from the seeded resume.
+    assert app["resume_sha256"]
+    assert app["resume_filename"] == "r.pdf"
+    # No replacement yet — current resume matches the snapshot.
+    assert app["resume_replaced_since"] is False
+
+
+def test_applications_records_letter_version_used(
+    client: TestClient,
+) -> None:
+    """The mark-applied body's letter_version_used flows through to
+    the application record."""
+    _seed_resume(client)
+    _seed_query(client)
+    r = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{r.json()['refresh_id']}")
+    client.post(
+        "/users/alice/jobs/j1/applied",
+        json={"letter_version_used": 2},
+    )
+    body = client.get("/users/alice/jobs/applications").json()
+    assert body["applications"][0]["letter_version_used"] == 2
+
+
+def test_applications_flags_resume_replaced_since_apply(
+    client: TestClient,
+) -> None:
+    """If the user uploads a new resume after applying, the row gets
+    a resume_replaced_since=True flag."""
+    _seed_resume(client)
+    _seed_query(client)
+    r = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{r.json()['refresh_id']}")
+    client.post("/users/alice/jobs/j1/applied", json={})
+
+    # Replace the resume — different bytes mean different sha.
+    client.post(
+        "/users/alice/resume",
+        files={
+            "file": (
+                "newer.pdf",
+                b"%PDF-1.4 different bytes here",
+                "application/pdf",
+            )
+        },
+    )
+    body = client.get("/users/alice/jobs/applications").json()
+    app = body["applications"][0]
+    assert app["resume_replaced_since"] is True
+    # Snapshot still shows the OLD filename (audit trail).
+    assert app["resume_filename"] == "r.pdf"
 
 
 def test_applications_survives_snapshot_rotation(client: TestClient) -> None:
-    """Applied jobs stay reachable even after a new search clobbers the snapshot.
-
-    This is the whole point of the seen_jobs index — applications shouldn't
-    disappear because the user ran another search.
-    """
+    """Applied jobs stay reachable even after a new search clobbers the snapshot."""
     _seed_resume(client)
     _seed_query(client)
-    # First refresh: cache j1 + j2, apply j1.
     r1 = client.post("/users/alice/jobs/refresh")
     client.get(f"/users/alice/jobs/refresh/{r1.json()['refresh_id']}")
-    client.post("/users/alice/jobs/j1/applied")
+    client.post("/users/alice/jobs/j1/applied", json={})
 
-    # Run an ad-hoc search — same fake pipeline returns j1 + j2 again, but
-    # in real life this would rotate the snapshot to a new set of jobs.
     s = client.post(
         "/users/alice/jobs/search",
         json={"what": ["data scientist"], "where": ["Halifax"]},
     )
     client.get(f"/users/alice/jobs/search/{s.json()['search_id']}")
 
-    # j1 is still in /applications regardless of what's in the snapshot now.
     body = client.get("/users/alice/jobs/applications").json()
     assert body["total"] == 1
-    assert body["jobs"][0]["job_id"] == "j1"
+    assert body["applications"][0]["job"]["job_id"] == "j1"
 
 
 def test_search_accepts_multi_value_where(client: TestClient) -> None:
@@ -872,3 +918,56 @@ def test_fetch_job_url_uses_cleaned_description_from_llm(
     )
     assert "Equal Opportunity" not in body["description"]
     assert "How to apply" not in body["description"]
+
+
+# ----- delete manual job -----
+
+
+def _create_manual(client: TestClient) -> str:
+    """Helper: create a manual job, return its id."""
+    r = client.post(
+        "/users/alice/jobs/manual",
+        json={
+            "title": "ML Engineer",
+            "company": "Acme",
+            "description": (
+                "Build production ML systems for the recommendations team. "
+                "5+ years experience."
+            ),
+            "url": "https://acme.example/jobs/9",
+        },
+    )
+    return r.json()["job_id"]
+
+
+def test_delete_manual_job_removes_from_seen_and_applied(
+    client: TestClient,
+) -> None:
+    _seed_resume(client)
+    job_id = _create_manual(client)
+    client.post(f"/users/alice/jobs/{job_id}/applied", json={})
+
+    response = client.delete(f"/users/alice/jobs/manual/{job_id}")
+    assert response.status_code == 204
+    # Detail returns 404 — gone from seen_jobs.
+    assert client.get(f"/users/alice/jobs/{job_id}").status_code == 404
+    # Applications no longer lists it.
+    apps = client.get("/users/alice/jobs/applications").json()
+    assert apps["total"] == 0
+
+
+def test_delete_manual_job_404_for_missing(client: TestClient) -> None:
+    response = client.delete("/users/alice/jobs/manual/manual:nonexistent")
+    assert response.status_code == 404
+
+
+def test_delete_manual_job_refuses_jsearch_jobs(client: TestClient) -> None:
+    """Only manual: prefix allowed. JSearch IDs (e.g., 'j1') are
+    rejected so the user can't accidentally nuke a search-snapshot job."""
+    _seed_resume(client)
+    _seed_query(client)
+    r = client.post("/users/alice/jobs/refresh")
+    client.get(f"/users/alice/jobs/refresh/{r.json()['refresh_id']}")
+    response = client.delete("/users/alice/jobs/manual/j1")
+    assert response.status_code == 400
+    assert "manual" in response.json()["detail"].lower()

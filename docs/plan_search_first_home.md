@@ -225,7 +225,86 @@ quota dashboard.
 
 | Step | Status |
 |---|---|
-| 1. Multi-value `where` (cap 3) | not started |
-| 2. Live tag-remove filter | not started |
+| 1. Multi-value `where` (cap 3) | shipped (ea7cc1a) |
+| 2. Live tag-remove filter | shipped (ea7cc1a / 54f33d7) |
 | 3. Quota dashboard | not started |
 | 4. Embedding cache | deferred |
+
+---
+
+# Plan: Application tracker enrichment
+
+Make the My Applications page a real tracker, not just a list of
+applied job IDs. Each application becomes a rich record so the user
+can later answer "what did I send to KPMG on April 30?".
+
+## Items
+
+| Item | Status | Effort | Priority |
+|---|---|---|---|
+| 1. applied_at timestamp + posted date display | approved | ~2h | now |
+| 2. Resume snapshot at apply time (filename + sha256) | approved | ~1h | now |
+| 3. Cover letter version captured at apply time | approved | ~1h | now |
+| 4. Manual-job Remove button (cards on /added-jobs) | approved | ~1.5h | now |
+| 5. Resume archive (full PDF bytes per application) | deferred | ~3h | later |
+
+## Detail
+
+### Now (items 1–4)
+
+`AppliedStore` evolves from `set[job_id]` to a richer record per
+application: `{applied_at, resume_filename, resume_sha256,
+letter_version_used}`. The mark-applied endpoint accepts an optional
+`letter_version` body and snapshots the user's current resume
+metadata at apply time. The `/applications` endpoint returns the
+enriched shape; My Applications cards display:
+
+```
+Senior ML Engineer                       53/100
+KPMG · Halifax, NS
+
+Applied   2026-04-30   ·   Posted   2026-04-22
+Resume    shaikh_v3.pdf
+Letter    v3 (edited)
+```
+
+Backwards-compat: legacy `{"applied": ["id1", "id2"]}` files are
+read transparently with empty timestamps; new applications use the
+enriched shape. No data migration script needed.
+
+Manual jobs gain a Remove button on the /added-jobs cards. Confirm
+dialog explicitly mentions the cleanup scope: removes the job from
+seen_jobs, deletes any cover letters tied to it, and clears any
+applied state. Scoped to manual jobs only — JSearch-sourced jobs
+rotate naturally with searches.
+
+### Later (item 5)
+
+True resume archive — store the actual PDF bytes per application,
+not just the filename + sha256. Lets the user open the *exact* PDF
+they sent on a given date even after replacing the resume 20 times.
+
+Storage shape: content-addressable by sha256, so 20 applications
+sharing the same resume keep ONE copy of the bytes. New endpoint
+`GET /users/{id}/resume-archive/{sha256}` serves the bytes; the
+existing My Applications card's resume link becomes live (today's
+work makes the link greyed out / "now replaced" when the current
+resume's sha256 differs from the snapshot).
+
+Storage cost: ~100KB–1MB per unique resume. Trivial for a single
+user; on the multi-user Cosmos / Blob deploy it lives in Blob
+Storage.
+
+## Decisions log
+
+- **Don't store resume bytes today.** sha256 + filename is enough
+  to render an honest UI: applications display the filename you used,
+  with a "now replaced" tag when the current resume's sha256 differs
+  from the snapshot. The greyed-out link becomes live the moment the
+  archive feature lands — no UI rework.
+- **Cover letters need no archive.** Each refine creates a new
+  versioned record that's already kept forever. Capturing the
+  version number at apply time is sufficient.
+- **Manual-job delete is not soft-delete.** No undo. The confirm
+  dialog is the safety net; storage staying clean matters more than
+  recovery.

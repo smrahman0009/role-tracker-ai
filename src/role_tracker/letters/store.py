@@ -44,6 +44,10 @@ class LetterStore(Protocol):
         refinement_index: int = 0,
         edited_by_user: bool = False,
     ) -> StoredLetter: ...
+    def delete_all_versions(self, user_id: str, job_id: str) -> None:
+        """Remove every saved letter for (user, job). No-op if none exist.
+        Used when deleting a manual job — keeps storage tidy."""
+        ...
 
 
 class FileLetterStore:
@@ -103,6 +107,10 @@ class FileLetterStore:
             (lt.refinement_index for lt in self._load(user_id, job_id)),
             default=0,
         )
+
+    def delete_all_versions(self, user_id: str, job_id: str) -> None:
+        path = self._path(user_id, job_id)
+        path.unlink(missing_ok=True)
 
     # ----- internals -----
 

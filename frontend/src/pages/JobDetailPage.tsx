@@ -161,13 +161,21 @@ export default function JobDetailPage() {
         onError: (err) => toast.error(err.message),
       });
     } else {
-      applyMutation.mutate(job.job_id, {
-        onSuccess: () => {
-          toast.success("Marked as applied");
-          jobQuery.refetch();
+      // Capture which letter version the user has selected at apply
+      // time so the My Applications row can show "applied with v3".
+      applyMutation.mutate(
+        {
+          jobId: job.job_id,
+          letterVersionUsed: current?.version ?? null,
         },
-        onError: (err) => toast.error(err.message),
-      });
+        {
+          onSuccess: () => {
+            toast.success("Marked as applied");
+            jobQuery.refetch();
+          },
+          onError: (err) => toast.error(err.message),
+        },
+      );
     }
   };
 
