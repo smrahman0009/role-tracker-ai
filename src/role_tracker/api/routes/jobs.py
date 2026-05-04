@@ -143,6 +143,14 @@ def get_letter_store_for_cleanup() -> LetterStore:
     """LetterStore factory — local copy to avoid a circular import on
     letters.py (which imports get_seen_jobs_store from this module).
     Tests override this to point at a tmp-rooted store."""
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_letter_store import DynamoDBLetterStore
+
+        return DynamoDBLetterStore(
+            table_name=settings.ddb_letters_table,
+            region_name=settings.aws_region,
+        )
     return FileLetterStore()
 
 

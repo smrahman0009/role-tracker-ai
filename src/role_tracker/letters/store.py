@@ -44,6 +44,12 @@ class LetterStore(Protocol):
         refinement_index: int = 0,
         edited_by_user: bool = False,
     ) -> StoredLetter: ...
+    def count_refinements(self, user_id: str, job_id: str) -> int:
+        """Highest refinement_index across all versions of this job.
+        Used to enforce the per-letter refinement cap; manual edits
+        don't bump the index so they don't count toward the cap."""
+        ...
+
     def delete_all_versions(self, user_id: str, job_id: str) -> None:
         """Remove every saved letter for (user, job). No-op if none exist.
         Used when deleting a manual job — keeps storage tidy."""

@@ -85,6 +85,15 @@ router = APIRouter(tags=["letters"])
 
 
 def get_letter_store() -> LetterStore:
+    """Picks DynamoDB when STORAGE_BACKEND=aws, else file-backed."""
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_letter_store import DynamoDBLetterStore
+
+        return DynamoDBLetterStore(
+            table_name=settings.ddb_letters_table,
+            region_name=settings.aws_region,
+        )
     return FileLetterStore()
 
 
