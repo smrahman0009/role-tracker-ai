@@ -8,6 +8,7 @@ from role_tracker.api.schemas import (
     SavedQuery,
     UpdateQueryRequest,
 )
+from role_tracker.config import Settings
 from role_tracker.queries.base import QueryStore
 from role_tracker.queries.json_store import JsonQueryStore
 
@@ -20,10 +21,18 @@ router = APIRouter(
 def get_query_store() -> QueryStore:
     """FastAPI dependency factory.
 
-    Returning a fresh instance per request is fine here — the store is
-    stateless; persistence is on disk. Tests override this to inject a
-    store rooted at a temp directory.
+    Picks the cloud-native (DynamoDB) backend when STORAGE_BACKEND=aws,
+    otherwise falls back to the JSON-file store used in dev. Tests
+    override this dependency at the FastAPI level.
     """
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_query_store import DynamoDBQueryStore
+
+        return DynamoDBQueryStore(
+            table_name=settings.ddb_queries_table,
+            region_name=settings.aws_region,
+        )
     return JsonQueryStore()
 
 
