@@ -7,16 +7,26 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear env vars that the developer's local .env might define so
+    pydantic-settings doesn't pick them up during a test run. Setting
+    the var explicitly (even to "") makes the env-var value take
+    precedence over anything in .env."""
+    monkeypatch.setenv("APP_TOKEN", "")
+    monkeypatch.setenv("STORAGE_BACKEND", "file")
+
+
 def _build_test_app(monkeypatch: pytest.MonkeyPatch, *, token: str = "") -> FastAPI:
     """Build a fresh FastAPI app under specific env settings.
 
     Tests import `create_app` lazily so monkeypatched env vars are applied
     BEFORE Settings() reads them.
     """
-    if token:
-        monkeypatch.setenv("APP_TOKEN", token)
-    else:
-        monkeypatch.delenv("APP_TOKEN", raising=False)
+    # Set APP_TOKEN explicitly (even to "") so the value beats whatever
+    # is in the developer's local .env file. delenv alone isn't enough
+    # because pydantic-settings still reads .env.
+    monkeypatch.setenv("APP_TOKEN", token)
 
     from role_tracker.api.main import create_app
 

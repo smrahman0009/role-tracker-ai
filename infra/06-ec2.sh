@@ -154,7 +154,11 @@ usermod -aG docker ec2-user
 # Map port 80 (where users connect) to the container's port 8000.
 # We use iptables instead of running uvicorn as root — port 80 is
 # privileged and our container deliberately runs as a non-root user.
+# We need OUTPUT too because with --network=host the container shares
+# the host's loopback, so health checks hitting 127.0.0.1:80 also
+# need redirecting to 8000.
 iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8000
+iptables -t nat -A OUTPUT -d 127.0.0.1 -p tcp --dport 80 -j REDIRECT --to-port 8000
 iptables-save > /etc/sysconfig/iptables 2>/dev/null || true
 
 # Install a systemd unit that pulls + runs the role-tracker container.
@@ -180,7 +184,7 @@ ExecStartPre=/bin/bash -c '/usr/bin/aws ecr get-login-password --region __REGION
 ExecStartPre=/usr/bin/docker pull __ECR_URI__:latest
 
 ExecStart=/usr/bin/docker run --rm --name role-tracker \
-    -p 8000:8000 \
+    --network=host \
     -e AWS_REGION=__REGION__ \
     -e STORAGE_BACKEND=aws \
     -e SSM_PREFIX=__SSM_PREFIX__ \
@@ -248,7 +252,7 @@ else
         --user-data "${USER_DATA}" \
         --tag-specifications \
             "ResourceType=instance,Tags=[{Key=Name,Value=${EC2_NAME_TAG}},{Key=Project,Value=${PROJECT}}]" \
-        --metadata-options "HttpTokens=required,HttpEndpoint=enabled" \
+        --metadata-options "HttpTokens=required,HttpEndpoint=enabled,HttpPutResponseHopLimit=2" \
         --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":20,"VolumeType":"gp3","DeleteOnTermination":true}}]' \
         --query "Instances[0].InstanceId" \
         --output text)

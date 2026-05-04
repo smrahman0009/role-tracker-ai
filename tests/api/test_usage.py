@@ -15,7 +15,6 @@ from role_tracker.usage import FileUsageStore
 def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[tuple[TestClient, FileUsageStore]]:
-    monkeypatch.delenv("APP_TOKEN", raising=False)
     app = create_app()
     store = FileUsageStore(root=tmp_path / "usage")
     app.dependency_overrides[get_usage_store] = lambda: store

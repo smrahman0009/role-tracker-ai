@@ -16,7 +16,6 @@ from role_tracker.users.yaml_store import YamlUserProfileStore
 def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
-    monkeypatch.delenv("APP_TOKEN", raising=False)
 
     users_dir = tmp_path / "users"
     users_dir.mkdir()

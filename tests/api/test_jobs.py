@@ -65,7 +65,6 @@ def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
     """Test client with all stores rooted in tmp_path, pipeline mocked."""
-    monkeypatch.delenv("APP_TOKEN", raising=False)
 
     # Patch the resume parser so the mock PDF doesn't have to be real.
     import role_tracker.api.routes.jobs as jobs_module

@@ -21,7 +21,6 @@ def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
     """Test client with auth disabled and the query store rooted in tmp_path."""
-    monkeypatch.delenv("APP_TOKEN", raising=False)
 
     app = create_app()
     test_store = JsonQueryStore(

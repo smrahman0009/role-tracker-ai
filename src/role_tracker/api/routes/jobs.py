@@ -113,7 +113,20 @@ def get_seen_jobs_store() -> SeenJobsStore:
 
 
 def get_usage_store() -> UsageStore:
-    """UsageStore factory — overridden by tests with a tmp-rooted store."""
+    """UsageStore factory.
+
+    Picks the cloud-native (DynamoDB) backend when STORAGE_BACKEND=aws,
+    otherwise falls back to the JSON-file store used in dev. Tests
+    override this dependency at the FastAPI level.
+    """
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_usage_store import DynamoDBUsageStore
+
+        return DynamoDBUsageStore(
+            table_name=settings.ddb_usage_table,
+            region_name=settings.aws_region,
+        )
     return FileUsageStore()
 
 

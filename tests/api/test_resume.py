@@ -19,7 +19,6 @@ _FAKE_PDF = b"%PDF-1.4\n% fake content\n%%EOF\n"
 def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
-    monkeypatch.delenv("APP_TOKEN", raising=False)
     app = create_app()
     test_store = FileResumeStore(root=tmp_path / "resumes")
     test_profiles = YamlUserProfileStore(root=tmp_path / "users")

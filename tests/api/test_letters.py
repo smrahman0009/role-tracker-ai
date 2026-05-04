@@ -95,7 +95,6 @@ def _job(job_id: str = "j1") -> JobPosting:
 def client(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
-    monkeypatch.delenv("APP_TOKEN", raising=False)
 
     # Stub the Phase 4 agent so no real Anthropic calls happen.
     import role_tracker.api.routes.letters as letters_module
@@ -318,7 +317,6 @@ def client_with_refine_stub(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> Iterator[TestClient]:
     """Same fixture as `client` but also stubs out refine_cover_letter."""
-    monkeypatch.delenv("APP_TOKEN", raising=False)
 
     import role_tracker.api.routes.letters as letters_module
 

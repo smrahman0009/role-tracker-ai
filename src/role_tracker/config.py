@@ -40,6 +40,25 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
+    # ----- AWS / cloud-native storage backends -----
+    # `file` keeps every store backed by JSON / disk (dev default).
+    # `aws` swaps each store to its DynamoDB / S3 equivalent.
+    # The factories in api/routes/*.py read this and pick accordingly.
+    storage_backend: str = "file"
+
+    # Region the AWS SDK should use when storage_backend == "aws".
+    aws_region: str = "ca-central-1"
+
+    # Resource names — match the values baked into infra/00-vars.sh.
+    # Overridable via env vars so the same image runs in any account.
+    s3_bucket: str = ""
+    ddb_applied_table: str = "role-tracker-applied"
+    ddb_letters_table: str = "role-tracker-letters"
+    ddb_usage_table: str = "role-tracker-usage"
+    ddb_queries_table: str = "role-tracker-queries"
+    ddb_seen_jobs_table: str = "role-tracker-seen-jobs"
+    ssm_prefix: str = "/role-tracker"
+
 
 class JobQuery(BaseModel):
     """A single job search query (used inside UserProfile too)."""
