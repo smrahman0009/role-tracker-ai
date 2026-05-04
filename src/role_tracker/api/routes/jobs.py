@@ -105,6 +105,15 @@ def get_refresh_store() -> RefreshTaskStore:
 
 
 def get_applied_store() -> AppliedStore:
+    """AppliedStore factory — picks DynamoDB when STORAGE_BACKEND=aws."""
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_applied_store import DynamoDBAppliedStore
+
+        return DynamoDBAppliedStore(
+            table_name=settings.ddb_applied_table,
+            region_name=settings.aws_region,
+        )
     return FileAppliedStore()
 
 
