@@ -40,7 +40,22 @@ MAX_RESUME_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 def get_resume_store() -> ResumeStore:
-    """FastAPI dependency factory. Tests override this with a tmp-rooted store."""
+    """FastAPI dependency factory.
+
+    Picks the S3-backed store when STORAGE_BACKEND=aws, else the
+    local-disk file store. Tests override this with a tmp-rooted
+    store at the FastAPI level.
+    """
+    from role_tracker.config import Settings
+
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.s3_resume_store import S3ResumeStore
+
+        return S3ResumeStore(
+            bucket=settings.s3_bucket,
+            region_name=settings.aws_region,
+        )
     return FileResumeStore()
 
 
