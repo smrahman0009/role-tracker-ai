@@ -12,6 +12,7 @@ module is only imported in the Docker image entrypoint.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -19,7 +20,38 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from role_tracker.api.main import create_app as create_api_app
+logger = logging.getLogger(__name__)
+
+
+def _load_secrets_if_aws() -> None:
+    """When running with STORAGE_BACKEND=aws, fetch API keys from SSM
+    Parameter Store and inject them into the process env BEFORE the
+    inner API app reads `Settings()`. Local dev (file backend) skips
+    this step entirely so it never needs AWS credentials."""
+    if os.environ.get("STORAGE_BACKEND", "file") != "aws":
+        return
+    prefix = os.environ.get("SSM_PREFIX", "/role-tracker")
+    region = os.environ.get("AWS_REGION")
+    try:
+        # Imported lazily so the file-backed dev path doesn't require boto3
+        # at module load time.
+        from role_tracker.aws.ssm_secrets import load_secrets_into_env
+
+        load_secrets_into_env(prefix=prefix, region_name=region)
+    except Exception as exc:  # noqa: BLE001
+        # Don't crash the whole app if SSM is unavailable — the
+        # operator can still SSH in and see what went wrong via logs.
+        # The API itself will return 5xx on routes that need a key,
+        # which is the correct behaviour anyway.
+        logger.error("SSM secret load failed: %s", exc)
+
+
+# Run BEFORE we import api.main, so when its module-level
+# `app = create_app()` line evaluates, env vars are already populated
+# and `Settings()` reads the right values.
+_load_secrets_if_aws()
+
+from role_tracker.api.main import create_app as create_api_app  # noqa: E402
 
 
 def _frontend_dist() -> Path:

@@ -103,7 +103,10 @@ PERMISSIONS_POLICY=$(cat <<EOF
                 "ssm:GetParameters",
                 "ssm:GetParametersByPath"
             ],
-            "Resource": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter${SSM_PREFIX}/*"
+            "Resource": [
+                "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter${SSM_PREFIX}",
+                "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter${SSM_PREFIX}/*"
+            ]
         },
         {
             "Sid": "KmsDecryptSsm",

@@ -86,10 +86,24 @@ sleep 15
 
 section "Hitting /api/health"
 
+# Pull the live APP_TOKEN from SSM if it's set — once auth is on,
+# anonymous /api/health 401s. /health is in the middleware's exempt
+# list but we send the header anyway for any other smoke probes.
+APP_TOKEN_VALUE="$(aws ssm get-parameter \
+    --name "${SSM_PREFIX}/APP_TOKEN" \
+    --with-decryption \
+    --query "Parameter.Value" \
+    --output text 2>/dev/null || true)"
+
+CURL_AUTH=()
+if [[ -n "${APP_TOKEN_VALUE}" ]] && [[ "${APP_TOKEN_VALUE}" != "None" ]]; then
+    CURL_AUTH=(-H "Authorization: Bearer ${APP_TOKEN_VALUE}")
+fi
+
 # Try a few times — first request after a fresh `docker pull` can be
 # slow because the image is being unpacked.
 for attempt in 1 2 3 4 5; do
-    if curl -fsS "http://${INSTANCE_PUBLIC_IP}/api/health"; then
+    if curl -fsS "${CURL_AUTH[@]}" "http://${INSTANCE_PUBLIC_IP}/api/health"; then
         echo
         ok "Health check passed"
         break

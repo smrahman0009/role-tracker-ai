@@ -21,7 +21,16 @@ from starlette.responses import JSONResponse, Response
 # - /health: Azure liveness probes can't send headers
 # - /docs, /openapi.json, /redoc: API docs UI is harmless to expose
 DEFAULT_EXEMPT_PATHS: frozenset[str] = frozenset(
-    {"/health", "/docs", "/openapi.json", "/redoc"}
+    {
+        "/health",
+        # The same path as it appears when the inner API app is mounted
+        # under /api by the production ASGI wrapper — the access logs
+        # surface the un-stripped path so we exempt both forms.
+        "/api/health",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
 )
 
 
