@@ -31,6 +31,10 @@ DEFAULT_ROOT = Path("data/seen_jobs")
 
 class SeenJobsStore(Protocol):
     def get(self, user_id: str, job_id: str) -> StoredScoredJob | None: ...
+    def list_all(self, user_id: str) -> list[StoredScoredJob]:
+        """Return every job ever stored for the user."""
+        ...
+
     def upsert_many(self, user_id: str, scored: list[ScoredJob]) -> None: ...
     def remove(self, user_id: str, job_id: str) -> bool:
         """Delete one job. Returns True if removed, False if it wasn't there."""
@@ -48,6 +52,9 @@ class FileSeenJobsStore:
             if entry.job.id == job_id:
                 return entry
         return None
+
+    def list_all(self, user_id: str) -> list[StoredScoredJob]:
+        return self._load(user_id)
 
     def upsert_many(self, user_id: str, scored: list[ScoredJob]) -> None:
         if not scored:

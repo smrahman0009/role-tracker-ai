@@ -118,6 +118,17 @@ def get_applied_store() -> AppliedStore:
 
 
 def get_seen_jobs_store() -> SeenJobsStore:
+    """SeenJobsStore factory — picks DynamoDB when STORAGE_BACKEND=aws."""
+    settings = Settings()
+    if settings.storage_backend == "aws":
+        from role_tracker.aws.dynamodb_seen_jobs_store import (
+            DynamoDBSeenJobsStore,
+        )
+
+        return DynamoDBSeenJobsStore(
+            table_name=settings.ddb_seen_jobs_table,
+            region_name=settings.aws_region,
+        )
     return FileSeenJobsStore()
 
 
@@ -726,16 +737,8 @@ def _score_manual_job(
 def _all_seen_for_user(
     seen_store: SeenJobsStore, user_id: str
 ) -> list[StoredScoredJob]:
-    """Read the full seen_jobs index for a user. Currently SeenJobsStore
-    only exposes get-by-id; for the manual-jobs list we need everything.
-    Wrap via the file backend's internal _load when available, else walk
-    by upserting nothing — for now we hit the file path directly which
-    is the only backend in use."""
-    if isinstance(seen_store, FileSeenJobsStore):
-        return seen_store._load(user_id)  # noqa: SLF001
-    # Other backends would need a list-all method. Cosmos swap (Phase 7)
-    # will get one; for now we only have the file backend in production.
-    return []
+    """Read the full seen_jobs index for a user."""
+    return seen_store.list_all(user_id)
 
 
 @router.get("/{job_id}", response_model=JobDetailResponse)
