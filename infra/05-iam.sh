@@ -168,6 +168,18 @@ aws iam put-role-policy \
     >/dev/null
 ok "Permissions policy attached"
 
+# Attach AWS's managed policy so the SSM Agent on the instance can
+# register with Systems Manager (UpdateInstanceInformation +
+# ssmmessages + ec2messages). Without this, GitHub Actions' Run
+# Command-based deploys fail with "InvalidInstanceId".
+section "Attaching AmazonSSMManagedInstanceCore"
+
+aws iam attach-role-policy \
+    --role-name "${IAM_ROLE_NAME}" \
+    --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" \
+    >/dev/null
+ok "Managed policy attached"
+
 # ----- Create the instance profile ---------------------------------------
 # EC2 attaches "instance profiles", not roles directly. The 1:1 wrapper
 # is a quirk of how AWS evolved this feature.
