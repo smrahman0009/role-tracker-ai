@@ -1,8 +1,13 @@
 # Role Tracker AI
 
+[![CI](https://github.com/smrahman0009/role-tracker-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/smrahman0009/role-tracker-ai/actions/workflows/ci.yml)
+[![Deploy](https://github.com/smrahman0009/role-tracker-ai/actions/workflows/deploy.yml/badge.svg)](https://github.com/smrahman0009/role-tracker-ai/actions/workflows/deploy.yml)
+
 An end-to-end job-search assistant. Searches live job boards, ranks postings against your resume with embeddings, drafts a tailored cover letter through a multi-step Claude agent, and tracks every application — all in one web app.
 
-Built as a portfolio-grade AI engineering project: a typed Python backend with a React frontend, an agentic LLM workflow (plan → critique → revise), prompt caching, retrieval-style structured extraction, a usage / cost dashboard, and a real cloud-native AWS deployment with CI/CD.
+Typed Python backend (FastAPI), typed React frontend, agentic LLM pipeline (plan → critique → revise) with prompt caching, retrieval-style structured extraction, a usage / cost dashboard, and a cloud-native AWS deployment with CI/CD on every push to `main`.
+
+> **Status:** deployed and live on AWS · 401 tests · CI/CD enabled · [Phase E backlog](#status--next-steps)
 
 ## What it does
 
@@ -51,9 +56,8 @@ infra/              Idempotent shell scripts that provision every AWS
                     resource (ECR, S3, DynamoDB, SSM, IAM, EC2, OIDC)
 .github/workflows/  ci.yml (lint + tests on every push) and
                     deploy.yml (build + push to ECR + restart EC2 on push to main)
-docs/               Plan, Docker walkthrough, AWS onboarding, deployment
-                    plan, CI/CD setup, tutorial
-tests/              400+ tests across api/, jobs/, letters/, cover_letter/,
+docs/               See the linked docs in the Deployment section below
+tests/              401 tests across api/, jobs/, letters/, cover_letter/,
                     aws/ (moto-mocked), ...
 Dockerfile          Multi-stage build: Node bundles the SPA → uv resolves
                     Python deps → slim Python runtime as the final image
@@ -68,7 +72,10 @@ uv venv && uv pip install -e ".[dev]"
 
 # 2. Secrets
 cp .env.example .env
-# Fill in: ANTHROPIC_API_KEY, OPENAI_API_KEY, JSEARCH_RAPIDAPI_KEY
+# Fill in three keys — links to where you get each one:
+#   ANTHROPIC_API_KEY     https://console.anthropic.com/
+#   OPENAI_API_KEY        https://platform.openai.com/api-keys
+#   JSEARCH_RAPIDAPI_KEY  https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
 
 # 3. Backend
 uv run uvicorn role_tracker.api.main:app --reload
@@ -77,17 +84,18 @@ uv run uvicorn role_tracker.api.main:app --reload
 cd frontend && npm install && npm run dev
 ```
 
-Run the full test suite (400+ tests, ~30 seconds): `uv run pytest`.
+Run the full test suite (~30 seconds): `uv run pytest`.
 Lint: `uv run ruff check src tests`.
 
 ## Deployment
 
-The `phase/8-docker` branch contains a fully-deployed AWS stack and reproducible infrastructure scripts:
+The whole AWS stack is reproducible from the [`infra/`](infra/) directory. Walkthrough docs:
 
 - [`docs/aws-onboarding.md`](docs/aws-onboarding.md) — one-time AWS account setup checklist (sign-up hardening, IAM admin user, CLI auth, SSH keys).
 - [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md) — the master plan: target architecture, every infra script, every storage migration, expected cost.
 - [`docs/docker-setup.md`](docs/docker-setup.md) — Docker walkthrough explaining the multi-stage build, day-to-day commands, dev-vs-Docker mental model.
 - [`docs/cicd-setup.md`](docs/cicd-setup.md) — GitHub Actions setup with OIDC, what each workflow step does, rollback paths, cost.
+- [`docs/operations.md`](docs/operations.md) — operating the live deployment: token recovery, rotation, log inspection.
 
 Once AWS CLI is authenticated, the entire stack provisions in eight idempotent scripts:
 
@@ -105,26 +113,6 @@ Once AWS CLI is authenticated, the entire stack provisions in eight idempotent s
 After that, `git push origin main` triggers an automatic build → push to ECR → SSM Run Command restart → smoke test, all gated by the test suite.
 
 **Cost in practice:** ~$0/month in year 1 (everything fits inside the AWS Free Tier — t2.micro 12-month + always-free DynamoDB tier + SSM Parameter Store free tier). ~$10/month after the EC2 free tier expires.
-
-## Recovering the bearer token
-
-The live deployment is gated by a bearer token (`APP_TOKEN`). The browser remembers it in `localStorage` after first login, so day-to-day you don't see it. If you ever need to retrieve it (new browser, cleared cookies, new device), there are three ways, in order of preference:
-
-```bash
-# 1. From SSM Parameter Store — the canonical source of truth
-aws ssm get-parameter \
-  --name /role-tracker/APP_TOKEN \
-  --with-decryption \
-  --query Parameter.Value \
-  --output text
-
-# 2. From your local .env file
-grep APP_TOKEN .env
-```
-
-3. **AWS Console** → Systems Manager → Parameter Store → `/role-tracker/APP_TOKEN` → click **Show** under Value.
-
-If you've genuinely lost access to all three, just rotate it: generate a new random token with `openssl rand -base64 32`, write it into SSM with `aws ssm put-parameter --name /role-tracker/APP_TOKEN --value "$NEW" --type SecureString --overwrite`, update `.env` to match, push to `main` so CI redeploys.
 
 ## Status & next steps
 
