@@ -2,7 +2,7 @@
 
 An end-to-end job-search assistant. Searches live job boards, ranks postings against your resume with embeddings, drafts a tailored cover letter through a multi-step Claude agent, and tracks every application — all in one web app.
 
-Built as a portfolio-grade AI engineering project: a typed Python backend with a React frontend, an agentic LLM workflow (plan → critique → revise), prompt caching, retrieval-style structured extraction, and a usage / cost dashboard so the bills don't surprise you.
+Built as a portfolio-grade AI engineering project: a typed Python backend with a React frontend, an agentic LLM workflow (plan → critique → revise), prompt caching, retrieval-style structured extraction, a usage / cost dashboard, and a real cloud-native AWS deployment with CI/CD.
 
 ## What it does
 
@@ -16,61 +16,96 @@ Built as a portfolio-grade AI engineering project: a typed Python backend with a
 
 ## Stack
 
-**Backend** — Python 3.12, FastAPI, Pydantic v2, `uv`, `ruff`, `pytest`. Anthropic + OpenAI SDKs. JSON-file-backed storage today behind `Protocol` interfaces, designed to swap to Cosmos DB without route changes.
+**Backend** — Python 3.12, FastAPI, Pydantic v2, `uv`, `ruff`, `pytest`. Anthropic + OpenAI SDKs. Storage abstracted behind `Protocol` interfaces with two interchangeable implementations: JSON-on-disk (dev) and AWS-native (DynamoDB + S3 + SSM Parameter Store) selected at runtime by a single env var.
 
 **Frontend** — React 19, TypeScript, Vite, TanStack Query, Tailwind CSS v4, lucide icons. Document Picture-in-Picture for the floating cover-letter editor on supported browsers.
 
 **LLM tooling** — Claude Sonnet 4.6 (planner / refine), Claude Haiku 4.5 (critic / polish / why-interested / URL refine), prompt caching on stable prefixes, structured tool calling.
 
+**Cloud / deployment** — Single-container Docker image deployed to AWS EC2. Cloud-native storage on Amazon DynamoDB (5 tables) and S3 (resume PDFs). Secrets in SSM Parameter Store, fetched at container startup via the EC2 IAM role. CI/CD via GitHub Actions with OIDC federated credentials — no static AWS keys anywhere. Infrastructure provisioning is reproducible from idempotent shell scripts in [`infra/`](infra/).
+
 ## Repository layout
 
 ```
 src/role_tracker/
-  api/              FastAPI routes, Pydantic schemas, bearer-token middleware
-  applied/          Per-user "applied" records (applied_at, resume snapshot, letter version)
+  api/              FastAPI routes, Pydantic schemas, bearer-token middleware,
+                    production ASGI wrapper that mounts the SPA + API together
+  applied/          Per-user "applied" records (applied_at, resume snapshot,
+                    letter version)
+  aws/              S3 + DynamoDB + SSM-backed implementations of every
+                    storage Protocol; selected when STORAGE_BACKEND=aws
   cover_letter/     Agent loop, planner, critic, refine, polish, tools
   jobs/             JSearch client, pipeline, URL extractor, snapshot cache
   letters/          Versioned letter store, PDF/DOCX rendering, header injection
-  matching/          Embedder + scorer
+  matching/         Embedder + scorer
   resume/           Upload, parse, store
-  screening/         Why-interested generate + polish
-  usage/             Per-user monthly rollups + cost estimates
-  users/             Profile store (YAML)
+  screening/        Why-interested generate + polish
+  usage/            Per-user monthly rollups + cost estimates
+  users/            Profile store (YAML)
 frontend/
-  src/pages/        JobList, JobDetail, Applications, ManualJobs, Usage, Settings
-  src/components/   JobCard, FitBadge, AddManualJobDialog, ResumeCard, …
-  src/hooks/        useJobs, useUsage, useResume, useLetters, …
-docs/               PLAN.md, plan_search_first_home.md, agentic AI tutorial
-tests/              342 backend tests across api/, jobs/, letters/, cover_letter/, …
+  src/pages/        JobList, JobDetail, Applications, ManualJobs, Usage,
+                    Settings, Login
+  src/components/   JobCard, FitBadge, AddManualJobDialog, ResumeCard, ...
+  src/hooks/        useJobs, useUsage, useResume, useLetters, ...
+infra/              Idempotent shell scripts that provision every AWS
+                    resource (ECR, S3, DynamoDB, SSM, IAM, EC2, OIDC)
+.github/workflows/  ci.yml (lint + tests on every push) and
+                    deploy.yml (build + push to ECR + restart EC2 on push to main)
+docs/               Plan, Docker walkthrough, AWS onboarding, deployment
+                    plan, CI/CD setup, tutorial
+tests/              400+ tests across api/, jobs/, letters/, cover_letter/,
+                    aws/ (moto-mocked), ...
+Dockerfile          Multi-stage build: Node bundles the SPA → uv resolves
+                    Python deps → slim Python runtime as the final image
 ```
 
 ## Quick start (local)
 
 ```bash
-# 1. Install uv
+# 1. Install uv + dependencies
 curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv && uv pip install -e ".[dev]"
 
-# 2. Backend deps
-uv venv
-uv pip install -e ".[dev]"
-
-# 3. Secrets
+# 2. Secrets
 cp .env.example .env
 # Fill in: ANTHROPIC_API_KEY, OPENAI_API_KEY, JSEARCH_RAPIDAPI_KEY
 
-# 4. Backend
+# 3. Backend
 uv run uvicorn role_tracker.api.main:app --reload
 
-# 5. Frontend (in another terminal)
-cd frontend
-npm install
-npm run dev
+# 4. Frontend (separate terminal)
+cd frontend && npm install && npm run dev
 ```
 
-Run the test suite with `uv run pytest`.
+Run the full test suite (400+ tests, ~30 seconds): `uv run pytest`.
+Lint: `uv run ruff check src tests`.
+
+## Deployment
+
+The `phase/8-docker` branch contains a fully-deployed AWS stack and reproducible infrastructure scripts:
+
+- [`docs/aws-onboarding.md`](docs/aws-onboarding.md) — one-time AWS account setup checklist (sign-up hardening, IAM admin user, CLI auth, SSH keys).
+- [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md) — the master plan: target architecture, every infra script, every storage migration, expected cost.
+- [`docs/docker-setup.md`](docs/docker-setup.md) — Docker walkthrough explaining the multi-stage build, day-to-day commands, dev-vs-Docker mental model.
+- [`docs/cicd-setup.md`](docs/cicd-setup.md) — GitHub Actions setup with OIDC, what each workflow step does, rollback paths, cost.
+
+Once AWS CLI is authenticated, the entire stack provisions in eight idempotent scripts:
+
+```bash
+./infra/01-ecr.sh           # Docker image registry
+./infra/02-s3.sh            # resume blob bucket
+./infra/03-dynamodb.sh      # five DynamoDB tables (applied, letters, usage, queries, seen_jobs)
+./infra/04-ssm.sh           # API keys → SSM Parameter Store
+./infra/05-iam.sh           # least-privilege EC2 role
+./infra/06-ec2.sh           # launch t2.micro with Docker bootstrap
+./infra/07-deploy.sh        # build → push → restart (covered by CI/CD after first run)
+./infra/08-github-oidc.sh   # GitHub Actions OIDC trust + deploy role
+```
+
+After that, `git push origin main` triggers an automatic build → push to ECR → SSM Run Command restart → smoke test, all gated by the test suite.
+
+**Cost in practice:** ~$0/month in year 1 (everything fits inside the AWS Free Tier — t2.micro 12-month + always-free DynamoDB tier + SSM Parameter Store free tier). ~$10/month after the EC2 free tier expires.
 
 ## Status
 
-The web app is feature-complete locally. Remaining work is deployment-side: Docker packaging, Azure Container Apps infrastructure, GitHub Actions CI/CD with OIDC, and a scheduled daily-refresh job. An optional email digest, a logged-out landing page, and soft monthly-cap enforcement on the usage dashboard are tracked as polish items.
-
-See [docs/PLAN.md](docs/PLAN.md) for the original phased plan and [docs/plan_search_first_home.md](docs/plan_search_first_home.md) for the search-first redesign.
+Locally feature-complete and deployed live on AWS. Remaining polish: HTTPS via ACM + Caddy, custom domain on Route 53, soft monthly-cap enforcement on the usage dashboard, public demo mode for portfolio visitors. Planning lives in [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md) (Phase E).
