@@ -11,9 +11,8 @@ convention in api_spec.md).
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 

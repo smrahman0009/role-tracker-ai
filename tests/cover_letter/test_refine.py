@@ -11,8 +11,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
 from role_tracker.users.models import UserProfile

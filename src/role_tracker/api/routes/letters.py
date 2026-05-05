@@ -56,11 +56,11 @@ from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
 from role_tracker.jobs.seen import SeenJobsStore
 from role_tracker.letters.formats import letter_to_docx, letter_to_pdf
-from role_tracker.letters.header import with_current_header
 from role_tracker.letters.generation_state import (
     FileLetterGenerationStore,
     LetterGenerationStore,
 )
+from role_tracker.letters.header import with_current_header
 from role_tracker.letters.models import StoredLetter
 from role_tracker.letters.store import (
     MAX_REFINEMENTS_PER_LETTER,

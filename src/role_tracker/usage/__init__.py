@@ -1,6 +1,6 @@
 """Usage tracking — per-user, per-month rollups of external-API calls."""
 
-from role_tracker.usage.recorder import UsageRecorder, NullRecorder
+from role_tracker.usage.recorder import NullRecorder, UsageRecorder
 from role_tracker.usage.store import (
     ANTHROPIC_FEATURES,
     FEATURE_COST_USD,

@@ -1,0 +1,144 @@
+# Build → push → restart, on every push to main.
+#
+# Auth uses OIDC federated credentials — GitHub mints a short-lived
+# token at runtime and exchanges it for AWS STS credentials by
+# assuming the role-tracker-deploy IAM role created by
+# infra/08-github-oidc.sh. No static AWS keys live in GitHub
+# Secrets — only a single repo VARIABLE pointing at the role ARN.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # allow manual re-deploys from the GitHub UI
+
+# Only one deploy at a time per branch — newer pushes cancel
+# in-flight runs so we don't race two image pushes.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: ca-central-1
+  ECR_REPO: role-tracker
+  EC2_NAME_TAG: role-tracker-app
+  SSM_APP_TOKEN_NAME: /role-tracker/APP_TOKEN
+
+jobs:
+  deploy:
+    name: Build + push + restart
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- AWS auth via OIDC ------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify identity
+        run: aws sts get-caller-identity
+
+      # ---- Build + push image ----------------------------------------------
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ---- Trigger the EC2 systemd unit to restart -------------------------
+      # We use SSM Run Command instead of SSH — no key material to store,
+      # no inbound port to open, full audit trail in CloudTrail.
+      - name: Look up EC2 instance ID
+        id: ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:Name,Values=${EC2_NAME_TAG}" \
+              "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "ERROR: no running instance tagged Name=${EC2_NAME_TAG}"
+            exit 1
+          fi
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Restart container via SSM
+        id: ssm
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy ${{ github.sha }}" \
+            --parameters '{"commands":["systemctl restart role-tracker.service"]}' \
+            --query "Command.CommandId" \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for restart command to finish
+        run: |
+          aws ssm wait command-executed \
+            --command-id "${{ steps.ssm.outputs.command_id }}" \
+            --instance-id "${{ steps.ec2.outputs.instance_id }}" \
+          || {
+            echo "Restart command did not complete cleanly. Output:"
+            aws ssm get-command-invocation \
+              --command-id "${{ steps.ssm.outputs.command_id }}" \
+              --instance-id "${{ steps.ec2.outputs.instance_id }}"
+            exit 1
+          }
+
+      # ---- Smoke test -----------------------------------------------------
+      - name: Look up public IP
+        id: ip
+        run: |
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids "${{ steps.ec2.outputs.instance_id }}" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text)
+          echo "public_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for new container to be healthy
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS "http://${{ steps.ip.outputs.public_ip }}/api/health"; then
+              echo
+              echo "Health check passed (attempt $attempt)"
+              exit 0
+            fi
+            echo "Attempt $attempt failed; sleeping 10s..."
+            sleep 10
+          done
+          echo "Health check never recovered."
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "## Deploy summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image tag | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Instance | \`${{ steps.ec2.outputs.instance_id }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Public URL | http://${{ steps.ip.outputs.public_ip }}/ |" >> "$GITHUB_STEP_SUMMARY"

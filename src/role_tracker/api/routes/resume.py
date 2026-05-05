@@ -11,7 +11,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from pydantic import BaseModel
 
 from role_tracker.api.routes.profile import get_profile_store
 from role_tracker.api.schemas import ResumeMetadata

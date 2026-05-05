@@ -195,7 +195,7 @@ class FileUsageStore:
         tmp.write_text(json.dumps(payload, indent=2) + "\n")
         tmp.replace(path)
 
-    def _mutate(self, user_id: str) -> "_MutateContext":
+    def _mutate(self, user_id: str) -> _MutateContext:
         return _MutateContext(self, user_id)
 
 

@@ -16,7 +16,6 @@ from docx import Document
 
 from role_tracker.letters.formats import letter_to_docx, letter_to_pdf
 
-
 _HEADER_LETTER = (
     "**Shaikh Mushfikur Rahman**\n"
     "+1 555 0100 | shaikh@example.com | Halifax, Canada\n"

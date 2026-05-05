@@ -23,7 +23,6 @@ from docx import Document
 from docx.shared import Inches, Pt
 from fpdf import FPDF
 
-
 _BOLD_SPLIT = re.compile(r"(\*\*[^\n*]+?\*\*)")
 # Markdown link `[label](url)` — we keep only `label` since neither fpdf2's
 # basic API nor python-docx's `add_run` make hyperlinks easy. The URLs

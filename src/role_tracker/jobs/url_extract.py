@@ -22,10 +22,9 @@ import json
 import re
 
 import httpx
+import trafilatura
 from anthropic import Anthropic
 from pydantic import BaseModel
-import trafilatura
-
 
 # Anything shorter than this almost certainly isn't a real JD — caller
 # should fall back to manual paste.
@@ -169,12 +168,6 @@ def _extract_workable(url: str, client: httpx.Client) -> ExtractedJob | None:
         return None
     data = r.json()
     title = (data.get("title") or "").strip()
-    loc = data.get("location") or {}
-    location_parts = [
-        loc.get("city") or "",
-        loc.get("region") or "",
-        loc.get("country") or "",
-    ]
     # Compose the JD from description + requirements + benefits — these
     # are separate HTML fields in Workable's schema. We strip tags here
     # so the JD is plain text the LLM can clean further.

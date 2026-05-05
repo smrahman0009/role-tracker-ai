@@ -14,10 +14,10 @@ from fastapi.testclient import TestClient
 from role_tracker.api.main import create_app
 from role_tracker.api.routes.jobs import (
     get_applied_store,
+    get_extraction_anthropic_client,
     get_jobs_cache,
     get_pipeline_runner,
     get_refresh_store,
-    get_extraction_anthropic_client,
     get_seen_jobs_store,
 )
 from role_tracker.api.routes.queries import get_query_store
@@ -50,7 +50,7 @@ def _job(job_id: str, title: str, company: str) -> JobPosting:
     )
 
 
-def _fake_pipeline_results() -> "MatchingResult":
+def _fake_pipeline_results():
     from role_tracker.jobs.pipeline import MatchingResult
 
     jobs = [

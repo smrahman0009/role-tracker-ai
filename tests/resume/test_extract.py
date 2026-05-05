@@ -2,7 +2,6 @@
 
 from role_tracker.resume.extract import extract_contact_info
 
-
 _TYPICAL_HEADER = """\
 Shaikh Mushfikur Rahman
 Halifax, NS · +1 (782) 882-0852 · smrahman0009@gmail.com

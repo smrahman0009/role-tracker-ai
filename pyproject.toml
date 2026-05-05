@@ -49,5 +49,9 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# Test fixtures often include long inline strings that aren't worth wrapping.
+"tests/**/*.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
