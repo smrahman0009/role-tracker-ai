@@ -22,7 +22,7 @@ Built as a portfolio-grade AI engineering project: a typed Python backend with a
 
 **LLM tooling** — Claude Sonnet 4.6 (planner / refine), Claude Haiku 4.5 (critic / polish / why-interested / URL refine), prompt caching on stable prefixes, structured tool calling.
 
-**Cloud / deployment** — Single-container Docker image deployed to AWS EC2. Cloud-native storage on Amazon DynamoDB (5 tables) and S3 (resume PDFs). Secrets in SSM Parameter Store, fetched at container startup via the EC2 IAM role. CI/CD via GitHub Actions with OIDC federated credentials — no static AWS keys anywhere. Infrastructure provisioning is reproducible from idempotent shell scripts in [`infra/`](infra/).
+**Cloud / deployment** — Single-container Docker image deployed to AWS EC2 (live). Cloud-native storage on Amazon DynamoDB (5 tables) and S3 (resume PDFs). Secrets in SSM Parameter Store, fetched at container startup via the EC2 IAM role. **CI/CD via GitHub Actions** — every push to `main` builds the image, pushes to ECR, and restarts the running container via SSM Run Command. Auth uses **OIDC federated credentials** so no static AWS keys live in GitHub Secrets. Infrastructure provisioning is reproducible from idempotent shell scripts in [`infra/`](infra/).
 
 ## Repository layout
 
@@ -96,9 +96,9 @@ Once AWS CLI is authenticated, the entire stack provisions in eight idempotent s
 ./infra/02-s3.sh            # resume blob bucket
 ./infra/03-dynamodb.sh      # five DynamoDB tables (applied, letters, usage, queries, seen_jobs)
 ./infra/04-ssm.sh           # API keys → SSM Parameter Store
-./infra/05-iam.sh           # least-privilege EC2 role
+./infra/05-iam.sh           # least-privilege EC2 role + SSM Agent permissions
 ./infra/06-ec2.sh           # launch t2.micro with Docker bootstrap
-./infra/07-deploy.sh        # build → push → restart (covered by CI/CD after first run)
+./infra/07-deploy.sh        # build → push → restart (manual fallback; CI/CD takes over after 08)
 ./infra/08-github-oidc.sh   # GitHub Actions OIDC trust + deploy role
 ```
 
@@ -106,6 +106,37 @@ After that, `git push origin main` triggers an automatic build → push to ECR �
 
 **Cost in practice:** ~$0/month in year 1 (everything fits inside the AWS Free Tier — t2.micro 12-month + always-free DynamoDB tier + SSM Parameter Store free tier). ~$10/month after the EC2 free tier expires.
 
-## Status
+## Recovering the bearer token
 
-Locally feature-complete and deployed live on AWS. Remaining polish: HTTPS via ACM + Caddy, custom domain on Route 53, soft monthly-cap enforcement on the usage dashboard, public demo mode for portfolio visitors. Planning lives in [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md) (Phase E).
+The live deployment is gated by a bearer token (`APP_TOKEN`). The browser remembers it in `localStorage` after first login, so day-to-day you don't see it. If you ever need to retrieve it (new browser, cleared cookies, new device), there are three ways, in order of preference:
+
+```bash
+# 1. From SSM Parameter Store — the canonical source of truth
+aws ssm get-parameter \
+  --name /role-tracker/APP_TOKEN \
+  --with-decryption \
+  --query Parameter.Value \
+  --output text
+
+# 2. From your local .env file
+grep APP_TOKEN .env
+```
+
+3. **AWS Console** → Systems Manager → Parameter Store → `/role-tracker/APP_TOKEN` → click **Show** under Value.
+
+If you've genuinely lost access to all three, just rotate it: generate a new random token with `openssl rand -base64 32`, write it into SSM with `aws ssm put-parameter --name /role-tracker/APP_TOKEN --value "$NEW" --type SecureString --overwrite`, update `.env` to match, push to `main` so CI redeploys.
+
+## Status & next steps
+
+**What's done.** Phases A–D from the deployment plan: AWS provisioning, cloud-native stores (DynamoDB + S3), SSM-loaded secrets, GitHub Actions CI/CD with OIDC. The app is live, fully automated, and any push to `main` ships.
+
+**Phase E — polish (optional).** Tracked in [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md):
+
+| Item | Why it's worth doing | Estimate |
+|------|---------------------|----------|
+| **Custom domain + HTTPS** | A live URL like `https://roletracker.smrahman.dev/` reads dramatically better than an IP. HTTPS also encrypts the bearer token in transit. | ~2 hrs |
+| **Public demo mode** | Right now strangers without the token see only the login page. A read-only `user_id=demo` with seeded sample data lets recruiters click through every screen without burning your API budget. Highest-leverage polish item for portfolio impact. | ~3 hrs |
+| **Soft monthly caps** | The usage dashboard *shows* spend; this would *enforce* it (reject requests that would push past the cap). | ~30 min |
+| **Daily refresh job** | Optional EventBridge rule that re-runs the matching pipeline overnight so the user wakes up to fresh ranked jobs. | ~1 hr |
+
+None of Phase E is required — the app is portfolio-ready as it stands. These are improvements, not blockers.
