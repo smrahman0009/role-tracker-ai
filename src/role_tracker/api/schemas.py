@@ -605,5 +605,11 @@ class CoverLetterSummaryRequest(BaseModel):
 
 
 class CoverLetterSummaryResponse(BaseModel):
-    summary: str
+    """Three-section JD digest. Any field can be "" if the JD does
+    not say anything genuine about it; the frontend skips rendering
+    empty sections instead of padding the response with fluff."""
+
+    role: str = ""
+    requirements: str = ""
+    context: str = ""
     model: str

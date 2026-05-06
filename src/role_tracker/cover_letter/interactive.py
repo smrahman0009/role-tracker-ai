@@ -346,8 +346,23 @@ def finalize(
 
 
 # ============================================================================
-# Phase 2.5: JD summary
+# Phase 2.5 / 2.7: JD summary, three-section structured output
 # ============================================================================
+
+
+class JobSummary(BaseModel):
+    """Three-section JD digest. Empty strings are permitted for any
+    field the JD doesn't genuinely say anything about; the frontend
+    skips empty sections rather than padding them."""
+
+    role: str = ""
+    requirements: str = ""
+    context: str = ""
+
+
+class SummaryError(Exception):
+    """Raised when the model can't produce valid JSON in the expected
+    schema. Mirrors AnalysisError's role for the analysis function."""
 
 
 def summarize_job(
@@ -355,17 +370,23 @@ def summarize_job(
     *,
     client: Anthropic | _AnthropicClientLike,
     model: str = _SUMMARY_MODEL_DEFAULT,
-) -> str:
-    """Five to six sentences summarising what the role is about.
+) -> JobSummary:
+    """Three-section structured summary of a job description.
+
+    Returns role / requirements / context strings. Each is 1-3
+    sentences of prose; any field can be "" if the JD doesn't say
+    anything genuine about it.
 
     Distinct from the match analysis: this is purely about the JOB,
-    independent of the user's resume. Useful as the first thing the
-    user reads when opening a job, especially when JDs are long or
-    repetitive.
+    independent of the user's resume.
 
     Sonnet by default since this is creative prose where nuance and
     voice matter. Haiku is acceptable when the user explicitly asks
     to test it.
+
+    Raises SummaryError when the model returns text that is not valid
+    JSON or doesn't match the schema. Network errors propagate from
+    the Anthropic client unchanged.
     """
     # Imported lazily to keep this module import-cheap when callers
     # don't use the summary feature.
@@ -384,4 +405,33 @@ def summarize_job(
             }
         ],
     )
-    return _extract_text(response).strip()
+    text = _extract_text(response).strip()
+    return _parse_summary(text)
+
+
+def _parse_summary(text: str) -> JobSummary:
+    """Coerce the model's reply into a JobSummary.
+
+    Tolerates code fences the same way analysis parsing does.
+    """
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        first_newline = cleaned.find("\n")
+        if first_newline != -1:
+            cleaned = cleaned[first_newline + 1 :]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[: -len("```")]
+        cleaned = cleaned.strip()
+
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise SummaryError(f"model did not return JSON: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise SummaryError(f"expected a JSON object, got {type(payload).__name__}")
+
+    try:
+        return JobSummary.model_validate(payload)
+    except ValidationError as exc:
+        raise SummaryError(f"JSON did not match schema: {exc}") from exc

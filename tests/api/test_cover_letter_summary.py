@@ -1,6 +1,7 @@
 """Tests for POST /users/{id}/jobs/{job_id}/cover-letter/summary
 and the model picker on the draft route."""
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -80,11 +81,20 @@ def _job() -> JobPosting:
     )
 
 
+_VALID_SUMMARY_PAYLOAD = json.dumps(
+    {
+        "role": "Senior data scientist on Shopify's Risk team.",
+        "requirements": "Python and 5+ years production ML experience.",
+        "context": "Hybrid in Toronto. Suits builders shipping ML to prod.",
+    }
+)
+
+
 def _make_client(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     *,
-    anthropic_text: str = "A neutral 5-sentence summary.",
+    anthropic_text: str = _VALID_SUMMARY_PAYLOAD,
 ) -> tuple[TestClient, _StubAnthropic]:
     import role_tracker.api.routes.letters as letters_module
 
@@ -141,7 +151,7 @@ def client_and_stub(
 # ----- /summary -----------------------------------------------------------
 
 
-def test_summary_returns_text_and_model(
+def test_summary_returns_three_sections_and_model(
     client_and_stub: tuple[TestClient, _StubAnthropic],
 ) -> None:
     client, _ = client_and_stub
@@ -151,8 +161,22 @@ def test_summary_returns_text_and_model(
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["summary"] == "A neutral 5-sentence summary."
+    assert body["role"].startswith("Senior data scientist")
+    assert "Python" in body["requirements"]
+    assert "Hybrid" in body["context"]
     assert body["model"] == SONNET_MODEL
+
+
+def test_summary_502_when_model_returns_garbage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """If the model returns prose instead of JSON, surface a 502."""
+    c, _ = _make_client(monkeypatch, tmp_path, anthropic_text="not json")
+    with c:
+        response = c.post(
+            "/users/alice/jobs/j1/cover-letter/summary", json={}
+        )
+        assert response.status_code == 502
 
 
 def test_summary_default_is_sonnet(

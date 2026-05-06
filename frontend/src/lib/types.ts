@@ -371,7 +371,12 @@ export interface CoverLetterSummaryRequest {
 }
 
 export interface CoverLetterSummaryResponse {
-  summary: string;
+  /** What the role is: day-to-day, seniority, team. May be "". */
+  role: string;
+  /** Top hard requirements (skills, years, certifications). May be "". */
+  requirements: string;
+  /** Anything notable: location, comp, who'd suit. May be "". */
+  context: string;
   model: string;
 }
 

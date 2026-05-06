@@ -60,6 +60,7 @@ from role_tracker.cover_letter.agent import generate_cover_letter_agent
 from role_tracker.cover_letter.interactive import (
     AnalysisError,
     MatchAnalysis,
+    SummaryError,
     analyze,
     draft,
     finalize,
@@ -547,14 +548,28 @@ def summarize_cover_letter_job(
         )
 
     model_id = resolve_model(body.model, default=_SUMMARY_MODEL_DEFAULT)
-    summary = summarize_job(
-        jd_text=job.description,
-        client=client,
-        model=model_id,
-    )
+    try:
+        summary = summarize_job(
+            jd_text=job.description,
+            client=client,
+            model=model_id,
+        )
+    except SummaryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Job summary failed to produce valid JSON. "
+                f"Try again. ({exc})"
+            ),
+        ) from exc
 
     UsageRecorder(usage_store, user_id).feature("cover_letter_summary")
-    return CoverLetterSummaryResponse(summary=summary, model=model_id)
+    return CoverLetterSummaryResponse(
+        role=summary.role,
+        requirements=summary.requirements,
+        context=summary.context,
+        model=model_id,
+    )
 
 
 @router.post(

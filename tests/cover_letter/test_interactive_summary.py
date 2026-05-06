@@ -1,10 +1,14 @@
 """Tests for cover_letter.interactive.summarize_job() + resolve_model()."""
 
+import json
+
 import pytest
 
 from role_tracker.cover_letter.interactive import (
     HAIKU_MODEL,
     SONNET_MODEL,
+    JobSummary,
+    SummaryError,
     resolve_model,
     summarize_job,
 )
@@ -22,27 +26,39 @@ class _Response:
 
 
 class _Messages:
-    def __init__(self, text: str = "Five-sentence summary here.") -> None:
-        self._text = text
+    def __init__(self, payload: object) -> None:
+        self._payload = payload
         self.last_request: dict | None = None
 
     def create(self, **kwargs: object) -> _Response:
         self.last_request = kwargs
-        return _Response(self._text)
+        if isinstance(self._payload, str):
+            return _Response(self._payload)
+        return _Response(json.dumps(self._payload))
 
 
 class _StubClient:
-    def __init__(self, text: str = "Five-sentence summary here.") -> None:
-        self.messages = _Messages(text)
+    def __init__(self, payload: object | None = None) -> None:
+        self.messages = _Messages(payload if payload is not None else _DEFAULT)
+
+
+_DEFAULT = {
+    "role": "Senior data scientist on Shopify's Risk team.",
+    "requirements": "Python and 5+ years production ML.",
+    "context": "Hybrid in Toronto. Suits ML practitioners shipping to prod.",
+}
 
 
 # ----- summarize_job ------------------------------------------------------
 
 
-def test_summarize_returns_text() -> None:
-    client = _StubClient("This is a senior data science role at Shopify.")
-    text = summarize_job("JD body here.", client=client)
-    assert text.startswith("This is")
+def test_summarize_returns_structured_model() -> None:
+    client = _StubClient(_DEFAULT)
+    result = summarize_job("JD body here.", client=client)
+    assert isinstance(result, JobSummary)
+    assert result.role.startswith("Senior data scientist")
+    assert "Python" in result.requirements
+    assert "Hybrid" in result.context
 
 
 def test_summarize_uses_sonnet_by_default() -> None:
@@ -57,17 +73,53 @@ def test_summarize_honours_explicit_model() -> None:
     assert client.messages.last_request["model"] == HAIKU_MODEL
 
 
-def test_summarize_strips_whitespace() -> None:
-    client = _StubClient("\n\n  Summary text.  \n")
-    text = summarize_job("JD", client=client)
-    assert text == "Summary text."
-
-
 def test_summarize_includes_jd_in_prompt() -> None:
     client = _StubClient()
     summarize_job("UNIQUE-JD-MARKER-12345", client=client)
     user_msg = client.messages.last_request["messages"][0]["content"]
     assert "UNIQUE-JD-MARKER-12345" in user_msg
+
+
+def test_summarize_tolerates_code_fences() -> None:
+    payload = json.dumps(_DEFAULT)
+    fenced = f"```json\n{payload}\n```"
+    client = _StubClient(fenced)
+    result = summarize_job("JD", client=client)
+    assert result.role.startswith("Senior")
+
+
+def test_summarize_allows_empty_field() -> None:
+    """If the JD doesn't say anything about, e.g., context, the model
+    is allowed to return an empty string and we accept it."""
+    payload = {
+        "role": "Senior DS at Shopify.",
+        "requirements": "Python and ML.",
+        "context": "",
+    }
+    client = _StubClient(payload)
+    result = summarize_job("JD", client=client)
+    assert result.context == ""
+
+
+def test_summarize_raises_on_non_json() -> None:
+    client = _StubClient("here is some prose, not JSON")
+    with pytest.raises(SummaryError):
+        summarize_job("JD", client=client)
+
+
+def test_summarize_raises_on_array_top_level() -> None:
+    client = _StubClient(json.dumps([1, 2, 3]))
+    with pytest.raises(SummaryError):
+        summarize_job("JD", client=client)
+
+
+def test_job_summary_defaults_to_empty_strings() -> None:
+    """All three fields default to "" so callers don't have to
+    handle missing keys."""
+    s = JobSummary()
+    assert s.role == ""
+    assert s.requirements == ""
+    assert s.context == ""
 
 
 # ----- resolve_model ------------------------------------------------------

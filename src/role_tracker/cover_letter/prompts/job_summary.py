@@ -1,45 +1,62 @@
 """Prompt for the JD summary panel.
 
-Produces a 5-6 sentence prose paragraph describing the role: what the
-person will do, what level it is, the top requirements, and anything
-notable. Independent of the user's resume; this is purely a JD digest.
+Produces a structured 3-section digest: Role, Requirements, Context.
+Each section is 1 to 3 short sentences, scannable independently.
+
+Output is JSON so the route can render each section in its own coloured
+card on the frontend without parsing prose.
 """
 
 from role_tracker.cover_letter.prompts.interactive_style import STYLE_RULES
 
-SYSTEM_PROMPT = f"""You write a short, plain-English summary of a job \
+SYSTEM_PROMPT = f"""You write a structured, plain-English digest of a job \
 description.
 
-Output: exactly 5 to 6 sentences as a single prose paragraph. Not bullets, \
-not a list, not headings. About 80 to 120 words total.
+Output exactly one valid JSON object, no surrounding text, no markdown, \
+no code fences. Schema:
 
-Cover, in roughly this order:
-1. What the role actually does, day to day.
-2. The seniority or level (junior, mid, senior, staff, etc.) and the \
-team or domain context.
-3. The top 2 to 3 hard requirements (specific technologies, years of \
-experience, certifications).
-4. Anything genuinely notable: comp range if stated, location or remote \
-policy, an unusual benefit, an unusual ask.
-5. A closing sentence on who this role would suit (e.g. \"This suits \
-someone who has shipped ML systems end-to-end and likes working close \
-to product.\").
+{{
+  "role": "string",
+  "requirements": "string",
+  "context": "string"
+}}
+
+Each field is 1 to 3 short sentences as prose, NOT bullets. Total across \
+all three fields should land between 80 and 130 words.
+
+Field meanings:
+
+- "role": What the person actually does day to day, plus the seniority \
+or level (junior, mid, senior, staff, etc.) and the team or domain. \
+Example: "This is a senior data scientist role on the Risk team at \
+Shopify, focused on shipping fraud-detection ML systems end to end."
+
+- "requirements": The top 2 to 3 hard requirements. Specific \
+technologies, years of experience, certifications. Pick what actually \
+matters; don't list every bullet from the JD. Example: "Python and \
+production ML experience are mandatory, with at least 5 years building \
+data systems. Familiarity with distributed processing (Spark or Beam) \
+is a plus."
+
+- "context": Anything else genuinely notable: location or remote \
+policy, comp range if stated, an unusual benefit, who this role would \
+suit. Example: "Hybrid in Toronto, two days in office. Compensation \
+not stated. This suits someone who has shipped ML systems end-to-end \
+and likes working close to product."
 
 Hard rules:
-- Never invent facts not in the JD. If the JD does not state \
-something (comp, location, seniority), do NOT write \"competitive \
-salary\" or \"likely senior\". Just leave it out.
-- Do not list every requirement; pick the top 2-3 that actually \
-matter.
-- Do not editorialise (\"this is a great opportunity\", \"exciting \
-challenge\"). Stay neutral.
-- Do not echo the JD verbatim. Paraphrase.
-- Refer to the company by its name, not as \"the company\".
+- Never invent facts. If the JD does not state compensation, location, \
+or seniority, do NOT fill those in. Leave the field empty (use "") \
+or shorter, rather than padding with "competitive salary" or \
+"likely senior".
+- An empty "" string is preferred over fabricated content.
+- Refer to the company by its name, not as "the company".
+- Don't editorialise ("this is a great opportunity"). Stay neutral.
+- Don't echo the JD verbatim; paraphrase.
 
 {STYLE_RULES}
 
-Output: just the paragraph. No preamble, no headings, no quotes \
-around it."""
+Return the JSON object now."""
 
 
 USER_TEMPLATE = """Job description:
@@ -47,4 +64,4 @@ USER_TEMPLATE = """Job description:
 {jd_text}
 ---
 
-Write the 5-6 sentence summary now."""
+Return the JSON object now."""
