@@ -35,6 +35,9 @@ from role_tracker.api.routes.jobs import get_seen_jobs_store, get_usage_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
     CoverLetterAnalysisResponse,
+    CoverLetterDraftRequest,
+    CoverLetterDraftResponse,
+    CoverLetterFinalizeRequest,
     CritiqueScore,
     GenerateLetterRequest,
     GenerateLetterResponse,
@@ -52,7 +55,13 @@ from role_tracker.api.schemas import (
 )
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
-from role_tracker.cover_letter.interactive import AnalysisError, analyze
+from role_tracker.cover_letter.interactive import (
+    AnalysisError,
+    MatchAnalysis,
+    analyze,
+    draft,
+    finalize,
+)
 from role_tracker.cover_letter.polish import polish_cover_letter
 from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
@@ -504,6 +513,126 @@ def analyze_cover_letter_match(
         excitement_hooks=analysis.excitement_hooks,
         model="claude-haiku-4-5",
     )
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/cover-letter/draft",
+    response_model=CoverLetterDraftResponse,
+)
+def draft_cover_letter_paragraph(
+    user_id: str,
+    job_id: str,
+    body: CoverLetterDraftRequest,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    resume_store: ResumeStore = Depends(get_resume_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
+    client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
+) -> CoverLetterDraftResponse:
+    """Generate one paragraph (Hook, Fit, or Close) of a cover letter.
+
+    Phase 2 of the interactive flow. Caller passes the previously
+    computed match analysis and the paragraphs already committed (if
+    any). The endpoint is stateless: re-supply the same inputs to get
+    a deterministic-ish redraft.
+    """
+    job = _find_job(seen_store, user_id, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    resume_bytes = resume_store.get_file_bytes(user_id)
+    if resume_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No resume uploaded.",
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resume_bytes)
+        tmp_path = Path(tmp.name)
+    try:
+        resume_text = parse_resume(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    try:
+        user_profile = user_store.get_user(user_id)
+        user_name = user_profile.name or user_id
+    except FileNotFoundError:
+        user_name = user_id
+
+    analysis_model = MatchAnalysis(
+        strong=body.analysis.strong,
+        gaps=body.analysis.gaps,
+        partial=body.analysis.partial,
+        excitement_hooks=body.analysis.excitement_hooks,
+    )
+
+    text = draft(
+        paragraph=body.paragraph,
+        user_name=user_name,
+        job_title=job.title,
+        job_company=job.company,
+        jd_text=job.description,
+        resume_text=resume_text,
+        analysis=analysis_model,
+        committed=body.committed.model_dump(),
+        hint=body.hint,
+        alternative_to=body.alternative_to,
+        client=client,
+    )
+
+    UsageRecorder(usage_store, user_id).feature("cover_letter_draft")
+    return CoverLetterDraftResponse(
+        paragraph=body.paragraph,
+        text=text,
+        model="claude-haiku-4-5",
+    )
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/cover-letter/finalize",
+    response_model=Letter,
+    status_code=status.HTTP_201_CREATED,
+)
+def finalize_cover_letter(
+    user_id: str,
+    job_id: str,
+    body: CoverLetterFinalizeRequest,
+    letter_store: LetterStore = Depends(get_letter_store),
+    user_store: UserProfileStore = Depends(get_user_profile_store),
+) -> Letter:
+    """Stitch the three committed paragraphs and persist as a new letter
+    version with edited_by_user=True.
+
+    Phase 2 just joins paragraphs with blank lines. Phase 6 will add a
+    Sonnet smoothing pass that enforces tone consistency before save.
+    """
+    if not (body.hook.strip() and body.fit.strip() and body.close.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "All three paragraphs (hook, fit, close) must be "
+                "non-empty before finalizing."
+            ),
+        )
+
+    text = finalize(hook=body.hook, fit=body.fit, close=body.close)
+
+    saved = letter_store.save_letter(
+        user_id,
+        job_id,
+        text=text,
+        strategy=None,
+        critique=None,
+        feedback_used=None,
+        refinement_index=0,
+        edited_by_user=True,
+    )
+    return _to_response(saved, _user_or_none(user_store, user_id))
 
 
 @router.get(

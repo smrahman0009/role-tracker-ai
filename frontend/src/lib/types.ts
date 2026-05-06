@@ -362,3 +362,31 @@ export interface CoverLetterAnalysisResponse {
   excitement_hooks: string[];
   model: string;
 }
+
+export type ParagraphKey = "hook" | "fit" | "close";
+
+export interface CoverLetterCommitted {
+  hook: string | null;
+  fit: string | null;
+  close: string | null;
+}
+
+export interface CoverLetterDraftRequest {
+  paragraph: ParagraphKey;
+  analysis: CoverLetterAnalysisResponse;
+  committed: CoverLetterCommitted;
+  hint?: string | null;
+  alternative_to?: string | null;
+}
+
+export interface CoverLetterDraftResponse {
+  paragraph: ParagraphKey;
+  text: string;
+  model: string;
+}
+
+export interface CoverLetterFinalizeRequest {
+  hook: string;
+  fit: string;
+  close: string;
+}

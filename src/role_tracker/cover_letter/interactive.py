@@ -21,15 +21,22 @@ from typing import Protocol
 from anthropic import Anthropic
 from pydantic import BaseModel, Field, ValidationError
 
+from role_tracker.cover_letter.prompts import (
+    interactive_close,
+    interactive_fit,
+    interactive_hook,
+)
 from role_tracker.cover_letter.prompts.interactive_analysis import (
     SYSTEM_PROMPT,
     USER_TEMPLATE,
 )
 
-# Use a small model for analysis — structured output with clear
-# instructions is its sweet spot.
+# Use a small model for analysis and individual paragraphs. Structured
+# output with tight constraints is its sweet spot.
 _ANALYSIS_MODEL = "claude-haiku-4-5"
+_DRAFT_MODEL = "claude-haiku-4-5"
 _MAX_TOKENS = 1024
+_DRAFT_MAX_TOKENS = 512  # paragraphs are short
 
 
 class MatchAnalysis(BaseModel):
@@ -51,6 +58,9 @@ class AnalysisError(Exception):
 class _AnthropicClientLike(Protocol):
     @property
     def messages(self) -> object: ...
+
+
+PARAGRAPH_KEYS = ("hook", "fit", "close")
 
 
 def analyze(
@@ -137,3 +147,165 @@ def _parse_analysis(text: str) -> MatchAnalysis:
         return MatchAnalysis.model_validate(payload)
     except ValidationError as exc:
         raise AnalysisError(f"JSON did not match schema: {exc}") from exc
+
+
+# ============================================================================
+# Phase 2: paragraph drafting
+# ============================================================================
+
+
+def _format_bullets(items: list[str]) -> str:
+    """Render a list of bullet items for inclusion in a prompt."""
+    if not items:
+        return "(none)"
+    return "\n".join(f"- {item}" for item in items)
+
+
+def _build_hook_messages(
+    *,
+    user_name: str,
+    job_title: str,
+    job_company: str,
+    excitement_hooks: list[str],
+    jd_text: str,
+    resume_text: str,
+) -> tuple[str, list[dict]]:
+    user_msg = interactive_hook.USER_TEMPLATE.format(
+        user_name=user_name,
+        job_title=job_title,
+        job_company=job_company,
+        excitement_hooks_block=_format_bullets(excitement_hooks),
+        jd_text=jd_text.strip(),
+        resume_text=resume_text.strip(),
+    )
+    return interactive_hook.SYSTEM_PROMPT, [
+        {"role": "user", "content": user_msg}
+    ]
+
+
+def _build_fit_messages(
+    *,
+    user_name: str,
+    job_title: str,
+    job_company: str,
+    analysis: MatchAnalysis,
+    jd_text: str,
+    resume_text: str,
+) -> tuple[str, list[dict]]:
+    user_msg = interactive_fit.USER_TEMPLATE.format(
+        user_name=user_name,
+        user_role_summary="",  # derived from resume in the prompt
+        job_title=job_title,
+        job_company=job_company,
+        strong_block=_format_bullets(analysis.strong),
+        gaps_block=_format_bullets(analysis.gaps),
+        partial_block=_format_bullets(analysis.partial),
+        jd_text=jd_text.strip(),
+        resume_text=resume_text.strip(),
+    )
+    return interactive_fit.SYSTEM_PROMPT, [
+        {"role": "user", "content": user_msg}
+    ]
+
+
+def _build_close_messages(
+    *,
+    user_name: str,
+    user_first_name: str,
+    job_title: str,
+    job_company: str,
+    resume_text: str,
+) -> tuple[str, list[dict]]:
+    user_msg = interactive_close.USER_TEMPLATE.format(
+        user_name=user_name,
+        user_first_name=user_first_name,
+        user_role_summary="",
+        job_title=job_title,
+        job_company=job_company,
+        resume_text=resume_text.strip(),
+    )
+    return interactive_close.SYSTEM_PROMPT, [
+        {"role": "user", "content": user_msg}
+    ]
+
+
+def draft(
+    *,
+    paragraph: str,
+    user_name: str,
+    job_title: str,
+    job_company: str,
+    jd_text: str,
+    resume_text: str,
+    analysis: MatchAnalysis,
+    committed: dict[str, str | None] | None = None,  # noqa: ARG001
+    hint: str | None = None,                          # noqa: ARG001
+    alternative_to: str | None = None,                # noqa: ARG001
+    client: Anthropic | _AnthropicClientLike,
+    model: str = _DRAFT_MODEL,
+) -> str:
+    """Generate one paragraph of a cover letter.
+
+    `paragraph` selects the prompt: "hook", "fit", or "close".
+
+    `committed`, `hint`, and `alternative_to` are accepted now to keep
+    the function signature stable, but Phase 2 ignores them. Phases
+    3 and 4 wire them in.
+    """
+    if paragraph not in PARAGRAPH_KEYS:
+        raise ValueError(
+            f"unknown paragraph {paragraph!r}, expected one of {PARAGRAPH_KEYS}"
+        )
+
+    user_first_name = (user_name.split() or [user_name])[0]
+
+    if paragraph == "hook":
+        system, messages = _build_hook_messages(
+            user_name=user_name,
+            job_title=job_title,
+            job_company=job_company,
+            excitement_hooks=analysis.excitement_hooks,
+            jd_text=jd_text,
+            resume_text=resume_text,
+        )
+    elif paragraph == "fit":
+        system, messages = _build_fit_messages(
+            user_name=user_name,
+            job_title=job_title,
+            job_company=job_company,
+            analysis=analysis,
+            jd_text=jd_text,
+            resume_text=resume_text,
+        )
+    else:  # paragraph == "close"
+        system, messages = _build_close_messages(
+            user_name=user_name,
+            user_first_name=user_first_name,
+            job_title=job_title,
+            job_company=job_company,
+            resume_text=resume_text,
+        )
+
+    response = client.messages.create(  # type: ignore[union-attr]
+        model=model,
+        max_tokens=_DRAFT_MAX_TOKENS,
+        system=system,
+        messages=messages,
+    )
+    return _extract_text(response).strip()
+
+
+def finalize(
+    *,
+    hook: str,
+    fit: str,
+    close: str,
+) -> str:
+    """Stitch the three committed paragraphs into a single letter.
+
+    Phase 2 just joins them with blank lines. Phase 6 will wrap this
+    with a Sonnet smoothing pass that enforces tone consistency
+    across paragraphs and runs the style validator one last time.
+    """
+    parts = [p.strip() for p in (hook, fit, close) if p.strip()]
+    return "\n\n".join(parts)

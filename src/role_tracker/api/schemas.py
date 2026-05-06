@@ -539,3 +539,50 @@ class CoverLetterAnalysisResponse(BaseModel):
     partial: list[str] = Field(default_factory=list)
     excitement_hooks: list[str] = Field(default_factory=list)
     model: str
+
+
+class CoverLetterCommitted(BaseModel):
+    """The three paragraphs as the user has committed them so far.
+
+    Each field is None until the user has committed that paragraph.
+    Used as context for regenerating the *other* paragraphs so tone
+    stays consistent across the letter.
+    """
+
+    hook: str | None = None
+    fit: str | None = None
+    close: str | None = None
+
+
+class CoverLetterDraftRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/draft."""
+
+    paragraph: Literal["hook", "fit", "close"]
+    # The match analysis the user already saw. Re-supplied per request
+    # rather than re-derived to keep the endpoint stateless.
+    analysis: CoverLetterAnalysisResponse
+    committed: CoverLetterCommitted = Field(default_factory=CoverLetterCommitted)
+    # Phase 4: a one-line steering hint for the model.
+    hint: str | None = None
+    # Phase 3: the current paragraph text when the user clicks "Try a
+    # different angle"; the model will be asked to produce something
+    # meaningfully different.
+    alternative_to: str | None = None
+
+
+class CoverLetterDraftResponse(BaseModel):
+    paragraph: Literal["hook", "fit", "close"]
+    text: str
+    model: str
+
+
+class CoverLetterFinalizeRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/finalize.
+
+    All three paragraphs are required; the route refuses to save a
+    letter with any blanks.
+    """
+
+    hook: str
+    fit: str
+    close: str

@@ -79,6 +79,9 @@ FEATURE_COST_USD: dict[str, float] = {
     # Interactive cover letter, match analysis — Haiku call returning
     # JSON over (resume + JD).
     "cover_letter_analysis": 0.005,
+    # Interactive cover letter, single-paragraph draft (hook / fit /
+    # close). Haiku call, ~500 tokens out.
+    "cover_letter_draft": 0.005,
 }
 
 
@@ -92,6 +95,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_refine",
     "cover_letter_polish",
     "cover_letter_analysis",
+    "cover_letter_draft",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",

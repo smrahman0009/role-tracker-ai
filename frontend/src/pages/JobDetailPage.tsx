@@ -34,6 +34,7 @@ import { Link, useParams } from "react-router";
 import { useAuth } from "@/auth/AuthContext";
 import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CoverLetterAnalysisPanel } from "@/components/CoverLetterAnalysisPanel";
+import { CoverLetterDraftPanel } from "@/components/CoverLetterDraftPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { LetterRenderer } from "@/components/LetterRenderer";
@@ -217,6 +218,7 @@ export default function JobDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
             <div className="lg:col-span-2 space-y-4">
               <CoverLetterAnalysisPanel jobId={job.job_id} />
+              <CoverLetterDraftPanel jobId={job.job_id} />
               <LetterWorkspace
                 userId={userId ?? ""}
                 jobId={job.job_id}
