@@ -52,10 +52,6 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
   const versionsQuery = useLetterVersions(jobId);
   const pip = usePictureInPictureWindow();
   const [whyOpen, setWhyOpen] = useState(false);
-  // Sticky-to-viewport by default so the apply kit follows the user as
-  // they scroll through the cover-letter workflow. Pin button below
-  // toggles back to in-flow positioning if it gets in the way.
-  const [pinned, setPinned] = useState(true);
 
   const versions = versionsQuery.data?.versions ?? [];
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
@@ -200,6 +196,11 @@ function ApplyKitBody({
   onOpenFloating,
   onCloseFloating,
 }: ApplyKitBodyProps) {
+  // Sticky-to-viewport by default so the apply kit follows the user as
+  // they scroll through the cover-letter workflow. Pin button in the
+  // header toggles back to in-flow positioning if it gets in the way.
+  const [pinned, setPinned] = useState(true);
+
   return (
     <Card
       className={cn(
