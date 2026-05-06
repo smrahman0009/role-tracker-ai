@@ -554,6 +554,9 @@ class CoverLetterCommitted(BaseModel):
     close: str | None = None
 
 
+ModelChoice = Literal["haiku", "sonnet"]
+
+
 class CoverLetterDraftRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/draft."""
 
@@ -568,6 +571,9 @@ class CoverLetterDraftRequest(BaseModel):
     # different angle"; the model will be asked to produce something
     # meaningfully different.
     alternative_to: str | None = None
+    # Phase 2.5: model picker. Defaults to Sonnet because Haiku tends
+    # to write naive cover letters; users can flip to Haiku to compare.
+    model: ModelChoice = "sonnet"
 
 
 class CoverLetterDraftResponse(BaseModel):
@@ -586,3 +592,18 @@ class CoverLetterFinalizeRequest(BaseModel):
     hook: str
     fit: str
     close: str
+
+
+class CoverLetterSummaryRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/summary.
+
+    Sonnet by default because the summary is creative prose; Haiku
+    is available for cost-vs-quality comparison.
+    """
+
+    model: ModelChoice = "sonnet"
+
+
+class CoverLetterSummaryResponse(BaseModel):
+    summary: str
+    model: str

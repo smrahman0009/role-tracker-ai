@@ -355,11 +355,23 @@ export interface UsageResponse {
 
 // ---------- Interactive cover letter ----------
 
+/** API-level model alias. Maps to a concrete Anthropic model on the server. */
+export type ModelChoice = "haiku" | "sonnet";
+
 export interface CoverLetterAnalysisResponse {
   strong: string[];
   gaps: string[];
   partial: string[];
   excitement_hooks: string[];
+  model: string;
+}
+
+export interface CoverLetterSummaryRequest {
+  model?: ModelChoice;
+}
+
+export interface CoverLetterSummaryResponse {
+  summary: string;
   model: string;
 }
 
@@ -377,6 +389,7 @@ export interface CoverLetterDraftRequest {
   committed: CoverLetterCommitted;
   hint?: string | null;
   alternative_to?: string | null;
+  model?: ModelChoice;
 }
 
 export interface CoverLetterDraftResponse {

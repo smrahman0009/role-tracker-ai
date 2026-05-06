@@ -80,8 +80,12 @@ FEATURE_COST_USD: dict[str, float] = {
     # JSON over (resume + JD).
     "cover_letter_analysis": 0.005,
     # Interactive cover letter, single-paragraph draft (hook / fit /
-    # close). Haiku call, ~500 tokens out.
-    "cover_letter_draft": 0.005,
+    # close). Defaults to Sonnet now; the dashboard cost is averaged
+    # across both model choices since the user can flip per call.
+    "cover_letter_draft": 0.020,
+    # Interactive cover letter, JD summary panel. Sonnet by default,
+    # ~80-120 tokens out.
+    "cover_letter_summary": 0.020,
 }
 
 
@@ -96,6 +100,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_polish",
     "cover_letter_analysis",
     "cover_letter_draft",
+    "cover_letter_summary",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",

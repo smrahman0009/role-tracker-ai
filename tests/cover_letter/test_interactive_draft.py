@@ -83,9 +83,20 @@ def test_draft_rejects_unknown_paragraph() -> None:
         draft(paragraph="unknown", **_common_kwargs(client))
 
 
-def test_draft_uses_haiku_model() -> None:
+def test_draft_default_is_sonnet() -> None:
+    """Phase 2.5 flipped the default from Haiku to Sonnet because Haiku
+    cover-letter drafts read naive. Per-call override is exposed at
+    the API surface."""
     client = _StubClient()
     draft(paragraph="hook", **_common_kwargs(client))
+    assert client.messages.last_request["model"] == "claude-sonnet-4-6"
+
+
+def test_draft_honors_explicit_model() -> None:
+    client = _StubClient()
+    draft(
+        paragraph="hook", model="claude-haiku-4-5", **_common_kwargs(client)
+    )
     assert client.messages.last_request["model"] == "claude-haiku-4-5"
 
 

@@ -168,7 +168,9 @@ def test_draft_returns_paragraph_and_model(client: TestClient) -> None:
     body = response.json()
     assert body["paragraph"] == "hook"
     assert body["text"] == "Generated paragraph here."
-    assert body["model"].startswith("claude-haiku-")
+    # Default since Phase 2.5 is Sonnet (the per-call model picker
+    # exists for the user to flip to Haiku for cost-vs-quality A/B).
+    assert body["model"].startswith("claude-sonnet-")
 
 
 def test_draft_supports_all_three_paragraphs(client: TestClient) -> None:

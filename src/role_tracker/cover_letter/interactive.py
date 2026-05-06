@@ -31,12 +31,46 @@ from role_tracker.cover_letter.prompts.interactive_analysis import (
     USER_TEMPLATE,
 )
 
-# Use a small model for analysis and individual paragraphs. Structured
-# output with tight constraints is its sweet spot.
-_ANALYSIS_MODEL = "claude-haiku-4-5"
-_DRAFT_MODEL = "claude-haiku-4-5"
+# Concrete Anthropic model IDs. Aliased to "haiku" / "sonnet" at the
+# API surface so the route accepts a stable enum even if Anthropic
+# rolls out a new minor version.
+HAIKU_MODEL = "claude-haiku-4-5"
+SONNET_MODEL = "claude-sonnet-4-6"
+
+# Defaults reflect what each task actually needs:
+#   - Analysis is structured JSON → Haiku is genuinely as good, 5x cheaper.
+#   - Summary and drafts are creative prose → Sonnet by default; the API
+#     accepts an override so the user can A/B compare cheaply.
+_ANALYSIS_MODEL = HAIKU_MODEL
+_DRAFT_MODEL_DEFAULT = SONNET_MODEL
+_SUMMARY_MODEL_DEFAULT = SONNET_MODEL
+
 _MAX_TOKENS = 1024
 _DRAFT_MAX_TOKENS = 512  # paragraphs are short
+_SUMMARY_MAX_TOKENS = 384
+
+
+def resolve_model(choice: str | None, *, default: str) -> str:
+    """Translate an API-level "haiku"/"sonnet" alias to a real model ID.
+
+    `None` and empty string fall through to the supplied default.
+    Raises ValueError on an unknown alias so route validation surfaces
+    a 422 instead of a silent 500.
+    """
+    if not choice:
+        return default
+    lowered = choice.lower()
+    if lowered == "haiku":
+        return HAIKU_MODEL
+    if lowered == "sonnet":
+        return SONNET_MODEL
+    # Allow callers to pass a fully-qualified model ID through if they
+    # want to pin a specific version.
+    if lowered.startswith("claude-"):
+        return choice
+    raise ValueError(
+        f"unknown model choice {choice!r}; expected 'haiku' or 'sonnet'"
+    )
 
 
 class MatchAnalysis(BaseModel):
@@ -242,7 +276,7 @@ def draft(
     hint: str | None = None,                          # noqa: ARG001
     alternative_to: str | None = None,                # noqa: ARG001
     client: Anthropic | _AnthropicClientLike,
-    model: str = _DRAFT_MODEL,
+    model: str = _DRAFT_MODEL_DEFAULT,
 ) -> str:
     """Generate one paragraph of a cover letter.
 
@@ -309,3 +343,45 @@ def finalize(
     """
     parts = [p.strip() for p in (hook, fit, close) if p.strip()]
     return "\n\n".join(parts)
+
+
+# ============================================================================
+# Phase 2.5: JD summary
+# ============================================================================
+
+
+def summarize_job(
+    jd_text: str,
+    *,
+    client: Anthropic | _AnthropicClientLike,
+    model: str = _SUMMARY_MODEL_DEFAULT,
+) -> str:
+    """Five to six sentences summarising what the role is about.
+
+    Distinct from the match analysis: this is purely about the JOB,
+    independent of the user's resume. Useful as the first thing the
+    user reads when opening a job, especially when JDs are long or
+    repetitive.
+
+    Sonnet by default since this is creative prose where nuance and
+    voice matter. Haiku is acceptable when the user explicitly asks
+    to test it.
+    """
+    # Imported lazily to keep this module import-cheap when callers
+    # don't use the summary feature.
+    from role_tracker.cover_letter.prompts import job_summary
+
+    response = client.messages.create(  # type: ignore[union-attr]
+        model=model,
+        max_tokens=_SUMMARY_MAX_TOKENS,
+        system=job_summary.SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": job_summary.USER_TEMPLATE.format(
+                    jd_text=jd_text.strip()
+                ),
+            }
+        ],
+    )
+    return _extract_text(response).strip()

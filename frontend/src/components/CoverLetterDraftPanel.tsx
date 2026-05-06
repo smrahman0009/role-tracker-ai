@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles, Check } from "lucide-react";
 
+import { ModelToggle } from "@/components/ModelToggle";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toaster";
@@ -28,8 +29,8 @@ import {
   useCoverLetterFinalize,
 } from "@/hooks/useCoverLetterDraft";
 import type {
-  CoverLetterAnalysisResponse,
   CoverLetterCommitted,
+  ModelChoice,
   ParagraphKey,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
     fit: { ...EMPTY_PARAGRAPH },
     close: { ...EMPTY_PARAGRAPH },
   });
+  const [model, setModel] = useState<ModelChoice>("sonnet");
 
   // Reset whenever the user opens a different job (analysis changes).
   useEffect(() => {
@@ -119,6 +121,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
             paragraph,
             analysis,
             committed,
+            model,
           });
           setParagraphs((prev) => ({
             ...prev,
@@ -197,7 +200,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
 
   return (
     <Card className="p-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">
             Compose cover letter
@@ -207,34 +210,41 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
             any of them before saving.
           </p>
         </div>
-        <Button
-          size="sm"
-          variant={noneStarted ? "default" : "secondary"}
-          onClick={composeAll}
-          disabled={
-            draftMutation.isPending ||
-            (!noneStarted &&
-              (["hook", "fit", "close"] as ParagraphKey[]).some(
-                (k) => paragraphs[k].status === "loading",
-              ))
-          }
-        >
-          {(["hook", "fit", "close"] as ParagraphKey[]).some(
-            (k) => paragraphs[k].status === "loading",
-          ) ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Drafting
-            </>
-          ) : noneStarted ? (
-            <>
-              <Sparkles className="h-3.5 w-3.5" />
-              Compose draft
-            </>
-          ) : (
-            "Re-draft all"
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <ModelToggle
+            value={model}
+            onChange={setModel}
+            disabled={draftMutation.isPending}
+          />
+          <Button
+            size="sm"
+            variant={noneStarted ? "default" : "secondary"}
+            onClick={composeAll}
+            disabled={
+              draftMutation.isPending ||
+              (!noneStarted &&
+                (["hook", "fit", "close"] as ParagraphKey[]).some(
+                  (k) => paragraphs[k].status === "loading",
+                ))
+            }
+          >
+            {(["hook", "fit", "close"] as ParagraphKey[]).some(
+              (k) => paragraphs[k].status === "loading",
+            ) ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Drafting
+              </>
+            ) : noneStarted ? (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                Compose draft
+              </>
+            ) : (
+              "Re-draft all"
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 space-y-3">

@@ -38,6 +38,8 @@ from role_tracker.api.schemas import (
     CoverLetterDraftRequest,
     CoverLetterDraftResponse,
     CoverLetterFinalizeRequest,
+    CoverLetterSummaryRequest,
+    CoverLetterSummaryResponse,
     CritiqueScore,
     GenerateLetterRequest,
     GenerateLetterResponse,
@@ -61,6 +63,8 @@ from role_tracker.cover_letter.interactive import (
     analyze,
     draft,
     finalize,
+    resolve_model,
+    summarize_job,
 )
 from role_tracker.cover_letter.polish import polish_cover_letter
 from role_tracker.cover_letter.refine import refine_cover_letter
@@ -516,6 +520,44 @@ def analyze_cover_letter_match(
 
 
 @router.post(
+    "/users/{user_id}/jobs/{job_id}/cover-letter/summary",
+    response_model=CoverLetterSummaryResponse,
+)
+def summarize_cover_letter_job(
+    user_id: str,
+    job_id: str,
+    body: CoverLetterSummaryRequest,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
+) -> CoverLetterSummaryResponse:
+    """Plain-English 5-6 sentence summary of the JD.
+
+    Independent of the user's resume; this is purely a JD digest. Sonnet
+    by default because the output is creative prose. Haiku is selectable
+    via the `model` field for cost-vs-quality comparison.
+    """
+    from role_tracker.cover_letter.interactive import _SUMMARY_MODEL_DEFAULT
+
+    job = _find_job(seen_store, user_id, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    model_id = resolve_model(body.model, default=_SUMMARY_MODEL_DEFAULT)
+    summary = summarize_job(
+        jd_text=job.description,
+        client=client,
+        model=model_id,
+    )
+
+    UsageRecorder(usage_store, user_id).feature("cover_letter_summary")
+    return CoverLetterSummaryResponse(summary=summary, model=model_id)
+
+
+@router.post(
     "/users/{user_id}/jobs/{job_id}/cover-letter/draft",
     response_model=CoverLetterDraftResponse,
 )
@@ -571,6 +613,10 @@ def draft_cover_letter_paragraph(
         excitement_hooks=body.analysis.excitement_hooks,
     )
 
+    from role_tracker.cover_letter.interactive import _DRAFT_MODEL_DEFAULT
+
+    model_id = resolve_model(body.model, default=_DRAFT_MODEL_DEFAULT)
+
     text = draft(
         paragraph=body.paragraph,
         user_name=user_name,
@@ -583,13 +629,14 @@ def draft_cover_letter_paragraph(
         hint=body.hint,
         alternative_to=body.alternative_to,
         client=client,
+        model=model_id,
     )
 
     UsageRecorder(usage_store, user_id).feature("cover_letter_draft")
     return CoverLetterDraftResponse(
         paragraph=body.paragraph,
         text=text,
-        model="claude-haiku-4-5",
+        model=model_id,
     )
 
 

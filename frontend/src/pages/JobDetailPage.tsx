@@ -36,6 +36,7 @@ import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CoverLetterAnalysisPanel } from "@/components/CoverLetterAnalysisPanel";
 import { CoverLetterDraftPanel } from "@/components/CoverLetterDraftPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
+import { JobSummaryPanel } from "@/components/JobSummaryPanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { LetterRenderer } from "@/components/LetterRenderer";
 import { FitBadge } from "@/components/FitBadge";
@@ -217,6 +218,7 @@ export default function JobDetailPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
             <div className="lg:col-span-2 space-y-4">
+              <JobSummaryPanel jobId={job.job_id} />
               <CoverLetterAnalysisPanel jobId={job.job_id} />
               <CoverLetterDraftPanel jobId={job.job_id} />
               <LetterWorkspace
