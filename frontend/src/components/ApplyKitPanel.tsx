@@ -19,6 +19,8 @@ import {
   Mail,
   PanelRight,
   PictureInPicture2,
+  Pin,
+  PinOff,
   Sparkles,
   X,
 } from "lucide-react";
@@ -50,6 +52,10 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
   const versionsQuery = useLetterVersions(jobId);
   const pip = usePictureInPictureWindow();
   const [whyOpen, setWhyOpen] = useState(false);
+  // Sticky-to-viewport by default so the apply kit follows the user as
+  // they scroll through the cover-letter workflow. Pin button below
+  // toggles back to in-flow positioning if it gets in the way.
+  const [pinned, setPinned] = useState(true);
 
   const versions = versionsQuery.data?.versions ?? [];
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
@@ -195,27 +201,55 @@ function ApplyKitBody({
   onCloseFloating,
 }: ApplyKitBodyProps) {
   return (
-    <Card>
+    <Card
+      className={cn(
+        // When pinned, follow the viewport as the user scrolls. The
+        // max-height + overflow-y rules keep the panel from spilling
+        // past the visible area on shorter screens.
+        pinned &&
+          "lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto",
+      )}
+    >
       <CardHeader>
         <CardTitle className="text-sm flex items-center gap-2">
           <PanelRight className="h-4 w-4 text-indigo-600" />
           Apply kit
         </CardTitle>
-        {isPipSupported && (
+        <div className="flex items-center gap-3">
+          {isPipSupported && (
+            <button
+              type="button"
+              onClick={isFloating ? onCloseFloating : onOpenFloating}
+              className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              title={
+                isFloating
+                  ? "Close the floating window"
+                  : "Open as a floating, always-on-top window (Chrome/Edge)"
+              }
+            >
+              <PictureInPicture2 className="h-3 w-3" />
+              {isFloating ? "Dock" : "Float"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={isFloating ? onCloseFloating : onOpenFloating}
-            className="text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+            onClick={() => setPinned((v) => !v)}
+            className="text-slate-400 hover:text-slate-700 transition-colors"
             title={
-              isFloating
-                ? "Close the floating window"
-                : "Open as a floating, always-on-top window (Chrome/Edge)"
+              pinned
+                ? "Unpin: stop following the page as you scroll"
+                : "Pin: follow the page as you scroll"
             }
+            aria-pressed={pinned}
+            aria-label={pinned ? "Unpin from viewport" : "Pin to viewport"}
           >
-            <PictureInPicture2 className="h-3 w-3" />
-            {isFloating ? "Dock" : "Float"}
+            {pinned ? (
+              <Pin className="h-3.5 w-3.5" />
+            ) : (
+              <PinOff className="h-3.5 w-3.5" />
+            )}
           </button>
-        )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
         <Button onClick={onOpenPosting} className="w-full" variant="primary">

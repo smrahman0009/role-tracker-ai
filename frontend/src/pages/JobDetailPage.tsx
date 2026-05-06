@@ -17,6 +17,8 @@
 import {
   ArrowLeft,
   Building2,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Loader2,
   MapPin,
@@ -218,6 +220,7 @@ export default function JobDetailPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
             <div className="lg:col-span-2 space-y-4">
+              <JobDescription description={job.description} />
               <JobSummaryPanel jobId={job.job_id} />
               <CoverLetterAnalysisPanel jobId={job.job_id} />
               <CoverLetterDraftPanel jobId={job.job_id} />
@@ -237,7 +240,6 @@ export default function JobDetailPage() {
                 regenerateMutationPending={regenerateMutation.isPending}
                 generateMutationPending={generateMutation.isPending}
               />
-              <JobDescription description={job.description} />
             </div>
 
             <div className="space-y-4">
@@ -341,16 +343,41 @@ function JobHeader({
 }
 
 function JobDescription({ description }: { description: string }) {
+  // Collapsed by default. The role-summary panel below this one
+  // already gives a 5-6 sentence digest, so the raw JD is here for
+  // verification / detail and only loaded into view on demand.
+  const [open, setOpen] = useState(false);
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-sm">Job description</CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {open ? (
+            <>
+              <ChevronUp className="h-3.5 w-3.5" />
+              Hide
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3.5 w-3.5" />
+              Show full description
+            </>
+          )}
+        </Button>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-          {description}
-        </p>
-      </CardContent>
+      {open && (
+        <CardContent>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+            {description}
+          </p>
+        </CardContent>
+      )}
     </Card>
   );
 }
