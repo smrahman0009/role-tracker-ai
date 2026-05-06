@@ -76,6 +76,9 @@ FEATURE_COST_USD: dict[str, float] = {
     "why_interested_polish": 0.005,
     # URL-extract LLM refine — single Haiku call against the JD body.
     "url_extract_llm_refine": 0.005,
+    # Interactive cover letter, match analysis — Haiku call returning
+    # JSON over (resume + JD).
+    "cover_letter_analysis": 0.005,
 }
 
 
@@ -88,6 +91,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_generate",
     "cover_letter_refine",
     "cover_letter_polish",
+    "cover_letter_analysis",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",

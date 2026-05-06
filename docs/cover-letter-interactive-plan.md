@@ -26,6 +26,48 @@ on smaller paragraph slices.
 
 ---
 
+## Reference template
+
+All paragraph generation anchors on this user-supplied template, kept
+short on purpose:
+
+```
+Paragraph 1, Introduction & Hook
+Hi {hiring_manager}, I'm {user.name}, a {user.role} with
+{user.experience_summary}. I'm genuinely excited about the
+{job.title} role at {job.company} because of your focus on
+{excitement_hook}.
+
+Paragraph 2, Why You're a Fit
+[Strong match path]
+Your role requires {req_1} and {req_2}. In my work at
+{relevant_employer}, I built {specific_example} that directly
+demonstrates {req_1}. Additionally, I've shipped {relevant_skill},
+which aligns with your need for {req_2}.
+
+[Gap path]
+Your role requires {req_1} and {req_2}. I have strong experience
+with {req_1} from my work at {relevant_employer}. While my {req_2}
+experience is still developing, I'm actively building this skill
+through {growth_evidence}, and my foundation in
+{transferable_skill} positions me to ramp up quickly.
+
+Paragraph 3, Close
+{user_self_summary_one_liner}. I'd love to connect and explore how
+I can contribute to your team. Thank you for your time and
+consideration.
+Best,
+{user.first_name}
+```
+
+The prompts in `cover_letter/prompts/` use this as the structural
+constraint. The match analysis from Phase 1 supplies the variables:
+Strong matches drive the strong-match path of Paragraph 2, Gaps
+drive the gap-honest path, Partial matches inform the framing of
+either, and `excitement_hooks` (added below) feed Paragraph 1.
+
+---
+
 ## The user flow
 
 Three pages, no wizard, all on one screen as a single editor.
@@ -128,10 +170,18 @@ No new tables. The existing data model already covers everything.
   "partial": [
     "Distributed systems, 1 yr (JD asks 3+; related Spark work compensates)"
   ],
+  "excitement_hooks": [
+    "their focus on real-time inference at scale",
+    "the cross-functional collaboration between ML and product"
+  ],
   "cached": false,
   "model": "claude-haiku-4-5"
 }
 ```
+
+`excitement_hooks` are 2-3 candidates Paragraph 1 can pick from. Each
+is one short phrase fitting the template's
+"because of your focus on ___" slot.
 
 ### POST /users/{user_id}/jobs/{job_id}/cover-letter/draft
 

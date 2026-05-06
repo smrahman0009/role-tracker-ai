@@ -34,6 +34,7 @@ from fastapi.responses import Response
 from role_tracker.api.routes.jobs import get_seen_jobs_store, get_usage_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
+    CoverLetterAnalysisResponse,
     CritiqueScore,
     GenerateLetterRequest,
     GenerateLetterResponse,
@@ -51,6 +52,7 @@ from role_tracker.api.schemas import (
 )
 from role_tracker.config import Settings
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.cover_letter.interactive import AnalysisError, analyze
 from role_tracker.cover_letter.polish import polish_cover_letter
 from role_tracker.cover_letter.refine import refine_cover_letter
 from role_tracker.jobs.models import JobPosting
@@ -431,6 +433,76 @@ def polish_letter(
     UsageRecorder(usage_store, user_id).feature("cover_letter_polish")
     return PolishLetterResponse(
         text=polished, word_count=len(polished.split())
+    )
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/cover-letter/analysis",
+    response_model=CoverLetterAnalysisResponse,
+)
+def analyze_cover_letter_match(
+    user_id: str,
+    job_id: str,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    resume_store: ResumeStore = Depends(get_resume_store),
+    client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
+) -> CoverLetterAnalysisResponse:
+    """Phase 1 of the interactive cover-letter flow.
+
+    Returns four short bullet lists (Strong / Gaps / Partial /
+    excitement_hooks) by sending the resume and JD to Claude Haiku
+    with strict JSON output. The lists drive the paragraph cards in
+    Phases 2-6.
+
+    No persistent caching yet; every call costs about $0.005 and
+    takes a few seconds. Add a cache layer once we have real usage
+    patterns.
+    """
+    job = _find_job(seen_store, user_id, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    resume_bytes = resume_store.get_file_bytes(user_id)
+    if resume_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No resume uploaded. Upload one before running analysis.",
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resume_bytes)
+        tmp_path = Path(tmp.name)
+    try:
+        resume_text = parse_resume(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    try:
+        analysis = analyze(
+            resume_text=resume_text,
+            jd_text=job.description,
+            client=client,
+        )
+    except AnalysisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Match analysis failed to produce valid JSON. "
+                f"Try again. ({exc})"
+            ),
+        ) from exc
+
+    UsageRecorder(usage_store, user_id).feature("cover_letter_analysis")
+    return CoverLetterAnalysisResponse(
+        strong=analysis.strong,
+        gaps=analysis.gaps,
+        partial=analysis.partial,
+        excitement_hooks=analysis.excitement_hooks,
+        model="claude-haiku-4-5",
     )
 
 

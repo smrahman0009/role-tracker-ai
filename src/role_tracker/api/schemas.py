@@ -524,3 +524,18 @@ class UsageResponse(BaseModel):
 
     current: UsageMonth
     history: list[UsageMonth] = []
+
+
+class CoverLetterAnalysisResponse(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/analysis.
+
+    Four lists driving the interactive cover-letter flow. Each list
+    item is one short factual line; we explicitly do not summarise or
+    cluster.
+    """
+
+    strong: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    partial: list[str] = Field(default_factory=list)
+    excitement_hooks: list[str] = Field(default_factory=list)
+    model: str

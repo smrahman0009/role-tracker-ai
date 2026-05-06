@@ -352,3 +352,13 @@ export interface UsageResponse {
   current: UsageMonth;
   history: UsageMonth[];
 }
+
+// ---------- Interactive cover letter ----------
+
+export interface CoverLetterAnalysisResponse {
+  strong: string[];
+  gaps: string[];
+  partial: string[];
+  excitement_hooks: string[];
+  model: string;
+}
