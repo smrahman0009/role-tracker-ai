@@ -271,6 +271,58 @@ def _build_close_messages(
     ]
 
 
+_DIFFERENT_ANGLE_PER_PARAGRAPH = {
+    "hook": (
+        "anchor on a different excitement hook from the analysis, or a "
+        "different specific detail in the JD"
+    ),
+    "fit": (
+        "lead with a different matched requirement and a different "
+        "concrete piece of resume evidence (different project, "
+        "employer, or artefact)"
+    ),
+    "close": (
+        "pick a different through-line for the candidate's overall "
+        "career shape; avoid the same opening framing as the previous "
+        "version"
+    ),
+}
+
+
+def _append_alternative_instruction(
+    messages: list[dict],
+    paragraph: str,
+    previous_text: str,
+) -> list[dict]:
+    """Add a follow-up user message asking for a meaningfully different
+    angle than the supplied previous_text.
+
+    Lives on the user side rather than the system prompt so the cached
+    system prefix still hits across calls. The model sees the previous
+    version verbatim plus a per-paragraph instruction on which axis to
+    vary along.
+    """
+    diff_axis = _DIFFERENT_ANGLE_PER_PARAGRAPH.get(
+        paragraph,
+        "produce something with a clearly different content shape, "
+        "not a reworded version",
+    )
+    addendum = (
+        "\n\nThe writer already saw this version of the paragraph and "
+        f"wants a meaningfully different angle. Specifically: {diff_axis}. "
+        "Do NOT just reword the previous text. Pick a genuinely different "
+        "anchor and write fresh prose around it.\n\n"
+        "Previous version:\n"
+        f"\"{previous_text.strip()}\""
+    )
+    # Append to the existing user message rather than adding a new turn,
+    # so the model treats the instruction as part of the same request
+    # context.
+    if messages and messages[0].get("role") == "user":
+        messages[0]["content"] = messages[0]["content"] + addendum
+    return messages
+
+
 def draft(
     *,
     paragraph: str,
@@ -282,7 +334,7 @@ def draft(
     analysis: MatchAnalysis,
     committed: dict[str, str | None] | None = None,  # noqa: ARG001
     hint: str | None = None,                          # noqa: ARG001
-    alternative_to: str | None = None,                # noqa: ARG001
+    alternative_to: str | None = None,
     client: Anthropic | _AnthropicClientLike,
     model: str = _DRAFT_MODEL_DEFAULT,
 ) -> str:
@@ -290,9 +342,14 @@ def draft(
 
     `paragraph` selects the prompt: "hook", "fit", or "close".
 
-    `committed`, `hint`, and `alternative_to` are accepted now to keep
-    the function signature stable, but Phase 2 ignores them. Phases
-    3 and 4 wire them in.
+    `alternative_to` triggers Phase 3's "different angle" mode: when set
+    to the previous paragraph text, the prompt asks for a meaningfully
+    different anchor (different excitement hook for Hook, different
+    matched requirement and evidence for Fit, different through-line
+    for Close). The cached system prefix still hits.
+
+    `committed` and `hint` are accepted to keep the signature stable;
+    `hint` lands in Phase 4.
     """
     if paragraph not in PARAGRAPH_KEYS:
         raise ValueError(
@@ -326,6 +383,11 @@ def draft(
             job_title=job_title,
             job_company=job_company,
             resume_text=resume_text,
+        )
+
+    if alternative_to and alternative_to.strip():
+        messages = _append_alternative_instruction(
+            messages, paragraph, alternative_to
         )
 
     response = client.messages.create(  # type: ignore[union-attr]

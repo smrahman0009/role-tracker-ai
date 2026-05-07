@@ -4,7 +4,6 @@ import pytest
 
 from role_tracker.cover_letter.style_validator import clean, clean_list
 
-
 # ----- em-dash + en-dash handling -----------------------------------------
 
 

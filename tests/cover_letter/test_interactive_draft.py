@@ -204,3 +204,79 @@ def test_finalize_skips_empty_paragraphs() -> None:
     the letter is incomplete; here we just defend the contract."""
     text = finalize(hook="Hello.", fit="Fit.", close="")
     assert text == "Hello.\n\nFit."
+
+
+# ----- Phase 3: alternative_to ("Try a different angle") ------------------
+
+
+def test_draft_without_alternative_omits_previous_text() -> None:
+    """Default behaviour: no `alternative_to` means the user message
+    contains nothing about a previous version."""
+    client = _StubClient()
+    draft(paragraph="hook", **_common_kwargs(client))
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "Previous version" not in user_msg
+    assert "different angle" not in user_msg
+
+
+def test_draft_with_alternative_includes_previous_text() -> None:
+    """When `alternative_to` is set, the previous text appears
+    verbatim in the user message so the model can avoid repeating it."""
+    client = _StubClient()
+    previous = "Hi Shopify team, I'm Shaikh and I love your real-time work."
+    draft(
+        paragraph="hook",
+        alternative_to=previous,
+        **_common_kwargs(client),
+    )
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert previous in user_msg
+    assert "different angle" in user_msg.lower()
+
+
+def test_draft_alternative_uses_per_paragraph_axis() -> None:
+    """Hook should mention 'excitement hook'; Fit should mention
+    'matched requirement'; Close should mention 'through-line'."""
+    for paragraph, axis_word in [
+        ("hook", "excitement hook"),
+        ("fit", "matched requirement"),
+        ("close", "through-line"),
+    ]:
+        client = _StubClient()
+        draft(
+            paragraph=paragraph,
+            alternative_to="Some previous text.",
+            **_common_kwargs(client),
+        )
+        user_msg = client.messages.last_request["messages"][0]["content"]
+        assert axis_word in user_msg.lower(), (
+            f"{paragraph} prompt should reference '{axis_word}'"
+        )
+
+
+def test_draft_empty_alternative_is_treated_as_none() -> None:
+    """An empty or whitespace-only alternative_to should not trigger
+    the 'different angle' append, so we don't inject empty quotes
+    into the prompt."""
+    client = _StubClient()
+    draft(
+        paragraph="hook",
+        alternative_to="   ",
+        **_common_kwargs(client),
+    )
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "Previous version" not in user_msg
+
+
+def test_draft_alternative_works_for_all_three_paragraphs() -> None:
+    """The flag must work on every paragraph, not just hook."""
+    for paragraph in ("hook", "fit", "close"):
+        client = _StubClient()
+        text = draft(
+            paragraph=paragraph,
+            alternative_to="Previous version text.",
+            **_common_kwargs(client),
+        )
+        assert text  # got a paragraph back
+        user_msg = client.messages.last_request["messages"][0]["content"]
+        assert "Previous version text." in user_msg

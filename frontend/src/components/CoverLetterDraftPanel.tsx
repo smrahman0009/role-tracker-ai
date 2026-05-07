@@ -1,23 +1,28 @@
 /**
- * CoverLetterDraftPanel — Phase 2 of the interactive cover-letter flow.
+ * CoverLetterDraftPanel — Phases 2, 2.5, 3 of the interactive flow.
  *
- * Below the match analysis, the user sees three paragraph cards:
- * Hook, Fit, Close. The flow:
+ * Three paragraph cards (Hook, Fit, Close), each with three things
+ * the user can do:
  *
- *   1. Click "Compose draft" — fires three parallel /draft calls,
- *      one per paragraph.
- *   2. Each card lands in *Viewing* state with the generated text.
- *   3. Click "Tweak this" → *Tweaking* state (textarea + Save / Cancel).
- *   4. Once all three paragraphs are non-empty, "Finalize and save"
- *      enables. Click → POST /finalize → letter saved with
- *      edited_by_user=true. The existing letter workspace refetches.
+ *   - "Tweak"          → inline edit (Phase 2)
+ *   - "Try a different angle" → side-by-side alternative (Phase 3)
+ *   - "Re-draft all"   → fresh top-level regeneration (Phase 2)
  *
- * No alternatives or hints yet (those land in Phases 3-4). No Sonnet
- * smoothing pass at finalize time yet (Phase 6).
+ * Alternatives are capped at MAX_ALTERNATIVES per card. Each
+ * alternative is displayed beside the current text with "Use this"
+ * (commits it as the new current) and "Discard" (drops just that
+ * one) buttons. A "Discard all" link clears every alternative for
+ * a card at once.
+ *
+ * Per-call model toggle (Sonnet / Haiku) at the panel level applies
+ * to every draft and alternative call.
+ *
+ * No hint field yet (Phase 4). No Sonnet smoothing pass at finalize
+ * (Phase 6).
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Sparkles, Check } from "lucide-react";
+import { Loader2, Sparkles, Check, Wand2, X } from "lucide-react";
 
 import { ModelToggle } from "@/components/ModelToggle";
 import { Button } from "@/components/ui/Button";
@@ -45,6 +50,11 @@ interface ParagraphState {
   text: string;
   draftEdit: string;
   status: CardState;
+  /** Alternates produced by "Try different angle"; oldest first. Capped
+   * at MAX_ALTERNATIVES. */
+  alternatives: string[];
+  /** True while a /draft call with alternative_to is in flight. */
+  loadingAlternative: boolean;
   error?: string;
 }
 
@@ -52,13 +62,19 @@ const EMPTY_PARAGRAPH: ParagraphState = {
   text: "",
   draftEdit: "",
   status: "empty",
+  alternatives: [],
+  loadingAlternative: false,
 };
+
+const MAX_ALTERNATIVES = 3;
 
 const PARAGRAPH_LABELS: Record<ParagraphKey, string> = {
   hook: "Paragraph 1, Hook",
   fit: "Paragraph 2, Why you're a fit",
   close: "Paragraph 3, Close",
 };
+
+const PARAGRAPH_KEYS: ParagraphKey[] = ["hook", "fit", "close"];
 
 export function CoverLetterDraftPanel({ jobId }: Props) {
   const analysisQuery = useCoverLetterAnalysis(jobId);
@@ -75,7 +91,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
   });
   const [model, setModel] = useState<ModelChoice>("sonnet");
 
-  // Reset whenever the user opens a different job (analysis changes).
+  // Reset whenever the user opens a different job.
   useEffect(() => {
     setParagraphs({
       hook: { ...EMPTY_PARAGRAPH },
@@ -97,13 +113,15 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
   }
 
   const composeAll = async () => {
-    const keys: ParagraphKey[] = ["hook", "fit", "close"];
-
-    // Mark all three as loading immediately so the user sees activity.
     setParagraphs((prev) => {
       const next = { ...prev };
-      for (const k of keys) {
-        next[k] = { ...prev[k], status: "loading", error: undefined };
+      for (const k of PARAGRAPH_KEYS) {
+        next[k] = {
+          ...prev[k],
+          status: "loading",
+          error: undefined,
+          alternatives: [],
+        };
       }
       return next;
     });
@@ -115,7 +133,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
     };
 
     await Promise.all(
-      keys.map(async (paragraph) => {
+      PARAGRAPH_KEYS.map(async (paragraph) => {
         try {
           const result = await draftMutation.mutateAsync({
             paragraph,
@@ -126,9 +144,12 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
           setParagraphs((prev) => ({
             ...prev,
             [paragraph]: {
+              ...prev[paragraph],
               text: result.text,
               draftEdit: result.text,
               status: "viewing",
+              alternatives: [],
+              loadingAlternative: false,
             },
           }));
         } catch (err) {
@@ -175,6 +196,87 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
     }));
   };
 
+  // Phase 3: alternatives -------------------------------------------
+
+  const tryDifferentAngle = async (key: ParagraphKey) => {
+    const current = paragraphs[key];
+    if (!current.text.trim() || current.loadingAlternative) return;
+
+    setParagraphs((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], loadingAlternative: true, error: undefined },
+    }));
+
+    try {
+      const result = await draftMutation.mutateAsync({
+        paragraph: key,
+        analysis,
+        committed: { hook: null, fit: null, close: null },
+        alternative_to: current.text,
+        model,
+      });
+      setParagraphs((prev) => {
+        const list = [...prev[key].alternatives, result.text];
+        // Cap: drop the oldest if we'd exceed the max.
+        const capped =
+          list.length > MAX_ALTERNATIVES
+            ? list.slice(list.length - MAX_ALTERNATIVES)
+            : list;
+        return {
+          ...prev,
+          [key]: {
+            ...prev[key],
+            alternatives: capped,
+            loadingAlternative: false,
+          },
+        };
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Alternative generation failed";
+      setParagraphs((prev) => ({
+        ...prev,
+        [key]: { ...prev[key], loadingAlternative: false, error: msg },
+      }));
+      toast.error(msg);
+    }
+  };
+
+  const useAlternative = (key: ParagraphKey, index: number) => {
+    setParagraphs((prev) => {
+      const chosen = prev[key].alternatives[index];
+      if (!chosen) return prev;
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          text: chosen,
+          draftEdit: chosen,
+          alternatives: [],
+        },
+      };
+    });
+  };
+
+  const discardAlternative = (key: ParagraphKey, index: number) => {
+    setParagraphs((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        alternatives: prev[key].alternatives.filter((_, i) => i !== index),
+      },
+    }));
+  };
+
+  const discardAllAlternatives = (key: ParagraphKey) => {
+    setParagraphs((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], alternatives: [] },
+    }));
+  };
+
+  // Finalize --------------------------------------------------------
+
   const finalize = () => {
     finalizeMutation.mutate(
       {
@@ -194,8 +296,11 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
     );
   };
 
-  const noneStarted = (["hook", "fit", "close"] as ParagraphKey[]).every(
+  const noneStarted = PARAGRAPH_KEYS.every(
     (k) => paragraphs[k].status === "empty",
+  );
+  const anyLoading = PARAGRAPH_KEYS.some(
+    (k) => paragraphs[k].status === "loading",
   );
 
   return (
@@ -206,8 +311,9 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
             Compose cover letter
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Three short paragraphs based on the match analysis above. Edit
-            any of them before saving.
+            Three short paragraphs based on the match analysis above.
+            Tweak any of them, or click Try a different angle for a
+            fresh take you can compare side-by-side.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -220,17 +326,9 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
             size="sm"
             variant={noneStarted ? "default" : "secondary"}
             onClick={composeAll}
-            disabled={
-              draftMutation.isPending ||
-              (!noneStarted &&
-                (["hook", "fit", "close"] as ParagraphKey[]).some(
-                  (k) => paragraphs[k].status === "loading",
-                ))
-            }
+            disabled={draftMutation.isPending || anyLoading}
           >
-            {(["hook", "fit", "close"] as ParagraphKey[]).some(
-              (k) => paragraphs[k].status === "loading",
-            ) ? (
+            {anyLoading ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Drafting
@@ -248,7 +346,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
       </div>
 
       <div className="mt-4 space-y-3">
-        {(["hook", "fit", "close"] as ParagraphKey[]).map((key) => (
+        {PARAGRAPH_KEYS.map((key) => (
           <ParagraphCard
             key={key}
             label={PARAGRAPH_LABELS[key]}
@@ -257,6 +355,13 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
             onCancel={() => cancelTweak(key)}
             onSave={() => saveTweak(key)}
             onEditChange={(v) => onEditChange(key, v)}
+            onTryDifferent={() => tryDifferentAngle(key)}
+            onUseAlternative={(i) => useAlternative(key, i)}
+            onDiscardAlternative={(i) => discardAlternative(key, i)}
+            onDiscardAll={() => discardAllAlternatives(key)}
+            canTryDifferent={
+              paragraphs[key].alternatives.length < MAX_ALTERNATIVES
+            }
           />
         ))}
       </div>
@@ -292,6 +397,20 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
 
 // ---------- one paragraph card ----------
 
+interface ParagraphCardProps {
+  label: string;
+  state: ParagraphState;
+  onTweak: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onEditChange: (value: string) => void;
+  onTryDifferent: () => void;
+  onUseAlternative: (index: number) => void;
+  onDiscardAlternative: (index: number) => void;
+  onDiscardAll: () => void;
+  canTryDifferent: boolean;
+}
+
 function ParagraphCard({
   label,
   state,
@@ -299,14 +418,14 @@ function ParagraphCard({
   onCancel,
   onSave,
   onEditChange,
-}: {
-  label: string;
-  state: ParagraphState;
-  onTweak: () => void;
-  onCancel: () => void;
-  onSave: () => void;
-  onEditChange: (value: string) => void;
-}) {
+  onTryDifferent,
+  onUseAlternative,
+  onDiscardAlternative,
+  onDiscardAll,
+  canTryDifferent,
+}: ParagraphCardProps) {
+  const hasAlternatives = state.alternatives.length > 0;
+
   return (
     <div
       className={cn(
@@ -319,9 +438,29 @@ function ParagraphCard({
           {label}
         </p>
         {state.status === "viewing" && (
-          <Button size="sm" variant="ghost" onClick={onTweak}>
-            Tweak
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onTryDifferent}
+              disabled={!canTryDifferent || state.loadingAlternative}
+              title={
+                canTryDifferent
+                  ? "Generate an alternative version with a different anchor"
+                  : "Maximum alternatives reached. Use one or discard."
+              }
+            >
+              {state.loadingAlternative ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="h-3.5 w-3.5" />
+              )}
+              Try a different angle
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onTweak}>
+              Tweak
+            </Button>
+          </div>
         )}
       </div>
 
@@ -340,10 +479,74 @@ function ParagraphCard({
         </p>
       )}
 
-      {state.status === "viewing" && (
+      {state.status === "viewing" && !hasAlternatives && (
         <p className="mt-2 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
           {state.text}
         </p>
+      )}
+
+      {/* Side-by-side comparison view */}
+      {state.status === "viewing" && hasAlternatives && (
+        <div className="mt-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Current */}
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide font-medium text-slate-500 mb-1.5">
+                Current
+              </p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                {state.text}
+              </p>
+            </div>
+
+            {/* Alternatives */}
+            <div className="space-y-3">
+              {state.alternatives.map((alt, i) => (
+                <div
+                  key={i}
+                  className="rounded-md border border-indigo-200 bg-indigo-50/30 px-3 py-2"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] uppercase tracking-wide font-medium text-indigo-700">
+                      Alternative {i + 1} of {state.alternatives.length}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onDiscardAlternative(i)}
+                      className="text-slate-400 hover:text-slate-700"
+                      title="Discard this alternative"
+                      aria-label="Discard"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                    {alt}
+                  </p>
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => onUseAlternative(i)}
+                      title="Use this version as the current paragraph"
+                    >
+                      Use this
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={onDiscardAll}
+              className="text-[11px] text-slate-500 hover:text-slate-700"
+            >
+              Discard all alternatives
+            </button>
+          </div>
+        </div>
       )}
 
       {state.status === "tweaking" && (
