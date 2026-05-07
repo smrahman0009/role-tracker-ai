@@ -280,3 +280,62 @@ def test_draft_alternative_works_for_all_three_paragraphs() -> None:
         assert text  # got a paragraph back
         user_msg = client.messages.last_request["messages"][0]["content"]
         assert "Previous version text." in user_msg
+
+
+# ----- Phase 4: hint ("Customize this paragraph") -------------------------
+
+
+def test_draft_with_hint_includes_hint_verbatim() -> None:
+    """When `hint` is set, the writer's steering text appears in the
+    user message so the model can incorporate it."""
+    client = _StubClient()
+    hint = "lead with the Everstream supply-chain ML work, not LLM stuff"
+    draft(paragraph="hook", hint=hint, **_common_kwargs(client))
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert hint in user_msg
+    assert "Steering hint" in user_msg
+
+
+def test_draft_without_hint_omits_hint_block() -> None:
+    """No hint -> no hint block in the prompt."""
+    client = _StubClient()
+    draft(paragraph="hook", **_common_kwargs(client))
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "Steering hint" not in user_msg
+
+
+def test_draft_empty_hint_is_treated_as_none() -> None:
+    """Whitespace-only hints should not trigger the steering block."""
+    client = _StubClient()
+    draft(paragraph="hook", hint="   ", **_common_kwargs(client))
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "Steering hint" not in user_msg
+
+
+def test_draft_hint_works_for_all_three_paragraphs() -> None:
+    for paragraph in ("hook", "fit", "close"):
+        client = _StubClient()
+        draft(
+            paragraph=paragraph,
+            hint="emphasise distributed-systems work",
+            **_common_kwargs(client),
+        )
+        user_msg = client.messages.last_request["messages"][0]["content"]
+        assert "emphasise distributed-systems work" in user_msg
+
+
+def test_draft_with_hint_and_alternative_includes_both() -> None:
+    """When both levers are active, both blocks land in the prompt
+    in the same call (hint first, alternative_to second by design)."""
+    client = _StubClient()
+    draft(
+        paragraph="fit",
+        hint="anchor on the Spark pipeline",
+        alternative_to="Previous version that focused on Python.",
+        **_common_kwargs(client),
+    )
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "anchor on the Spark pipeline" in user_msg
+    assert "Previous version that focused on Python." in user_msg
+    # Hint comes first so the model treats it as primary signal.
+    assert user_msg.find("Steering hint") < user_msg.find("Previous version")

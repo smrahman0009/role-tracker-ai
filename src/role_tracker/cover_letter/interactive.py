@@ -289,35 +289,60 @@ _DIFFERENT_ANGLE_PER_PARAGRAPH = {
 }
 
 
-def _append_alternative_instruction(
+def _append_steering_to_user_message(
     messages: list[dict],
     paragraph: str,
-    previous_text: str,
+    *,
+    alternative_to: str | None = None,
+    hint: str | None = None,
 ) -> list[dict]:
-    """Add a follow-up user message asking for a meaningfully different
-    angle than the supplied previous_text.
+    """Append optional steering blocks to the user message.
 
-    Lives on the user side rather than the system prompt so the cached
-    system prefix still hits across calls. The model sees the previous
-    version verbatim plus a per-paragraph instruction on which axis to
-    vary along.
+    Two independent levers, either or both can be active:
+
+    - `alternative_to`: the previous paragraph text the writer wants a
+      meaningfully different version of. Triggers a per-paragraph axis
+      instruction ("pick a different excitement hook", etc.) plus the
+      previous version verbatim so the model can avoid repeating it.
+
+    - `hint`: a one-line steering instruction from the writer ("lead
+      with the Everstream supply-chain ML work, not LLM stuff"). The
+      model is told to incorporate this for *this paragraph only*.
+
+    Both blocks land at the END of the user message so the cached
+    system prefix still hits across calls. When both are set, the hint
+    appears first because it is the writer's stronger signal of what
+    they want.
     """
-    diff_axis = _DIFFERENT_ANGLE_PER_PARAGRAPH.get(
-        paragraph,
-        "produce something with a clearly different content shape, "
-        "not a reworded version",
-    )
-    addendum = (
-        "\n\nThe writer already saw this version of the paragraph and "
-        f"wants a meaningfully different angle. Specifically: {diff_axis}. "
-        "Do NOT just reword the previous text. Pick a genuinely different "
-        "anchor and write fresh prose around it.\n\n"
-        "Previous version:\n"
-        f"\"{previous_text.strip()}\""
-    )
-    # Append to the existing user message rather than adding a new turn,
-    # so the model treats the instruction as part of the same request
-    # context.
+    has_alt = bool(alternative_to and alternative_to.strip())
+    has_hint = bool(hint and hint.strip())
+    if not (has_alt or has_hint):
+        return messages
+
+    parts: list[str] = []
+
+    if has_hint:
+        parts.append(
+            "\n\nSteering hint from the writer (apply to this paragraph "
+            "and prioritise it over default choices, but stay within "
+            f'the paragraph\'s rules above):\n"{hint.strip()}"'  # type: ignore[union-attr]
+        )
+
+    if has_alt:
+        diff_axis = _DIFFERENT_ANGLE_PER_PARAGRAPH.get(
+            paragraph,
+            "produce something with a clearly different content shape, "
+            "not a reworded version",
+        )
+        parts.append(
+            "\n\nThe writer already saw this version of the paragraph "
+            f"and wants a meaningfully different angle. Specifically: "
+            f"{diff_axis}. Do NOT just reword the previous text. Pick "
+            "a genuinely different anchor and write fresh prose around "
+            f'it.\n\nPrevious version:\n"{alternative_to.strip()}"'  # type: ignore[union-attr]
+        )
+
+    addendum = "".join(parts)
     if messages and messages[0].get("role") == "user":
         messages[0]["content"] = messages[0]["content"] + addendum
     return messages
@@ -333,7 +358,7 @@ def draft(
     resume_text: str,
     analysis: MatchAnalysis,
     committed: dict[str, str | None] | None = None,  # noqa: ARG001
-    hint: str | None = None,                          # noqa: ARG001
+    hint: str | None = None,
     alternative_to: str | None = None,
     client: Anthropic | _AnthropicClientLike,
     model: str = _DRAFT_MODEL_DEFAULT,
@@ -342,14 +367,21 @@ def draft(
 
     `paragraph` selects the prompt: "hook", "fit", or "close".
 
-    `alternative_to` triggers Phase 3's "different angle" mode: when set
-    to the previous paragraph text, the prompt asks for a meaningfully
-    different anchor (different excitement hook for Hook, different
-    matched requirement and evidence for Fit, different through-line
-    for Close). The cached system prefix still hits.
+    `alternative_to` (Phase 3) triggers "different angle" mode: when
+    set to the previous paragraph text, the prompt asks for a
+    meaningfully different anchor (different excitement hook for Hook,
+    different matched requirement / evidence for Fit, different
+    through-line for Close).
 
-    `committed` and `hint` are accepted to keep the signature stable;
-    `hint` lands in Phase 4.
+    `hint` (Phase 4) is a one-line steering instruction from the
+    writer that the model is told to prioritise for this paragraph
+    only ("lead with the Everstream supply-chain ML work, not LLM
+    stuff").
+
+    Both can be active independently or together. Both land in the
+    user message tail so the cached system prefix still hits.
+
+    `committed` is accepted to keep the signature stable.
     """
     if paragraph not in PARAGRAPH_KEYS:
         raise ValueError(
@@ -385,10 +417,12 @@ def draft(
             resume_text=resume_text,
         )
 
-    if alternative_to and alternative_to.strip():
-        messages = _append_alternative_instruction(
-            messages, paragraph, alternative_to
-        )
+    messages = _append_steering_to_user_message(
+        messages,
+        paragraph,
+        alternative_to=alternative_to,
+        hint=hint,
+    )
 
     response = client.messages.create(  # type: ignore[union-attr]
         model=model,
