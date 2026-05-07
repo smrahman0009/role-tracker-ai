@@ -36,7 +36,12 @@ import { Link, useParams } from "react-router";
 import { useAuth } from "@/auth/AuthContext";
 import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CoverLetterAnalysisPanel } from "@/components/CoverLetterAnalysisPanel";
-import { CoverLetterDraftPanel } from "@/components/CoverLetterDraftPanel";
+// CoverLetterDraftPanel hidden in the UI for now (the agent-based
+// LetterWorkspace below remains the primary cover-letter flow).
+// The component file, hooks, prompts, and routes all stay in the
+// codebase; mount this back when ready to re-publish the
+// interactive flow.
+// import { CoverLetterDraftPanel } from "@/components/CoverLetterDraftPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
 import { JobSummaryPanel } from "@/components/JobSummaryPanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
@@ -223,7 +228,7 @@ export default function JobDetailPage() {
               <JobDescription description={job.description} />
               <JobSummaryPanel jobId={job.job_id} />
               <CoverLetterAnalysisPanel jobId={job.job_id} />
-              <CoverLetterDraftPanel jobId={job.job_id} />
+              {/* <CoverLetterDraftPanel /> hidden — see comment by import */}
               <LetterWorkspace
                 userId={userId ?? ""}
                 jobId={job.job_id}
