@@ -228,7 +228,6 @@ def _build_fit_messages(
 ) -> tuple[str, list[dict]]:
     user_msg = interactive_fit.USER_TEMPLATE.format(
         user_name=user_name,
-        user_role_summary="",  # derived from resume in the prompt
         job_title=job_title,
         job_company=job_company,
         strong_block=_format_bullets(analysis.strong),
@@ -253,7 +252,6 @@ def _build_close_messages(
     user_msg = interactive_close.USER_TEMPLATE.format(
         user_name=user_name,
         user_first_name=user_first_name,
-        user_role_summary="",
         job_title=job_title,
         job_company=job_company,
         resume_text=resume_text.strip(),

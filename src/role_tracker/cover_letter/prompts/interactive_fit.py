@@ -1,24 +1,23 @@
 """Prompt for Paragraph 2, Why You're a Fit.
 
-Branches on the analysis. Strong-match path when there are no real
-gaps; gap-honest path when there are. The branching happens inside the
-prompt rather than in two separate prompts so the cached prefix stays
-the same across both paths.
+The earlier version of this prompt anchored on a literal sentence
+shape ("Your role requires X and Y. In my work at..."), which made
+every Fit paragraph open the same way and leak the template through
+the output. This rewrite states *principles* and lets the model pick
+its own opening, with two clear branches (strong match vs gap-honest)
+based on the analysis.
 
-Template (loose anchor):
+Diversity contract across the three paragraphs:
 
-    [Strong match]
-    Your role requires [req 1] and [req 2]. In my work at [employer],
-    I built [specific example] that directly demonstrates [req 1].
-    Additionally, I've shipped [relevant skill], which aligns with
-    your need for [req 2].
+  Hook  : anchors on something specific in the JOB DESCRIPTION.
+  Fit   : anchors on RESUME EVIDENCE — a specific project, employer,
+          quantified result, or shipped artefact. Names ONE matched
+          requirement and, if there's a real gap, ONE gap-bridge.
+  Close : anchors on the CANDIDATE'S OVERALL SHAPE.
 
-    [Gap path]
-    Your role requires [req 1] and [req 2]. I have strong experience
-    with [req 1] from my work at [employer]. While my [req 2]
-    experience is still developing, I'm actively building this skill
-    through [growth evidence], and my foundation in
-    [transferable skill] positions me to ramp up quickly.
+Fit's job is concrete proof, not summary. Every claim must be backed
+by a specific thing on the resume, never a generic "I have strong
+experience with X" without naming what or where.
 """
 
 from role_tracker.cover_letter.prompts.interactive_style import STYLE_RULES
@@ -26,56 +25,69 @@ from role_tracker.cover_letter.prompts.interactive_style import STYLE_RULES
 SYSTEM_PROMPT = f"""You write Paragraph 2 of a short cover letter, Why \
 You're a Fit.
 
-Length: 3 to 4 sentences. Aim for 60 to 100 words.
+Length: 3 to 4 sentences. About 60 to 100 words.
 
-Inputs you'll receive: a Strong matches list, a Gaps list, and a \
-Partial matches list, all derived from comparing the resume against \
-the JD.
+What this paragraph is for, in one line: prove with concrete resume \
+evidence that the writer can do the work this role requires.
 
-Two branches:
+You will receive three lists from the analysis: Strong matches, Gaps, \
+and Partial matches. Decide which branch to write based on the Gaps \
+list:
 
-(A) STRONG MATCH BRANCH. Use when Gaps is empty or contains only \
-cosmetic items the resume can plausibly absorb. Format:
-"Your role requires [req 1] and [req 2]. In my work at [employer], I \
-built [specific example] that directly demonstrates [req 1]. \
-Additionally, I've shipped [relevant skill], which aligns with your \
-need for [req 2]."
+(A) STRONG-MATCH path. Use when Gaps is empty or contains only minor \
+items the resume reasonably absorbs. Pick the SINGLE strongest match \
+and back it with a specific concrete example from the resume: a named \
+project, a quantified result, an employer, a shipped artefact. Then \
+add ONE supporting credential (a second matched requirement, briefly).
 
-(B) GAP-HONEST BRANCH. Use when Gaps contains real items the resume \
-does not cover. Format:
-"Your role requires [req 1] and [req 2]. I have strong experience with \
-[req 1] from my work at [employer]. While my [req 2] experience is \
-still developing, I'm actively building this skill through [evidence], \
-and my foundation in [transferable skill] positions me to ramp up \
-quickly."
+(B) GAP-HONEST path. Use when Gaps contains a real requirement the \
+resume does not directly cover. Lead with one strong match (concrete \
+evidence from resume), then acknowledge the gap in plain language and \
+point to a partial match or related transferable skill that bridges \
+it. The bridge must come from the resume; do not invent ramp-up plans \
+the candidate has not started.
 
-Pick the branch by reading the Gaps list. If it has 0 entries, use (A). \
-If it has 1+ entry that genuinely matters for the role, use (B) on \
-that gap. Partial matches help frame the bridge in branch (B); they \
-become "my foundation in [transferable skill]" content.
+Hard rules for both branches:
 
-Two requirements at most per paragraph. Even if the JD lists many \
-requirements, pick the two most central. Pulling in three or four \
-makes the paragraph too dense.
+- Be specific. "I built X at Company Y" beats "I have experience with X".
+- Name at most TWO requirements. Even if the JD lists ten, pick the \
+two most central.
+- One concrete piece of evidence per requirement. A named project or \
+employer is concrete. "Strong skills in distributed systems" is not.
+- Do NOT open with the literal phrase "Your role requires...". That \
+specific shape is overused and reads as templated. Pick an opening \
+that fits the paragraph's content. Acceptable openings include \
+referring directly to one of the role's needs, naming the candidate's \
+most relevant project, or stating the central match plainly.
+- Do NOT pad with adjectives. "Highly skilled", "deeply passionate", \
+"extensive experience" all weaken the paragraph. Strip them.
+- In the gap-honest branch, do NOT apologise. "Still developing" is \
+the maximum hedge allowed. Words to avoid: weak, lacking, \
+unfortunately, although, I lack.
+- Do NOT echo the analysis bullets verbatim. Paraphrase into prose.
 
-In branch (B), do NOT apologise or hedge excessively. "Still \
-developing" is the strongest hedge allowed. Don't say "weak", "lacking", \
-"unfortunately", or anything that primes the reader to doubt.
+What this paragraph should NOT do:
+
+- Do not name a JD detail as a reason for excitement. That was the Hook.
+- Do not summarise the candidate's overall career shape. That is the \
+Close.
+- Do not list more than two requirements. Compression is the discipline.
 
 {STYLE_RULES}
 
-Output: just the paragraph text, no preamble."""
+Output: just the paragraph text. No preamble, no quotation marks \
+around it, no explanation."""
 
 
-USER_TEMPLATE = """About me (the writer):
+USER_TEMPLATE = """About the writer:
 - Name: {user_name}
-- Self-summary: {user_role_summary}
 
 The job:
 - Title: {job_title}
 - Company: {job_company}
 
-Match analysis from earlier:
+Match analysis (the Strong / Gaps / Partial buckets, supplied verbatim \
+from the analysis stage):
 
 Strong matches:
 {strong_block}
@@ -86,15 +98,16 @@ Gaps:
 Partial matches:
 {partial_block}
 
-Job description (context only, do not echo):
+Job description (context, do not echo):
 ---
 {jd_text}
 ---
 
-Resume (context only, do not echo):
+Resume (use to find the SPECIFIC project, employer, or artefact \
+that proves the strongest match. Concrete is the entire point of \
+this paragraph):
 ---
 {resume_text}
 ---
 
-Write Paragraph 2 now. Choose the strong-match or gap-honest branch \
-based on the Gaps list."""
+Decide branch by reading the Gaps list, then write Paragraph 2 now."""
