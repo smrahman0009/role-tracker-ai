@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from role_tracker.api.middleware import BearerTokenMiddleware
+from role_tracker.api.middleware import BearerTokenMiddleware, parse_tokens
 from role_tracker.api.routes import (
     health,
     jobs,
@@ -58,8 +58,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Bearer-token auth (skipped if APP_TOKEN unset).
-    app.add_middleware(BearerTokenMiddleware, token=settings.app_token)
+    # Bearer-token auth. Multi-user mode (APP_TOKENS JSON) takes
+    # precedence over the legacy single-token APP_TOKEN; both unset =
+    # dev mode bypass.
+    tokens = parse_tokens(settings.app_tokens)
+    app.add_middleware(
+        BearerTokenMiddleware,
+        token=settings.app_token,
+        tokens=tokens,
+    )
 
     # Routes.
     app.include_router(health.router)

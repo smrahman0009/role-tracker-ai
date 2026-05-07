@@ -90,6 +90,7 @@ from role_tracker.screening.why_interested import (
     polish_why_interested,
 )
 from role_tracker.usage import UsageRecorder, UsageStore
+from role_tracker.usage.caps import enforce_daily_cap
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
 from role_tracker.users.yaml_store import YamlUserProfileStore
@@ -340,6 +341,8 @@ def refine_letter(
             ),
         )
 
+    enforce_daily_cap(usage_store, user_id, "cover_letter_refine")
+
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
     background_tasks.add_task(
@@ -443,6 +446,7 @@ def polish_letter(
     the user can polish, review, then click Save edit (which goes through
     the manual-edit endpoint as before).
     """
+    enforce_daily_cap(usage_store, user_id, "cover_letter_polish")
     polished = polish_cover_letter(text=body.text, client=client)
     UsageRecorder(usage_store, user_id).feature("cover_letter_polish")
     return PolishLetterResponse(
@@ -486,6 +490,8 @@ def analyze_cover_letter_match(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No resume uploaded. Upload one before running analysis.",
         )
+
+    enforce_daily_cap(usage_store, user_id, "cover_letter_analysis")
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(resume_bytes)
@@ -547,6 +553,8 @@ def summarize_cover_letter_job(
             detail=f"Job '{job_id}' not found",
         )
 
+    enforce_daily_cap(usage_store, user_id, "cover_letter_summary")
+
     model_id = resolve_model(body.model, default=_SUMMARY_MODEL_DEFAULT)
     try:
         summary = summarize_job(
@@ -606,6 +614,8 @@ def draft_cover_letter_paragraph(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No resume uploaded.",
         )
+
+    enforce_daily_cap(usage_store, user_id, "cover_letter_draft")
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(resume_bytes)
@@ -686,6 +696,8 @@ def finalize_cover_letter(
                 "non-empty before finalizing."
             ),
         )
+
+    enforce_daily_cap(usage_store, user_id, "cover_letter_smooth")
 
     text = finalize(
         hook=body.hook,
@@ -857,6 +869,8 @@ def generate_why_interested_answer(
             detail="No resume uploaded. Upload one before generating.",
         )
 
+    enforce_daily_cap(usage_store, user_id, "why_interested_generate")
+
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(resume_bytes)
         tmp_path = Path(tmp.name)
@@ -891,6 +905,7 @@ def polish_why_interested_answer(
     Single Claude Haiku call, ~3s, ~$0.005. Preserves meaning and
     length; doesn't introduce new ideas.
     """
+    enforce_daily_cap(usage_store, user_id, "why_interested_polish")
     polished = polish_why_interested(text=body.text, client=client)
     UsageRecorder(usage_store, user_id).feature("why_interested_polish")
     return WhyInterestedResponse(
@@ -914,6 +929,7 @@ def _start_generation(
     client: Anthropic,
     usage_store: UsageStore,
 ) -> GenerateLetterResponse:
+    enforce_daily_cap(usage_store, user_id, "cover_letter_generate")
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
     background_tasks.add_task(

@@ -28,17 +28,34 @@ from datetime import UTC, datetime
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from role_tracker.usage.store import MonthlyUsage
+from role_tracker.usage.store import MonthlyUsage, cost_of_features
 
 # Prefix used for per-feature counters. Picked to be both human-
 # readable in the AWS console and unambiguous against any future
 # top-level fields we might add.
 _FEATURE_ATTR_PREFIX = "f_"
 
+# Per-day per-feature counters. Attribute name shape:
+#   d_<YYYY-MM-DD>__<feature>     e.g.  d_2026-05-07__cover_letter_draft
+# Two underscores between the date and feature so the date prefix is
+# unambiguously parseable even if a feature name ever contained an
+# underscore (which they all do).
+_DAILY_ATTR_PREFIX = "d_"
+_DAILY_SEPARATOR = "__"
+
 
 def _current_year_month() -> str:
     now = datetime.now(UTC)
     return f"{now.year:04d}-{now.month:02d}"
+
+
+def _today_iso() -> str:
+    now = datetime.now(UTC)
+    return f"{now.year:04d}-{now.month:02d}-{now.day:02d}"
+
+
+def _daily_attr(date_iso: str, feature: str) -> str:
+    return f"{_DAILY_ATTR_PREFIX}{date_iso}{_DAILY_SEPARATOR}{feature}"
 
 
 class DynamoDBUsageStore:
@@ -99,29 +116,57 @@ class DynamoDBUsageStore:
         )
 
     def record_feature(self, user_id: str, feature: str) -> None:
-        # `ADD` on a non-existent attribute creates it; on a
-        # non-existent item creates the item. Two concurrent calls
-        # against the same key both increment correctly — DynamoDB
-        # serialises the updates server-side.
+        # Single atomic update bumps both the monthly counter and
+        # today's per-day counter. `ADD` on a non-existent attribute
+        # creates it; on a non-existent item creates the item.
+        # Concurrent callers all increment correctly — DynamoDB
+        # serialises ADDs server-side.
         self._table.update_item(
             Key={"user_id": user_id, "year_month": _current_year_month()},
-            UpdateExpression="ADD #attr :one",
+            UpdateExpression="ADD #monthly :one, #daily :one",
             ExpressionAttributeNames={
-                "#attr": f"{_FEATURE_ATTR_PREFIX}{feature}"
+                "#monthly": f"{_FEATURE_ATTR_PREFIX}{feature}",
+                "#daily": _daily_attr(_today_iso(), feature),
             },
             ExpressionAttributeValues={":one": 1},
         )
+
+    def get_today_cost_usd(self, user_id: str) -> float:
+        response = self._table.get_item(
+            Key={"user_id": user_id, "year_month": _current_year_month()}
+        )
+        item = response.get("Item")
+        if not item:
+            return 0.0
+        today = _today_iso()
+        prefix = f"{_DAILY_ATTR_PREFIX}{today}{_DAILY_SEPARATOR}"
+        today_calls: dict[str, int] = {
+            key[len(prefix):]: int(value)
+            for key, value in item.items()
+            if key.startswith(prefix)
+        }
+        return cost_of_features(today_calls)
 
 
 def _item_to_monthly(item: dict) -> MonthlyUsage:
     """Translate a raw DynamoDB item back into a MonthlyUsage model."""
     feature_calls: dict[str, int] = {}
+    daily: dict[str, dict[str, int]] = {}
     for key, value in item.items():
-        if key.startswith(_FEATURE_ATTR_PREFIX):
-            feature_calls[key[len(_FEATURE_ATTR_PREFIX) :]] = int(value)
+        if key.startswith(_FEATURE_ATTR_PREFIX) and not key.startswith(
+            _DAILY_ATTR_PREFIX
+        ):
+            feature_calls[key[len(_FEATURE_ATTR_PREFIX):]] = int(value)
+        elif key.startswith(_DAILY_ATTR_PREFIX):
+            rest = key[len(_DAILY_ATTR_PREFIX):]
+            if _DAILY_SEPARATOR not in rest:
+                continue
+            date_iso, feature = rest.split(_DAILY_SEPARATOR, 1)
+            daily.setdefault(date_iso, {})[feature] = int(value)
 
     return MonthlyUsage(
         year_month=item["year_month"],
         jsearch_calls=int(item.get("jsearch_calls", 0)),
         feature_calls=feature_calls,
+        daily_feature_calls=daily,
     )

@@ -35,8 +35,26 @@ class Settings(BaseSettings):
     top_n_jobs: int = 5
 
     # Web API (Phase 5+) — bearer-token + CORS
-    app_token: str = ""                          # empty disables auth in dev
+    #
+    # Two auth modes:
+    #
+    # 1. Multi-user (preferred): set `app_tokens` to a JSON map of
+    #    `{"<token>": "<user_id>"}`. The middleware binds each token to
+    #    one user_id and rejects any request whose URL path targets a
+    #    different user_id. Used for the friends-as-testers deployment.
+    #
+    # 2. Legacy single-token: set `app_token` to a single secret. The
+    #    token grants access to any user_id in the URL (wildcard). Kept
+    #    so single-user prod deployments don't break during migration.
+    #
+    # Both unset = dev mode = no auth at all.
+    app_token: str = ""
+    app_tokens: str = ""                         # JSON: {"<token>": "<user_id>"}
     cors_origins: str = "http://localhost:5173"  # comma-separated list
+
+    # Per-user, per-day spend cap on Anthropic / OpenAI features.
+    # Resets at midnight UTC. Set to 0 to disable (e.g. local dev).
+    daily_cost_cap_usd: float = 1.50
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 

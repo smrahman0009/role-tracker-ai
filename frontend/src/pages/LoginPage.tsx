@@ -92,8 +92,8 @@ export default function LoginPage() {
               Sign in
             </Button>
             <p className="text-xs text-slate-500 text-center pt-1">
-              No real auth yet — single-user mode. Real OAuth lands when
-              the app goes multi-user.
+              Private beta. Your token is bound to one user_id; cross-user
+              access is rejected by the backend.
             </p>
             <BackendStatus
               isLoading={health.isLoading}

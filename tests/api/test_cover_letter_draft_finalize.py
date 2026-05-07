@@ -269,6 +269,25 @@ def test_finalize_400_on_blank_paragraph(client: TestClient) -> None:
     assert response.status_code == 400
 
 
+def test_draft_returns_429_when_user_over_daily_cap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Burning the per-user daily cap blocks further Anthropic calls."""
+    monkeypatch.setenv("DAILY_COST_CAP_USD", "1.50")
+    with _make_client(monkeypatch, tmp_path) as client:
+        # Pre-spend $1.60 of cover_letter_draft (80 × $0.020) directly
+        # against the usage store the app is using.
+        usage_store = client.app.dependency_overrides[get_usage_store]()
+        for _ in range(80):
+            usage_store.record_feature("alice", "cover_letter_draft")
+        response = client.post(
+            "/users/alice/jobs/j1/cover-letter/draft",
+            json=_draft_body(),
+        )
+        assert response.status_code == 429
+        assert "00:00 utc" in response.json()["detail"].lower()
+
+
 def test_finalize_letter_appears_in_versions_list(client: TestClient) -> None:
     """A finalized letter shows up alongside agent-generated ones."""
     client.post(
