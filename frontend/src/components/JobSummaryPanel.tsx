@@ -109,7 +109,7 @@ export function JobSummaryPanel({ jobId }: Props) {
           />
           <Button
             size="sm"
-            variant={display ? "secondary" : "default"}
+            variant={display ? "secondary" : "primary"}
             onClick={onRun}
             disabled={isRunning}
           >

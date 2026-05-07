@@ -374,7 +374,7 @@ export function CoverLetterDraftPanel({ jobId }: Props) {
           />
           <Button
             size="sm"
-            variant={noneStarted ? "default" : "secondary"}
+            variant={noneStarted ? "primary" : "secondary"}
             onClick={composeAll}
             disabled={draftMutation.isPending || anyLoading}
           >

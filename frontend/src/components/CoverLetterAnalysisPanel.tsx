@@ -56,7 +56,7 @@ export function CoverLetterAnalysisPanel({ jobId }: Props) {
         </div>
         <Button
           size="sm"
-          variant={data ? "secondary" : "default"}
+          variant={data ? "secondary" : "primary"}
           onClick={() => run.mutate()}
           disabled={isRunning}
         >
