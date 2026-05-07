@@ -128,3 +128,14 @@ After that, `git push origin main` triggers an automatic build → push to ECR �
 | **Daily refresh job** | Optional EventBridge rule that re-runs the matching pipeline overnight so the user wakes up to fresh ranked jobs. | ~1 hr |
 
 None of Phase E is required — the app is portfolio-ready as it stands. These are improvements, not blockers.
+
+## Authorship
+
+Designed and built by **Shaikh Mushfikur Rahman**, an ML engineer based in Canada. This project started as a personal job-search tool and grew into a full demonstration of agentic LLM workflows, cloud-native AWS deployment, and CI/CD on GitHub Actions.
+
+If you find this useful, fork it, learn from it, or adapt pieces into your own projects — that's exactly what it's here for. If you build on it in something public, a link back is appreciated. If you're a recruiter or fellow engineer who'd like to chat, the contacts below are the best way to reach me.
+
+- LinkedIn: [linkedin.com/in/mushfikurrahman](https://www.linkedin.com/in/mushfikurrahman)
+- Email: [shaikh.rahman.dev@gmail.com](mailto:shaikh.rahman.dev@gmail.com)
+
+Released under the [MIT License](LICENSE).

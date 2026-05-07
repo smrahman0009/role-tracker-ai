@@ -2,6 +2,11 @@
 name = "role-tracker"
 version = "0.1.0"
 description = "Daily automated job-matching pipeline with tailored cover letters and email digest"
+authors = [
+    { name = "Shaikh Mushfikur Rahman", email = "shaikh.rahman.dev@gmail.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
