@@ -58,3 +58,5 @@ frontend/dist/
 frontend/.vite/
 frontend/*.log
 frontend/.tsbuildinfo
+# Personal scratch files (templates, command snippets)
+.cover_letter_sample

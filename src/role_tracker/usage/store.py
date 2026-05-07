@@ -76,6 +76,19 @@ FEATURE_COST_USD: dict[str, float] = {
     "why_interested_polish": 0.005,
     # URL-extract LLM refine — single Haiku call against the JD body.
     "url_extract_llm_refine": 0.005,
+    # Interactive cover letter, match analysis — Haiku call returning
+    # JSON over (resume + JD).
+    "cover_letter_analysis": 0.005,
+    # Interactive cover letter, single-paragraph draft (hook / fit /
+    # close). Defaults to Sonnet now; the dashboard cost is averaged
+    # across both model choices since the user can flip per call.
+    "cover_letter_draft": 0.020,
+    # Interactive cover letter, JD summary panel. Sonnet by default,
+    # ~80-120 tokens out.
+    "cover_letter_summary": 0.020,
+    # Interactive cover letter, final smoothing pass at finalize time.
+    # Sonnet over the stitched 3-paragraph letter; ~200-300 tokens out.
+    "cover_letter_smooth": 0.025,
 }
 
 
@@ -88,6 +101,10 @@ ANTHROPIC_FEATURES = {
     "cover_letter_generate",
     "cover_letter_refine",
     "cover_letter_polish",
+    "cover_letter_analysis",
+    "cover_letter_draft",
+    "cover_letter_summary",
+    "cover_letter_smooth",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",
@@ -108,6 +125,12 @@ class MonthlyUsage(BaseModel):
 
     # Per-feature counters. Keys are stable strings — see FEATURE_COST_USD.
     feature_calls: dict[str, int] = Field(default_factory=dict)
+
+    # Per-day, per-feature counts. Outer key: ISO date "YYYY-MM-DD".
+    # Inner key: feature name. Used for the per-user $/day cap (MU-2);
+    # resets implicitly at midnight UTC because today's bucket is
+    # only populated when today's calls happen.
+    daily_feature_calls: dict[str, dict[str, int]] = Field(default_factory=dict)
 
     # ----- Derived fields -----
 
@@ -137,6 +160,17 @@ class UsageStore(Protocol):
     def list_months(self, user_id: str) -> list[MonthlyUsage]: ...
     def record_jsearch(self, user_id: str) -> None: ...
     def record_feature(self, user_id: str, feature: str) -> None: ...
+    def get_today_cost_usd(self, user_id: str) -> float: ...
+
+
+def _today_iso() -> str:
+    now = datetime.now(UTC)
+    return f"{now.year:04d}-{now.month:02d}-{now.day:02d}"
+
+
+def cost_of_features(features: dict[str, int]) -> float:
+    """Sum FEATURE_COST_USD * count over a {feature: count} map."""
+    return sum(FEATURE_COST_USD.get(f, 0.0) * c for f, c in features.items())
 
 
 class FileUsageStore:
@@ -162,6 +196,15 @@ class FileUsageStore:
             month.feature_calls[feature] = (
                 month.feature_calls.get(feature, 0) + 1
             )
+            today = _today_iso()
+            day_bucket = month.daily_feature_calls.setdefault(today, {})
+            day_bucket[feature] = day_bucket.get(feature, 0) + 1
+
+    def get_today_cost_usd(self, user_id: str) -> float:
+        ym = _current_year_month()
+        month = self.get_month(user_id, ym)
+        today = _today_iso()
+        return cost_of_features(month.daily_feature_calls.get(today, {}))
 
     # ----- internals -----
 

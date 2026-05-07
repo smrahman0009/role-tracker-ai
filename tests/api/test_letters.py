@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from role_tracker.api.main import create_app
-from role_tracker.api.routes.jobs import get_seen_jobs_store
+from role_tracker.api.routes.jobs import get_seen_jobs_store, get_usage_store
 from role_tracker.api.routes.letters import (
     get_anthropic_client,
     get_letter_generation_store,
@@ -28,6 +28,7 @@ from role_tracker.letters.generation_state import FileLetterGenerationStore
 from role_tracker.letters.store import FileLetterStore
 from role_tracker.matching.scorer import ScoredJob
 from role_tracker.resume.store import FileResumeStore
+from role_tracker.usage import FileUsageStore
 from role_tracker.users.models import UserProfile
 
 
@@ -135,6 +136,9 @@ def client(
     )
     app.dependency_overrides[get_user_profile_store] = lambda: _StubUserProfileStore()
     app.dependency_overrides[get_anthropic_client] = lambda: object()  # unused
+    app.dependency_overrides[get_usage_store] = lambda: FileUsageStore(
+        root=tmp_path / "usage"
+    )
 
     with TestClient(app) as c:
         yield c
@@ -368,6 +372,9 @@ def client_with_refine_stub(
     )
     app.dependency_overrides[get_user_profile_store] = lambda: _StubUserProfileStore()
     app.dependency_overrides[get_anthropic_client] = lambda: object()
+    app.dependency_overrides[get_usage_store] = lambda: FileUsageStore(
+        root=tmp_path / "usage"
+    )
 
     with TestClient(app) as c:
         yield c

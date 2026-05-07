@@ -524,3 +524,92 @@ class UsageResponse(BaseModel):
 
     current: UsageMonth
     history: list[UsageMonth] = []
+
+
+class CoverLetterAnalysisResponse(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/analysis.
+
+    Four lists driving the interactive cover-letter flow. Each list
+    item is one short factual line; we explicitly do not summarise or
+    cluster.
+    """
+
+    strong: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    partial: list[str] = Field(default_factory=list)
+    excitement_hooks: list[str] = Field(default_factory=list)
+    model: str
+
+
+class CoverLetterCommitted(BaseModel):
+    """The three paragraphs as the user has committed them so far.
+
+    Each field is None until the user has committed that paragraph.
+    Used as context for regenerating the *other* paragraphs so tone
+    stays consistent across the letter.
+    """
+
+    hook: str | None = None
+    fit: str | None = None
+    close: str | None = None
+
+
+ModelChoice = Literal["haiku", "sonnet"]
+
+
+class CoverLetterDraftRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/draft."""
+
+    paragraph: Literal["hook", "fit", "close"]
+    # The match analysis the user already saw. Re-supplied per request
+    # rather than re-derived to keep the endpoint stateless.
+    analysis: CoverLetterAnalysisResponse
+    committed: CoverLetterCommitted = Field(default_factory=CoverLetterCommitted)
+    # Phase 4: a one-line steering hint for the model.
+    hint: str | None = None
+    # Phase 3: the current paragraph text when the user clicks "Try a
+    # different angle"; the model will be asked to produce something
+    # meaningfully different.
+    alternative_to: str | None = None
+    # Phase 2.5: model picker. Defaults to Sonnet because Haiku tends
+    # to write naive cover letters; users can flip to Haiku to compare.
+    model: ModelChoice = "sonnet"
+
+
+class CoverLetterDraftResponse(BaseModel):
+    paragraph: Literal["hook", "fit", "close"]
+    text: str
+    model: str
+
+
+class CoverLetterFinalizeRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/finalize.
+
+    All three paragraphs are required; the route refuses to save a
+    letter with any blanks.
+    """
+
+    hook: str
+    fit: str
+    close: str
+
+
+class CoverLetterSummaryRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/summary.
+
+    Sonnet by default because the summary is creative prose; Haiku
+    is available for cost-vs-quality comparison.
+    """
+
+    model: ModelChoice = "sonnet"
+
+
+class CoverLetterSummaryResponse(BaseModel):
+    """Three-section JD digest. Any field can be "" if the JD does
+    not say anything genuine about it; the frontend skips rendering
+    empty sections instead of padding the response with fluff."""
+
+    role: str = ""
+    requirements: str = ""
+    context: str = ""
+    model: str
