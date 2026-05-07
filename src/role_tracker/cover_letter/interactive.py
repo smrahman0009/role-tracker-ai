@@ -30,6 +30,7 @@ from role_tracker.cover_letter.prompts.interactive_analysis import (
     SYSTEM_PROMPT,
     USER_TEMPLATE,
 )
+from role_tracker.cover_letter.style_validator import clean, clean_list
 
 # Concrete Anthropic model IDs. Aliased to "haiku" / "sonnet" at the
 # API surface so the route accepts a stable enum even if Anthropic
@@ -123,7 +124,16 @@ def analyze(
     )
 
     text = _extract_text(response)
-    return _parse_analysis(text)
+    parsed = _parse_analysis(text)
+
+    # Run every bullet through the style validator so em-dashes and
+    # banned LLM tics don't leak through to the UI.
+    return MatchAnalysis(
+        strong=clean_list(parsed.strong),
+        gaps=clean_list(parsed.gaps),
+        partial=clean_list(parsed.partial),
+        excitement_hooks=clean_list(parsed.excitement_hooks),
+    )
 
 
 # ----- internals -----------------------------------------------------------
@@ -324,7 +334,7 @@ def draft(
         system=system,
         messages=messages,
     )
-    return _extract_text(response).strip()
+    return clean(_extract_text(response).strip())
 
 
 def finalize(
@@ -335,12 +345,15 @@ def finalize(
 ) -> str:
     """Stitch the three committed paragraphs into a single letter.
 
-    Phase 2 just joins them with blank lines. Phase 6 will wrap this
-    with a Sonnet smoothing pass that enforces tone consistency
-    across paragraphs and runs the style validator one last time.
+    Phase 2 joined them with blank lines. Phase 5 adds a final
+    style-validator pass over the joined output as belt-and-suspenders;
+    individual paragraphs were already cleaned at draft() time, but the
+    user may have edited them manually since, and a final sweep keeps
+    the saved letter consistent. Phase 6 will wrap this with a Sonnet
+    smoothing pass before the validator runs.
     """
     parts = [p.strip() for p in (hook, fit, close) if p.strip()]
-    return "\n\n".join(parts)
+    return clean("\n\n".join(parts))
 
 
 # ============================================================================
@@ -404,7 +417,15 @@ def summarize_job(
         ],
     )
     text = _extract_text(response).strip()
-    return _parse_summary(text)
+    parsed = _parse_summary(text)
+
+    # Run each section through the style validator so em-dashes and
+    # banned LLM tics don't leak through to the UI.
+    return JobSummary(
+        role=clean(parsed.role),
+        requirements=clean(parsed.requirements),
+        context=clean(parsed.context),
+    )
 
 
 def _parse_summary(text: str) -> JobSummary:
