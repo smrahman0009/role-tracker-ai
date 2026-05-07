@@ -86,6 +86,9 @@ FEATURE_COST_USD: dict[str, float] = {
     # Interactive cover letter, JD summary panel. Sonnet by default,
     # ~80-120 tokens out.
     "cover_letter_summary": 0.020,
+    # Interactive cover letter, final smoothing pass at finalize time.
+    # Sonnet over the stitched 3-paragraph letter; ~200-300 tokens out.
+    "cover_letter_smooth": 0.025,
 }
 
 
@@ -101,6 +104,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_analysis",
     "cover_letter_draft",
     "cover_letter_summary",
+    "cover_letter_smooth",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",

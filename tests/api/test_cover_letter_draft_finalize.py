@@ -231,6 +231,12 @@ def test_draft_rejects_invalid_paragraph_value(client: TestClient) -> None:
 
 
 def test_finalize_saves_letter_with_edited_by_user(client: TestClient) -> None:
+    """Phase 6: finalize runs the three paragraphs through a Sonnet
+    smoothing pass before saving. The stub Anthropic returns a fixed
+    string, so the route's contract here is that *something* got
+    saved with edited_by_user=True; the semantic correctness of the
+    smoothing pass itself is covered in the unit tests for
+    smooth_letter()."""
     response = client.post(
         "/users/alice/jobs/j1/cover-letter/finalize",
         json={"hook": "Hello.", "fit": "Fit.", "close": "Best,\nAlice"},
@@ -239,9 +245,8 @@ def test_finalize_saves_letter_with_edited_by_user(client: TestClient) -> None:
     body = response.json()
     assert body["edited_by_user"] is True
     assert body["version"] == 1
-    assert "Hello." in body["text"]
-    assert "Fit." in body["text"]
-    assert "Best," in body["text"]
+    assert body["text"]
+    assert len(body["text"]) > 0
 
 
 def test_finalize_increments_version(client: TestClient) -> None:

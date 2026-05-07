@@ -666,12 +666,17 @@ def finalize_cover_letter(
     body: CoverLetterFinalizeRequest,
     letter_store: LetterStore = Depends(get_letter_store),
     user_store: UserProfileStore = Depends(get_user_profile_store),
+    client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
 ) -> Letter:
-    """Stitch the three committed paragraphs and persist as a new letter
-    version with edited_by_user=True.
+    """Stitch the three committed paragraphs, run a Sonnet smoothing
+    pass to align tone and clean transitions, then persist as a new
+    letter version with edited_by_user=True.
 
-    Phase 2 just joins paragraphs with blank lines. Phase 6 will add a
-    Sonnet smoothing pass that enforces tone consistency before save.
+    The smoothing pass does not add or remove substantive content; it
+    only fixes seams between paragraphs and trims accidental
+    redundancy. The deterministic style validator runs on the smoothed
+    output as a final safety net.
     """
     if not (body.hook.strip() and body.fit.strip() and body.close.strip()):
         raise HTTPException(
@@ -682,7 +687,13 @@ def finalize_cover_letter(
             ),
         )
 
-    text = finalize(hook=body.hook, fit=body.fit, close=body.close)
+    text = finalize(
+        hook=body.hook,
+        fit=body.fit,
+        close=body.close,
+        client=client,
+        smooth=True,
+    )
 
     saved = letter_store.save_letter(
         user_id,
@@ -694,6 +705,8 @@ def finalize_cover_letter(
         refinement_index=0,
         edited_by_user=True,
     )
+
+    UsageRecorder(usage_store, user_id).feature("cover_letter_smooth")
     return _to_response(saved, _user_or_none(user_store, user_id))
 
 

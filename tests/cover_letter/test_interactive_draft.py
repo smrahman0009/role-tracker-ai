@@ -339,3 +339,85 @@ def test_draft_with_hint_and_alternative_includes_both() -> None:
     assert "Previous version that focused on Python." in user_msg
     # Hint comes first so the model treats it as primary signal.
     assert user_msg.find("Steering hint") < user_msg.find("Previous version")
+
+
+# ----- Phase 6: smooth_letter and finalize-with-smoothing -----------------
+
+from role_tracker.cover_letter.interactive import smooth_letter  # noqa: E402
+
+
+def test_smooth_letter_sends_stitched_letter_to_model() -> None:
+    """The stitched 3-paragraph input must reach the model verbatim
+    in the user message so it has the full text to polish."""
+    client = _StubClient("Smoothed letter output here.")
+    stitched = "Hook line.\n\nFit line.\n\nClose line."
+    result = smooth_letter(stitched_letter=stitched, client=client)
+    assert result == "Smoothed letter output here."
+
+    user_msg = client.messages.last_request["messages"][0]["content"]
+    assert "Hook line." in user_msg
+    assert "Fit line." in user_msg
+    assert "Close line." in user_msg
+
+
+def test_smooth_letter_uses_sonnet_by_default() -> None:
+    client = _StubClient()
+    smooth_letter(stitched_letter="x", client=client)
+    assert client.messages.last_request["model"] == "claude-sonnet-4-6"
+
+
+def test_finalize_with_smooth_calls_anthropic() -> None:
+    """When client is provided and smooth=True, the smoothing pass
+    runs and its output (post style-validator) is what finalize
+    returns."""
+    client = _StubClient("Final smoothed letter content.")
+    text = finalize(
+        hook="h.",
+        fit="f.",
+        close="c.",
+        client=client,
+        smooth=True,
+    )
+    assert "Final smoothed letter content." in text
+    # The call to Anthropic happened.
+    assert client.messages.last_request is not None
+
+
+def test_finalize_without_client_falls_back_to_plain_join() -> None:
+    """No client -> no smoothing call. Output is the stitched plain
+    join run through the style validator. Useful for unit tests of
+    callers that don't want to stub Anthropic."""
+    text = finalize(hook="Hook.", fit="Fit.", close="Close.")
+    assert text == "Hook.\n\nFit.\n\nClose."
+
+
+def test_finalize_smooth_false_skips_anthropic_call() -> None:
+    """smooth=False is the explicit opt-out. No Anthropic call is
+    made even if a client is provided."""
+    client = _StubClient("Should not be used.")
+    text = finalize(
+        hook="Hook.",
+        fit="Fit.",
+        close="Close.",
+        client=client,
+        smooth=False,
+    )
+    assert text == "Hook.\n\nFit.\n\nClose."
+    # The stub was never called.
+    assert client.messages.last_request is None
+
+
+def test_finalize_runs_style_validator_on_smoothed_output() -> None:
+    """Even after the smoothing pass, the deterministic style
+    validator runs. If Sonnet slipped an em-dash in, it gets stripped."""
+    client = _StubClient("Smoothed output — with an em-dash.")
+    text = finalize(
+        hook="h.",
+        fit="f.",
+        close="c.",
+        client=client,
+        smooth=True,
+    )
+    # Em-dash gone, replaced with comma.
+    assert "—" not in text
+    assert "Smoothed output, with an em-dash." in text

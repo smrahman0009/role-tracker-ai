@@ -433,23 +433,76 @@ def draft(
     return clean(_extract_text(response).strip())
 
 
+_SMOOTH_MODEL_DEFAULT = SONNET_MODEL
+_SMOOTH_MAX_TOKENS = 1024
+
+
 def finalize(
     *,
     hook: str,
     fit: str,
     close: str,
+    client: Anthropic | _AnthropicClientLike | None = None,
+    model: str | None = None,
+    smooth: bool = True,
 ) -> str:
     """Stitch the three committed paragraphs into a single letter.
 
-    Phase 2 joined them with blank lines. Phase 5 adds a final
-    style-validator pass over the joined output as belt-and-suspenders;
-    individual paragraphs were already cleaned at draft() time, but the
-    user may have edited them manually since, and a final sweep keeps
-    the saved letter consistent. Phase 6 will wrap this with a Sonnet
-    smoothing pass before the validator runs.
+    Phase 6 wraps the stitch with a Sonnet smoothing pass that fixes
+    transitions, aligns tone, and trims accidental redundancy across
+    paragraphs. The smoothing pass is opt-out: pass `smooth=False` (or
+    omit `client`) to fall back to the Phase 2 behaviour of plain
+    concatenation followed by the style validator. That keeps unit
+    tests for finalize() trivially pure.
+
+    Either way, the style validator runs on the final output as a
+    safety net — paragraphs were cleaned at draft time, but the user
+    may have edited them manually, and the smoothing pass itself
+    might land an em-dash despite being told not to.
     """
     parts = [p.strip() for p in (hook, fit, close) if p.strip()]
-    return clean("\n\n".join(parts))
+    stitched = "\n\n".join(parts)
+
+    if not smooth or client is None or not stitched.strip():
+        return clean(stitched)
+
+    smoothed = smooth_letter(
+        stitched_letter=stitched,
+        client=client,
+        model=resolve_model(model, default=_SMOOTH_MODEL_DEFAULT),
+    )
+    return clean(smoothed)
+
+
+def smooth_letter(
+    *,
+    stitched_letter: str,
+    client: Anthropic | _AnthropicClientLike,
+    model: str = _SMOOTH_MODEL_DEFAULT,
+) -> str:
+    """Run the final tone-and-transitions polish over a 3-paragraph
+    letter. Sonnet by default because tone work compounds; Haiku is
+    sometimes too literal here.
+
+    Returns the smoothed text. The caller is responsible for running
+    the style validator afterwards (finalize() does this).
+    """
+    from role_tracker.cover_letter.prompts import interactive_smooth
+
+    response = client.messages.create(  # type: ignore[union-attr]
+        model=model,
+        max_tokens=_SMOOTH_MAX_TOKENS,
+        system=interactive_smooth.SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": interactive_smooth.USER_TEMPLATE.format(
+                    stitched_letter=stitched_letter.strip()
+                ),
+            }
+        ],
+    )
+    return _extract_text(response).strip()
 
 
 # ============================================================================
