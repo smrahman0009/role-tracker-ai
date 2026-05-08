@@ -91,11 +91,11 @@ Lint: `uv run ruff check src tests`.
 
 The whole AWS stack is reproducible from the [`infra/`](infra/) directory. Walkthrough docs:
 
+- [`docs/HANDBOOK.md`](docs/HANDBOOK.md), the **operator's handbook** — single entry point covering architecture, local dev, deploy, user management, caps, and operations cookbook.
 - [`docs/aws-onboarding.md`](docs/aws-onboarding.md), one-time AWS account setup checklist (sign-up hardening, IAM admin user, CLI auth, SSH keys).
-- [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md), the master plan: target architecture, every infra script, every storage migration, expected cost.
 - [`docs/docker-setup.md`](docs/docker-setup.md), Docker walkthrough explaining the multi-stage build, day-to-day commands, dev-vs-Docker mental model.
 - [`docs/cicd-setup.md`](docs/cicd-setup.md), GitHub Actions setup with OIDC, what each workflow step does, rollback paths, cost.
-- [`docs/operations.md`](docs/operations.md), operating the live deployment: token recovery, rotation, log inspection.
+- [`docs/multi_user.md`](docs/multi_user.md), token management + per-user cost-cap configuration.
 
 Once AWS CLI is authenticated, the entire stack provisions in eight idempotent scripts:
 

@@ -1,5 +1,10 @@
 # Role Tracker — Project Plan
 
+> **Historical plan, snapshot.** Original phase plan from project start.
+> For current state, read [`HANDBOOK.md`](HANDBOOK.md) (operator entry
+> point) and [`project_state.md`](project_state.md) (what's shipped +
+> what's open). Kept for early-decision context.
+
 ## Context
 The user is job-hunting for data science, ML, AI engineer, and software developer and other roles in Canada or anywhere in the world. Manually searching Adzuna every day, scoring each posting against his resume, tailoring a cover letter per job, and tracking which jobs he has already applied to is repetitive and slow.
 

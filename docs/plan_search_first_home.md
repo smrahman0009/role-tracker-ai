@@ -1,5 +1,9 @@
 # Plan: search-first home page
 
+> **Historical plan, snapshot.** This describes a UI redesign that has
+> shipped. For current state, see [`HANDBOOK.md`](HANDBOOK.md). Kept for
+> context on the design rationale.
+
 Replace the cached Job List with an ad-hoc search form on `/`. Resume +
 What/Where + optional filters → live JSearch query → ranked results
 below. Settings keeps the recurring pieces (profile, daily auto-search,

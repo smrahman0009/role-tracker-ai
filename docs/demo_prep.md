@@ -1,5 +1,10 @@
 # Demo prep checklist
 
+> **Reference doc, snapshot.** A pre-demo checklist for recording a
+> portfolio video. Use as a guide; the live app may have evolved beyond
+> the specific screens described here. For current operational details,
+> see [`HANDBOOK.md`](HANDBOOK.md).
+
 Before recording a demo for LinkedIn / a portfolio / a recruiter
 showcase, run through this list. The goal is a clean, professional
 recording that doesn't expose anything you'd rather keep private OR

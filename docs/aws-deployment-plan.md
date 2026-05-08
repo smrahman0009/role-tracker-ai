@@ -1,5 +1,12 @@
 # AWS deployment plan
 
+> **Historical plan, snapshot.** This was the planning doc for the AWS
+> deploy work; the deploy is now live. For day-to-day operations on the
+> running system, see [`HANDBOOK.md`](HANDBOOK.md) §4 (deploy) and §7
+> (operations). Kept here for context on the original architecture
+> choices (why DynamoDB + S3 + SSM rather than Aurora + Secrets Manager,
+> etc.).
+
 The end-to-end plan for getting Role Tracker AI live on AWS as a
 **cloud-native (Tier 2) deployment** — single Docker container on
 EC2, with binary blobs in S3, structured records in DynamoDB,

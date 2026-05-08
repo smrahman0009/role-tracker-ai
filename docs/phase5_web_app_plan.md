@@ -1,6 +1,12 @@
 # Phase 5+ — Web App Pivot Plan
 
-> **Status:** planning, not yet started.
+> **Historical plan, snapshot.** Phase 5 (FastAPI backend), Phase 6
+> (React frontend), and Phase 8 (AWS deployment) are all shipped and
+> live. For current state, see [`HANDBOOK.md`](HANDBOOK.md) and
+> [`project_state.md`](project_state.md). This file documents the
+> original pivot decision and is kept for context.
+
+> **Original status:** planning, not yet started.
 > **Created:** 2026-04-27
 > **Target branch:** `phase/5-web-app` (long-lived, sub-features merge in)
 
