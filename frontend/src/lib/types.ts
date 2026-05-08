@@ -240,8 +240,19 @@ export interface LetterGenerationStatus {
   error: string | null;
 }
 
+export interface GenerateLetterRequest {
+  /** Optional steering text from the GenerateLetterDialog. */
+  instruction?: string | null;
+  /** Optional letter to mirror as a style guide. */
+  template?: string | null;
+  /** Anthropic extended-thinking opt-in. Higher quality, ~3× cost. */
+  extended_thinking?: boolean;
+}
+
 export interface RefineLetterRequest {
   feedback: string;
+  /** Same extended-thinking toggle on the refine path. */
+  extended_thinking?: boolean;
 }
 
 export interface ManualEditRequest {

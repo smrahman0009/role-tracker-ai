@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/lib/api";
 import type {
+  GenerateLetterRequest,
   GenerateLetterResponse,
   Letter,
   LetterGenerationStatus,
@@ -35,10 +36,10 @@ export function useLetterVersions(jobId: string | undefined) {
 export function useGenerateLetter(jobId: string | undefined) {
   const { userId } = useAuth();
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (body: GenerateLetterRequest = {}) =>
       api.post<GenerateLetterResponse>(
         `/users/${userId}/jobs/${jobId}/letters`,
-        {},
+        body,
       ),
   });
 }
@@ -59,10 +60,10 @@ export function useRefineLetter(
 ) {
   const { userId } = useAuth();
   return useMutation({
-    mutationFn: (feedback: string) =>
+    mutationFn: (body: RefineLetterRequest) =>
       api.post<GenerateLetterResponse>(
         `/users/${userId}/jobs/${jobId}/letters/${version}/refine`,
-        { feedback } satisfies RefineLetterRequest,
+        body,
       ),
   });
 }

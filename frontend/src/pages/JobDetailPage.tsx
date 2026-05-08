@@ -36,6 +36,10 @@ import { Link, useParams } from "react-router";
 import { useAuth } from "@/auth/AuthContext";
 import { ApplyKitPanel } from "@/components/ApplyKitPanel";
 import { CritiquePanel } from "@/components/CritiquePanel";
+import {
+  GenerateLetterDialog,
+  type GenerateDialogResult,
+} from "@/components/GenerateLetterDialog";
 import { JobSummaryPanel } from "@/components/JobSummaryPanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { LetterRenderer } from "@/components/LetterRenderer";
@@ -120,11 +124,52 @@ export default function JobDetailPage() {
   const applyMutation = useApplyJob();
   const unapplyMutation = useUnapplyJob();
 
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+
   const startGenerate = () => {
-    generateMutation.mutate(undefined, {
-      onSuccess: (d) => setActiveGenId(d.generation_id),
-      onError: (err) => toast.error(`Generate failed: ${err.message}`),
-    });
+    // Top-level Generate button now opens the dialog. The dialog's
+    // submit handler picks scratch vs edit and calls the right
+    // mutation. See handleDialogSubmit below.
+    setGenerateDialogOpen(true);
+  };
+
+  const handleDialogSubmit = (result: GenerateDialogResult) => {
+    if (result.mode === "edit") {
+      refineMutation.mutate(
+        {
+          feedback: result.instruction,
+          extended_thinking: result.extended_thinking,
+        },
+        {
+          onSuccess: (d) => {
+            setGenerateDialogOpen(false);
+            setActiveGenId(d.generation_id);
+          },
+          onError: (err) => {
+            if (err instanceof ApiClientError && err.status === 422) {
+              toast.error(err.message);
+            } else {
+              toast.error(`Refine failed: ${err.message}`);
+            }
+          },
+        },
+      );
+      return;
+    }
+    generateMutation.mutate(
+      {
+        instruction: result.instruction || null,
+        template: result.template || null,
+        extended_thinking: result.extended_thinking,
+      },
+      {
+        onSuccess: (d) => {
+          setGenerateDialogOpen(false);
+          setActiveGenId(d.generation_id);
+        },
+        onError: (err) => toast.error(`Generate failed: ${err.message}`),
+      },
+    );
   };
 
   const startRegenerate = () => {
@@ -136,7 +181,7 @@ export default function JobDetailPage() {
 
   const [refineOpen, setRefineOpen] = useState(false);
   const startRefine = (feedback: string) => {
-    refineMutation.mutate(feedback, {
+    refineMutation.mutate({ feedback }, {
       onSuccess: (d) => {
         setRefineOpen(false);
         setActiveGenId(d.generation_id);
@@ -256,6 +301,14 @@ export default function JobDetailPage() {
           </div>
         </>
       ) : null}
+
+      <GenerateLetterDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+        currentVersion={current?.version ?? null}
+        isPending={generateMutation.isPending || refineMutation.isPending}
+        onSubmit={handleDialogSubmit}
+      />
 
       <RefineDialog
         open={refineOpen}
