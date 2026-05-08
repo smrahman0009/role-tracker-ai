@@ -67,13 +67,18 @@ class UserProfile(BaseModel):
         if self.city and self.show_city_in_header:
             contact_parts.append(self.city)
 
+        # Render URLs as plain text (with the https:// scheme) rather
+        # than markdown [Label](url) syntax. Many ATS scrapers strip
+        # markdown links and lose the URL entirely; spelling the URL
+        # out keeps it both human-readable and ATS-parseable. PDF /
+        # markdown viewers will still auto-link the bare URL on click.
         links: list[str] = []
         if self.linkedin_url and self.show_linkedin_in_header:
-            links.append(f"[LinkedIn]({self.linkedin_url})")
+            links.append(self.linkedin_url)
         if self.github_url and self.show_github_in_header:
-            links.append(f"[GitHub]({self.github_url})")
+            links.append(self.github_url)
         if self.portfolio_url and self.show_portfolio_in_header:
-            links.append(f"[Portfolio]({self.portfolio_url})")
+            links.append(self.portfolio_url)
 
         lines = [f"**{self.name}**"]
         if contact_parts:

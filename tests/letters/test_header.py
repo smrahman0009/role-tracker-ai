@@ -122,4 +122,7 @@ def test_multi_line_header_with_links_is_preserved() -> None:
     lines = head.split("\n")
     assert lines[0] == "**Alice Doe**"
     assert "alice@example.com" in lines[1]
-    assert "[LinkedIn]" in lines[2] and "[GitHub]" in lines[2]
+    # ATS-friendly: URLs as plain text, not [Label](url) markdown links.
+    assert "https://linkedin.com/in/alice-doe" in lines[2]
+    assert "https://github.com/alice" in lines[2]
+    assert "[LinkedIn]" not in lines[2]

@@ -238,6 +238,9 @@ export interface LetterGenerationStatus {
   completed_at: string | null;
   letter: Letter | null;
   error: string | null;
+  /** Live progress label set by the agent ("Reading the job
+   *  description…", "Critiquing the draft…", etc.). */
+  phase: string;
 }
 
 export interface GenerateLetterRequest {

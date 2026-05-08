@@ -115,8 +115,11 @@ def test_contact_header_includes_all_populated_fields(tmp_path: Path) -> None:
     assert "555-1234" in header
     assert "Toronto, ON" in header
     assert "jane@example.com" in header
-    assert "[LinkedIn](https://linkedin.com/in/jane)" in header
-    assert "[GitHub](https://github.com/jane)" in header
+    # ATS-friendly: URLs rendered as plain text, not markdown links.
+    assert "https://linkedin.com/in/jane" in header
+    assert "https://github.com/jane" in header
+    assert "[LinkedIn]" not in header
+    assert "[GitHub]" not in header
 
 
 def test_contact_header_respects_show_flags(tmp_path: Path) -> None:

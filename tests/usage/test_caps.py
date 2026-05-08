@@ -71,3 +71,49 @@ def test_today_cost_resets_across_iso_days(
 
 def test_get_today_cost_zero_for_unknown_user(store: FileUsageStore) -> None:
     assert store.get_today_cost_usd("nobody") == 0.0
+
+
+# ----- Per-user cap override (DAILY_COST_CAP_USD_OVERRIDES) ---------------
+
+
+def test_resolve_cap_uses_global_when_no_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from role_tracker.usage.caps import resolve_cap_usd
+
+    monkeypatch.setenv("DAILY_COST_CAP_USD", "2.50")
+    monkeypatch.setenv("DAILY_COST_CAP_USD_OVERRIDES", "")
+    assert resolve_cap_usd("alice") == pytest.approx(2.50)
+
+
+def test_resolve_cap_picks_user_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Smrah (admin) gets a higher cap; everyone else gets the global."""
+    from role_tracker.usage.caps import resolve_cap_usd
+
+    monkeypatch.setenv("DAILY_COST_CAP_USD", "1.50")
+    monkeypatch.setenv(
+        "DAILY_COST_CAP_USD_OVERRIDES",
+        '{"smrah": 10.00}',
+    )
+    assert resolve_cap_usd("smrah") == pytest.approx(10.00)
+    assert resolve_cap_usd("rafin_") == pytest.approx(1.50)
+
+
+def test_parse_cap_overrides_rejects_malformed_input() -> None:
+    from role_tracker.usage.caps import parse_cap_overrides
+
+    with pytest.raises(Exception):
+        parse_cap_overrides("{not json")
+    with pytest.raises(ValueError):
+        parse_cap_overrides('["array", "not", "object"]')
+    with pytest.raises(ValueError):
+        parse_cap_overrides('{"smrah": "ten dollars"}')
+
+
+def test_parse_cap_overrides_empty_returns_empty_dict() -> None:
+    from role_tracker.usage.caps import parse_cap_overrides
+
+    assert parse_cap_overrides("") == {}
+    assert parse_cap_overrides("   ") == {}

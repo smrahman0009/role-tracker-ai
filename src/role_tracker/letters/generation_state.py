@@ -32,6 +32,12 @@ class LetterGenerationRecord(BaseModel):
     completed_at: datetime | None = None
     saved_version: int | None = None     # populated when status="done"
     error: str | None = None             # populated when status="failed"
+    # Human-readable progress label updated by the agent at each
+    # tool-call iteration ("Reading the job description…", etc.).
+    # The frontend renders this beneath the spinner so users can see
+    # what the agent is currently doing. Defaults to a generic
+    # starting message; routes update via mark_phase().
+    phase: str = "Starting…"
 
 
 class LetterGenerationStore(Protocol):
@@ -42,6 +48,9 @@ class LetterGenerationStore(Protocol):
         self, user_id: str, generation_id: str
     ) -> LetterGenerationRecord | None: ...
     def mark_running(self, user_id: str, generation_id: str) -> None: ...
+    def mark_phase(
+        self, user_id: str, generation_id: str, phase: str
+    ) -> None: ...
     def mark_done(
         self, user_id: str, generation_id: str, saved_version: int
     ) -> None: ...
@@ -81,6 +90,11 @@ class FileLetterGenerationStore:
 
     def mark_running(self, user_id: str, generation_id: str) -> None:
         self._update(user_id, generation_id, status="running")
+
+    def mark_phase(
+        self, user_id: str, generation_id: str, phase: str
+    ) -> None:
+        self._update(user_id, generation_id, phase=phase)
 
     def mark_done(
         self, user_id: str, generation_id: str, saved_version: int

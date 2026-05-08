@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # Per-user, per-day spend cap on Anthropic / OpenAI features.
     # Resets at midnight UTC. Set to 0 to disable (e.g. local dev).
     daily_cost_cap_usd: float = 1.50
+
+    # Per-user override of the daily cap. JSON map of
+    # `{user_id: cap_usd}`. Used to give the admin (e.g. smrah)
+    # headroom for testing without raising the cap for everyone.
+    # Empty = no overrides; the global daily_cost_cap_usd applies
+    # to every user.
+    daily_cost_cap_usd_overrides: str = ""
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 

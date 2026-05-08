@@ -19,9 +19,9 @@ from role_tracker.letters.formats import letter_to_docx, letter_to_pdf
 _HEADER_LETTER = (
     "**Shaikh Mushfikur Rahman**\n"
     "+1 555 0100 | shaikh@example.com | Halifax, Canada\n"
-    "[LinkedIn](https://linkedin.com/in/shaikh) | "
-    "[GitHub](https://github.com/shaikh) | "
-    "[Portfolio](https://shaikh.dev)"
+    "https://linkedin.com/in/shaikh | "
+    "https://github.com/shaikh | "
+    "https://shaikh.dev"
     "\n\n"
     "Dear Acme team,\n\n"
     "I'm writing because **the McKesson supply chain project** taught me "
@@ -60,24 +60,22 @@ def test_pdf_overflows_to_two_pages_with_long_text() -> None:
     assert page_count >= 2
 
 
-def test_pdf_strips_markdown_link_syntax() -> None:
-    """Bracket-and-paren syntax shouldn't appear literally in the rendered PDF."""
+def test_pdf_renders_urls_as_plain_text() -> None:
+    """ATS-friendly: URLs render as plain text in the PDF, not as
+    markdown link syntax. The bare URL is what scrapers extract."""
     pdf_bytes = letter_to_pdf(_HEADER_LETTER)
     text = _extract_text_from_pdf_bytes(pdf_bytes)
-    # The visible labels survive...
-    assert "LinkedIn" in text
-    assert "GitHub" in text
-    # ...but the URL syntax is stripped.
+    assert "https://linkedin.com/in/shaikh" in text
+    assert "https://github.com/shaikh" in text
+    # No leftover markdown link syntax (e.g. from older saved letters).
     assert "](" not in text
-    assert "https://linkedin.com" not in text
 
 
-def test_docx_strips_markdown_link_syntax() -> None:
+def test_docx_renders_urls_as_plain_text() -> None:
     docx_bytes = letter_to_docx(_HEADER_LETTER)
     full_text = _extract_text_from_docx_bytes(docx_bytes)
-    assert "LinkedIn" in full_text
+    assert "https://linkedin.com/in/shaikh" in full_text
     assert "](" not in full_text
-    assert "https://linkedin.com" not in full_text
 
 
 def test_docx_preserves_multi_line_header_inside_one_paragraph() -> None:

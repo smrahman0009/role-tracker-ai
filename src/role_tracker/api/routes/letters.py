@@ -236,6 +236,7 @@ def poll_letter_generation(
         completed_at=record.completed_at,
         letter=letter,
         error=record.error,
+        phase=record.phase,
     )
 
 
@@ -871,6 +872,10 @@ def _run_generation_in_background(
 
         # 4. Run the agent. usage_tracker exposes strategy + critique.
         usage_tracker: dict = {}
+
+        def _report_phase(label: str) -> None:
+            generation_store.mark_phase(user_id, generation_id, label)
+
         letter_text = generate_cover_letter_agent(
             user=user_profile,
             resume_text=resume_text,
@@ -880,6 +885,7 @@ def _run_generation_in_background(
             instruction=instruction,
             template=template,
             extended_thinking=extended_thinking,
+            on_phase=_report_phase,
         )
 
         # 5. Persist as a new version.

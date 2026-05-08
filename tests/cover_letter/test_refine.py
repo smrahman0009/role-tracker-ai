@@ -96,9 +96,10 @@ def test_refine_substitutes_fresh_header_when_agent_keeps_stale_one() -> None:
         client=_stub_client(stale_letter),  # agent echoes the old letter back
     )
 
-    # Fresh header (with LinkedIn) replaces the stale header.
-    assert "linkedin.com/in/alice-doe" in revised
-    assert "[LinkedIn](https://linkedin.com/in/alice-doe)" in revised
+    # Fresh header (with LinkedIn URL as plain text — ATS-friendly)
+    # replaces the stale header.
+    assert "https://linkedin.com/in/alice-doe" in revised
+    assert "[LinkedIn]" not in revised
 
 
 def test_refine_preserves_body_after_header_substitution() -> None:

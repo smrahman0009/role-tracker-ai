@@ -23,11 +23,9 @@ import {
   Loader2,
   MapPin,
   Pencil,
-  RefreshCw,
   Save,
   Sparkles,
   Wand,
-  Wand2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -44,7 +42,6 @@ import { JobSummaryPanel } from "@/components/JobSummaryPanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { LetterRenderer } from "@/components/LetterRenderer";
 import { FitBadge } from "@/components/FitBadge";
-import { RefineDialog } from "@/components/RefineDialog";
 import { StrategyPanel } from "@/components/StrategyPanel";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -58,7 +55,6 @@ import {
   useLetterVersions,
   usePolishLetter,
   useRefineLetter,
-  useRegenerateLetter,
 } from "@/hooks/useLetters";
 import { ApiClientError } from "@/lib/api";
 import { formatMatchScore, formatSalary } from "@/lib/format";
@@ -99,6 +95,7 @@ export default function JobDetailPage() {
   const [activeGenId, setActiveGenId] = useState<string | null>(null);
   const generation = useLetterGeneration(jobId, activeGenId);
   const generationStatus = generation.data?.status;
+  const generationPhase = generation.data?.phase;
   const isGenerating =
     generationStatus === "pending" || generationStatus === "running";
 
@@ -118,7 +115,6 @@ export default function JobDetailPage() {
   }, [generationStatus]);
 
   const generateMutation = useGenerateLetter(jobId);
-  const regenerateMutation = useRegenerateLetter(jobId);
   const refineMutation = useRefineLetter(jobId, current?.version);
   const editMutation = useEditLetter(jobId, current?.version);
   const applyMutation = useApplyJob();
@@ -170,30 +166,6 @@ export default function JobDetailPage() {
         onError: (err) => toast.error(`Generate failed: ${err.message}`),
       },
     );
-  };
-
-  const startRegenerate = () => {
-    regenerateMutation.mutate(undefined, {
-      onSuccess: (d) => setActiveGenId(d.generation_id),
-      onError: (err) => toast.error(`Regenerate failed: ${err.message}`),
-    });
-  };
-
-  const [refineOpen, setRefineOpen] = useState(false);
-  const startRefine = (feedback: string) => {
-    refineMutation.mutate({ feedback }, {
-      onSuccess: (d) => {
-        setRefineOpen(false);
-        setActiveGenId(d.generation_id);
-      },
-      onError: (err) => {
-        if (err instanceof ApiClientError && err.status === 422) {
-          toast.error(err.message);
-        } else {
-          toast.error(`Refine failed: ${err.message}`);
-        }
-      },
-    });
   };
 
   const job = jobQuery.data;
@@ -272,13 +244,10 @@ export default function JobDetailPage() {
                 current={current}
                 isGenerating={isGenerating}
                 generationStatus={generationStatus}
-                refinementsRemaining={refinementsRemaining}
+                generationPhase={generationPhase}
                 onSelectVersion={setSelectedVersion}
                 onGenerate={startGenerate}
-                onRegenerate={startRegenerate}
-                onOpenRefine={() => setRefineOpen(true)}
                 editMutation={editMutation}
-                regenerateMutationPending={regenerateMutation.isPending}
                 generateMutationPending={generateMutation.isPending}
               />
             </div>
@@ -310,13 +279,6 @@ export default function JobDetailPage() {
         onSubmit={handleDialogSubmit}
       />
 
-      <RefineDialog
-        open={refineOpen}
-        onOpenChange={setRefineOpen}
-        remaining={refinementsRemaining}
-        isSubmitting={refineMutation.isPending}
-        onSubmit={startRefine}
-      />
     </div>
   );
 }
@@ -440,13 +402,10 @@ interface LetterWorkspaceProps {
   current: Letter | null;
   isGenerating: boolean;
   generationStatus: string | undefined;
-  refinementsRemaining: number;
+  generationPhase: string | undefined;
   onSelectVersion: (v: number) => void;
   onGenerate: () => void;
-  onRegenerate: () => void;
-  onOpenRefine: () => void;
   editMutation: ReturnType<typeof useEditLetter>;
-  regenerateMutationPending: boolean;
   generateMutationPending: boolean;
 }
 
@@ -457,13 +416,10 @@ function LetterWorkspace({
   current,
   isGenerating,
   generationStatus,
-  refinementsRemaining,
+  generationPhase,
   onSelectVersion,
   onGenerate,
-  onRegenerate,
-  onOpenRefine,
   editMutation,
-  regenerateMutationPending,
   generateMutationPending,
 }: LetterWorkspaceProps) {
   const [editing, setEditing] = useState(false);
@@ -519,7 +475,7 @@ function LetterWorkspace({
   }
 
   if (!current) {
-    return <GenerationBanner status={generationStatus} />;
+    return <GenerationBanner status={generationStatus} phase={generationPhase} />;
   }
 
   const saveEdit = () => {
@@ -628,32 +584,25 @@ function LetterWorkspace({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onOpenRefine}
-                disabled={isGenerating || refinementsRemaining <= 0}
-                title={
-                  refinementsRemaining <= 0
-                    ? "10-refinement cap reached for this letter"
-                    : undefined
-                }
+                onClick={onGenerate}
+                disabled={isGenerating || generateMutationPending}
+                title="Open the generate dialog. Pick scratch or edit-current mode inside."
               >
-                <Wand2 />
-                Refine
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onRegenerate}
-                disabled={isGenerating || regenerateMutationPending}
-              >
-                <RefreshCw className={isGenerating ? "animate-spin" : ""} />
-                Regenerate
+                <Sparkles className={isGenerating ? "animate-spin" : ""} />
+                Generate
               </Button>
             </>
           )}
         </div>
       </CardHeader>
       <CardContent>
-        {isGenerating && <GenerationBanner status={generationStatus} inline />}
+        {isGenerating && (
+          <GenerationBanner
+            status={generationStatus}
+            phase={generationPhase}
+            inline
+          />
+        )}
         {editing ? (
           <Textarea
             rows={20}
@@ -708,11 +657,21 @@ function VersionSelector({
 
 function GenerationBanner({
   status,
+  phase,
   inline = false,
 }: {
   status: string | undefined;
+  phase?: string;
   inline?: boolean;
 }) {
+  // Prefer the agent's live phase label when running; fall back to a
+  // generic message before the agent has reported anything.
+  const label =
+    status === "running" && phase
+      ? phase
+      : status === "running"
+        ? "Drafting…"
+        : "Starting generation…";
   return (
     <div
       className={cn(
@@ -722,14 +681,8 @@ function GenerationBanner({
       )}
     >
       <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-      <span className="font-medium">
-        {status === "running"
-          ? "Drafting and self-critiquing the letter…"
-          : "Starting generation…"}
-      </span>
-      <span className="text-indigo-700">
-        ~60-90 seconds
-      </span>
+      <span className="font-medium">{label}</span>
+      <span className="text-indigo-700">~60-90 seconds</span>
     </div>
   );
 }

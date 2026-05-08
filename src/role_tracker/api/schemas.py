@@ -375,6 +375,9 @@ class LetterGenerationStatus(BaseModel):
     completed_at: datetime | None = None
     letter: Letter | None = None        # populated when status="done"
     error: str | None = None
+    # Human-readable progress label, updated by the agent at each
+    # tool-call iteration. Frontend renders it under the spinner.
+    phase: str = "Starting…"
 
 
 class RefineLetterRequest(BaseModel):
