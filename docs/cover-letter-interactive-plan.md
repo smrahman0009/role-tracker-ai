@@ -1,5 +1,26 @@
 # Interactive cover letter generation, plan
 
+> **⚠️ SUPERSEDED (May 2026).** This plan described a per-paragraph
+> "card" UI (analyze → hook / fit / close cards → finalize). The
+> approach shipped in two waves — first the cards, then a chat
+> exploration on `feat/cover-letter-chat` — and was finally replaced
+> with a **single Generate dialog** in
+> [`docs/cover_letter_dialog_plan.md`](cover_letter_dialog_plan.md).
+>
+> The card UI, its routes (`/cover-letter/analysis`, `/draft`,
+> `/finalize`), the chat backend, and the related Pydantic schemas
+> have all been removed. The kept pieces are:
+>
+> - JD summary panel (`POST /cover-letter/summary`) — still useful
+>   independently of the dialog.
+> - Style validator concept — folded into the agent's system prompt.
+>
+> Read this file as historical context only.
+
+---
+
+## Original plan follows
+
 A user-in-the-loop redesign of the cover letter flow. Replaces the
 existing fire-and-forget agent loop (planner, critic, revise) with a
 shorter loop that surfaces the agent's reasoning as inspectable

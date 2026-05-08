@@ -199,36 +199,43 @@ exactly as they are.
 
 ## Phases
 
-### Phase 1 — Cleanup (~1 hr)
+### Phase 1 — Cleanup ✅ Done
 
-Delete the per-paragraph card flow. Frontend cards + hooks +
-types; backend routes + module trim + dead schemas + dead prompts;
-the corresponding test files. **Done when**: the page still loads,
-typecheck + tests pass, the Generate button still works (just
-without instructions yet).
+Per-paragraph card flow removed: frontend cards + hooks + types;
+backend routes (`/cover-letter/analysis`, `/draft`, `/finalize`);
+the `cover_letter.interactive` module trimmed to summary-only;
+their schemas and tests.
 
-### Phase 2 — Backend (~3 hrs)
+### Phase 2 — Backend ✅ Done
 
-Add the new fields to `/letters` (generate) and `/letters/.../refine`
-routes. Thread them through to the agent's system prompt. New
-`cover_letter_generate_extended` cost entry. Tests for each new
-parameter combination. **Done when**: a `curl POST /letters` with
-`{"instruction": "...", "extended_thinking": true}` returns a
-generation_id and produces a letter that visibly responds to the
-instruction.
+`GenerateLetterRequest` gained `instruction`, `template`, and
+`extended_thinking`. `RefineLetterRequest` gained
+`extended_thinking`. Both threaded through to the agent's prompt
+and (for thinking) the Anthropic call. New
+`cover_letter_generate_extended` cost entry ($0.12) and per-user
+cap override (`DAILY_COST_CAP_USD_OVERRIDES` env var).
 
-### Phase 3 — Frontend dialog (~4 hrs)
+### Phase 3 — Frontend dialog ✅ Done
 
-Build `GenerateLetterDialog.tsx`. Wire the Generate button to open
-it. The dialog can call generate or refine based on the mode toggle.
-**Done when**: the dialog is usable end-to-end against the local
-backend.
+`GenerateLetterDialog.tsx` shipped. Mode radio (scratch / edit
+current draft), instruction textarea, template textarea (scratch
+mode only), extended-thinking checkbox. Wired into `LetterWorkspace`
+as the **only** entry point — Regenerate and Refine buttons removed.
 
-### Phase 4 — Tests + prompt iteration (~2-3 hrs)
+### Phase 3.5 — Polish (added live based on feedback) ✅ Done
 
-Tests for the dialog component + integration tests for the new
-backend params. Run the dialog against three real job postings and
-tune the system prompt as needed.
+- Single Generate button (consolidated three buttons → one)
+- ATS-friendly URL rendering in the contact header
+- Live progress phase labels during generation ("Searching your
+  resume…", etc.) via an `on_phase` callback from the agent
+- Off-topic deflection paragraph in the agent's system prompt
+- Per-user daily-cap override
+
+### Phase 4 — Real-job prompt iteration ⏳ Pending
+
+Run the dialog against several real job postings; tune the agent's
+system prompt where outputs feel weak. **Not started** — only
+meaningful with real Anthropic calls + real JDs.
 
 ## Estimate
 

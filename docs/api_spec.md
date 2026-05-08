@@ -206,12 +206,35 @@ agent loop takes 30-60 seconds.
 #### `POST /users/{user_id}/jobs/{job_id}/letters`
 Kick off cover-letter generation for the given job.
 
-**Request body:** `GenerateLetterRequest` (currently empty — reserved
-for future fields like `extra_instructions`).
+**Request body:** `GenerateLetterRequest` (all fields optional; empty
+body = identical to the original one-click flow):
+
+```python
+class GenerateLetterRequest(BaseModel):
+    instruction: str | None = None        # max 500 chars; user steering
+    template: str | None = None           # max 4000 chars; style guide
+    extended_thinking: bool = False       # enable Anthropic thinking budget
+```
+
+When `instruction` is set, it's threaded into the agent's system
+prompt as high-priority guidance ("make it punchy", "lead with the
+LLM project"). The agent treats it as a steer, not a license to
+invent experience.
+
+When `template` is set, it replaces the agent's baked-in
+`REFERENCE_LETTER` for that run — the agent mirrors voice and
+structure, but content is still grounded in the user's resume + this
+JD.
+
+When `extended_thinking=true`, the agent uses Anthropic's extended
+thinking budget. ~3× cost (`cover_letter_generate_extended` =
+$0.12) and ~3× latency, but better quality on non-obvious resume↔JD
+matches.
 
 **Response 202:** `GenerateLetterResponse` — contains a
 `generation_id` to poll.
-**Response 429:** if daily rate limit hit.
+**Response 429:** if daily cost cap hit (per-user; see
+`docs/multi_user.md`).
 
 #### `GET /users/{user_id}/letter-jobs/{generation_id}`
 Poll the status of a letter generation. Used by the frontend every
@@ -270,7 +293,14 @@ Quality drift past 10 rounds is real — the cleanest path is a fresh
 strategy via regenerate, not refine #11. The frontend should show a
 counter ("Refinement 4 of 10") and disable the refine button at 10.
 
-**Request body:** `RefineLetterRequest`
+**Request body:** `RefineLetterRequest`:
+
+```python
+class RefineLetterRequest(BaseModel):
+    feedback: str = Field(min_length=5, max_length=500)
+    extended_thinking: bool = False   # same as on /letters
+```
+
 **Response 202:** `GenerateLetterResponse`
 **Response 422:** if the per-letter refinement cap is exceeded.
 
@@ -591,7 +621,10 @@ class LetterVersionList(BaseModel):
     total: int
 
 class GenerateLetterRequest(BaseModel):
-    pass                                # reserved for future fields
+    # All optional. Empty body == today's one-click Generate.
+    instruction: str | None = None        # max 500 chars
+    template: str | None = None           # max 4000 chars
+    extended_thinking: bool = False
 
 class GenerateLetterResponse(BaseModel):
     generation_id: str

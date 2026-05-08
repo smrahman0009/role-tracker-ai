@@ -80,21 +80,45 @@ users apart in logs without the full secret).
 
 ## When a tester reports "429 Daily cost cap reached"
 
-That's working as intended — they spent $1.50 of estimated Anthropic
-cost in one UTC day. The bucket resets at 00:00 UTC; tell them to try
-again tomorrow.
+That's working as intended — they spent the configured cap of estimated
+Anthropic cost in one UTC day. The bucket resets at 00:00 UTC; tell
+them to try again tomorrow.
 
-If you want to raise the cap globally:
+### Raising the cap globally
 
 ```bash
 aws ssm put-parameter --name /role-tracker/DAILY_COST_CAP_USD \
     --value "3.00" --type String --overwrite
+
+ssh ec2-user@<ec2-ip> 'sudo systemctl restart role-tracker'
 ```
 
-Restart the container.
+Default if unset: `$1.50/day`.
 
-To bypass the cap for one user (e.g. yourself): the cap is global; the
-clean way is to raise it for everyone. There is no per-user override.
+### Per-user cap override
+
+The admin (you, while iterating on the agent) typically needs more
+headroom than friend testers. Push a JSON map of overrides to SSM:
+
+```bash
+aws ssm put-parameter \
+    --name /role-tracker/DAILY_COST_CAP_USD_OVERRIDES \
+    --value '{"smrah":10.00}' \
+    --type SecureString --overwrite
+
+ssh ec2-user@<ec2-ip> 'sudo systemctl restart role-tracker'
+```
+
+Effect: `smrah` gets a $10/day cap; everyone else falls back to the
+global `DAILY_COST_CAP_USD`.
+
+The map can list multiple users:
+`{"smrah":10.00,"power_tester":5.00}`. Users not in the map use the
+global cap. Empty / unset = no overrides.
+
+The override is stored as a SecureString purely for hygiene (it's
+not really a secret — but consistent with everything else under
+`/role-tracker/`).
 
 ## Costs are estimates
 

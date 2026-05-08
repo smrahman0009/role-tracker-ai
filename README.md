@@ -13,7 +13,7 @@ Typed Python backend (FastAPI), typed React frontend, agentic LLM pipeline (plan
 
 - **Live job search.** Fetches postings via JSearch (Google for Jobs), dedupes across saved searches, and applies user-defined exclusions on companies, title keywords, and recruiters.
 - **Resume-aware ranking.** OpenAI `text-embedding-3-small` for both resume and job descriptions; cosine similarity surfaces the strongest matches first. Resume embeddings are content-hashed and cached on disk.
-- **Agentic cover-letter generation.** A Claude Sonnet planner commits to a strategy, drafts the letter using tools (resume facts, JD highlights, profile contact block), then a Claude Haiku critic scores it against a rubric and the planner revises if a category fails. Stable system prompts are wrapped in Anthropic's prompt-cache blocks.
+- **Agentic cover-letter generation.** A Claude Sonnet planner commits to a strategy, drafts the letter using tools (resume facts, JD highlights, profile contact block), then a Claude Haiku critic scores it against a rubric and the planner revises if a category fails. Stable system prompts are wrapped in Anthropic's prompt-cache blocks. Triggered by a single Generate dialog: leave it empty for one-click, or supply optional steering (free-text instruction, a paste-in style template, opt-in extended-thinking) — same dialog handles refining the current draft via a mode toggle.
 - **Why-interested + grammar polish.** One-click, ~3-second Haiku passes for short application-form answers and final-edit grammar fixes.
 - **URL → posting extractor.** Pasting an arbitrary job URL tries three tiers in order: ATS JSON APIs (Workable, Greenhouse, Lever), schema.org `JobPosting` JSON-LD, then a Trafilatura fallback, followed by an LLM refinement pass that pulls the actual hiring company out of recruiter/aggregator pages.
 - **Application tracker.** Marking a job applied snapshots the resume filename + SHA-256 and the letter version used at apply time. The applications page surfaces a "now replaced" tag if you've since uploaded a different resume.
@@ -116,18 +116,25 @@ After that, `git push origin main` triggers an automatic build → push to ECR �
 
 ## Status & next steps
 
-**What's done.** Phases A–D from the deployment plan: AWS provisioning, cloud-native stores (DynamoDB + S3), SSM-loaded secrets, GitHub Actions CI/CD with OIDC. The app is live, fully automated, and any push to `main` ships.
+**What's done.**
 
-**Phase E, polish (optional).** Tracked in [`docs/aws-deployment-plan.md`](docs/aws-deployment-plan.md):
+- **Phases A–D** from the deployment plan: AWS provisioning, cloud-native stores (DynamoDB + S3), SSM-loaded secrets, GitHub Actions CI/CD with OIDC.
+- **Custom domain + HTTPS**: live at [`https://roletracker.app`](https://roletracker.app) via Cloudflare DNS / SSL.
+- **Multi-user beta**: bearer-token middleware binds each token to one `user_id` and rejects cross-user paths with 403. Token mint / rotate / remove via [`infra/users/manage_users.py`](infra/users/manage_users.py). Three friend-testers onboarded.
+- **Per-user daily cost cap** with optional per-user overrides — see [`docs/multi_user.md`](docs/multi_user.md).
+- **Cover-letter Generate dialog** ([`docs/cover_letter_dialog_plan.md`](docs/cover_letter_dialog_plan.md)): single Generate button opens a dialog where the user can give an optional steering instruction, paste a style template, or toggle Anthropic's extended-thinking mode. Empty body works as one-click. Live progress phase labels during generation.
+- **ATS-friendly contact header**: URLs render as plain text (`https://linkedin.com/...`) so resume scrapers parse them.
+
+**Open follow-ups (none blocking).**
 
 | Item | Why it's worth doing | Estimate |
 |------|---------------------|----------|
-| **Custom domain + HTTPS** | A live URL like `https://roletracker.smrahman.dev/` reads dramatically better than an IP. HTTPS also encrypts the bearer token in transit. | ~2 hrs |
-| **Public demo mode** | Right now strangers without the token see only the login page. A read-only `user_id=demo` with seeded sample data lets recruiters click through every screen without burning your API budget. Highest-leverage polish item for portfolio impact. | ~3 hrs |
-| **Soft monthly caps** | The usage dashboard *shows* spend; this would *enforce* it (reject requests that would push past the cap). | ~30 min |
-| **Daily refresh job** | Optional EventBridge rule that re-runs the matching pipeline overnight so the user wakes up to fresh ranked jobs. | ~1 hr |
+| **Real-job prompt iteration** | Tune the agent's system prompt based on output quality on actual postings. Only meaningful after using the dialog on 3-5 real applications. | ~2 hrs |
+| **Public demo mode** | A read-only `user_id=demo` with seeded sample data lets recruiters click through every screen without burning your API budget. | ~3 hrs |
+| **Cloudflare Access** | Zero-trust gateway in front of the site so unauthorised visitors don't even see the login page. Free tier covers 50 users; defensible defer at 3 testers. | ~30 min |
+| **Daily refresh job** | EventBridge rule that re-runs the matching pipeline overnight so the user wakes up to fresh ranked jobs. | ~1 hr |
 
-None of Phase E is required. The app is portfolio-ready as it stands. These are improvements, not blockers.
+None of these are required. The app is portfolio-ready and friend-tester-ready as it stands.
 
 ## Authorship
 

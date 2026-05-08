@@ -44,16 +44,6 @@ export function useGenerateLetter(jobId: string | undefined) {
   });
 }
 
-export function useRegenerateLetter(jobId: string | undefined) {
-  const { userId } = useAuth();
-  return useMutation({
-    mutationFn: () =>
-      api.post<GenerateLetterResponse>(
-        `/users/${userId}/jobs/${jobId}/regenerate`,
-      ),
-  });
-}
-
 export function useRefineLetter(
   jobId: string | undefined,
   version: number | undefined,
