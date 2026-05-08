@@ -262,16 +262,24 @@ def generate_cover_letter_agent(
     # billed separately; budget chosen to give meaningful headroom
     # without ballooning per-call cost. Only attached when requested.
     extra_kwargs: dict = {}
+    # Anthropic requires max_tokens > thinking.budget_tokens. When
+    # thinking is enabled we must lift the per-call output ceiling
+    # accordingly; the actual completion still stops when the model
+    # is done, so this doesn't make the response itself larger or
+    # more expensive.
+    THINKING_BUDGET = 10_000
+    effective_max_tokens = MAX_TOKENS
     if extended_thinking:
+        effective_max_tokens = THINKING_BUDGET + MAX_TOKENS
         extra_kwargs["thinking"] = {
             "type": "enabled",
-            "budget_tokens": 10_000,
+            "budget_tokens": THINKING_BUDGET,
         }
 
     for iteration in range(max_iterations):
         response = client.messages.create(
             model=model,
-            max_tokens=MAX_TOKENS,
+            max_tokens=effective_max_tokens,
             system=system_blocks,
             tools=tools,
             messages=messages,

@@ -126,15 +126,20 @@ def refine_cover_letter(
     )
 
     extra_kwargs: dict = {}
+    # See agent.py: max_tokens must be > thinking.budget_tokens, so
+    # we lift the per-call ceiling accordingly when thinking is on.
+    THINKING_BUDGET = 10_000
+    effective_max_tokens = MAX_TOKENS
     if extended_thinking:
+        effective_max_tokens = THINKING_BUDGET + MAX_TOKENS
         extra_kwargs["thinking"] = {
             "type": "enabled",
-            "budget_tokens": 10_000,
+            "budget_tokens": THINKING_BUDGET,
         }
 
     response = client.messages.create(
         model=model,
-        max_tokens=MAX_TOKENS,
+        max_tokens=effective_max_tokens,
         system=[
             {
                 "type": "text",
