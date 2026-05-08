@@ -7,7 +7,18 @@ Output is JSON so the route can render each section in its own coloured
 card on the frontend without parsing prose.
 """
 
-from role_tracker.cover_letter.prompts.interactive_style import STYLE_RULES
+# Inlined here after the per-paragraph card flow was deleted. Kept
+# brief because the JD summary is structured JSON, not free prose —
+# only the no-em-dash + no-filler rules really matter for the digest.
+_STYLE_RULES = """\
+Style rules (non-negotiable):
+- Plain text. No markdown, no bullets, no headings.
+- No em-dashes anywhere. Use commas or periods.
+- No filler phrases: "delve", "leverage", "harness", "unlock",
+  "in the realm of", "it's worth noting".
+- Specific over abstract. Cite real numbers and named tools where
+  the JD provides them.
+- Honest over enthusiastic. Don't editorialise."""
 
 SYSTEM_PROMPT = f"""You write a structured, plain-English digest of a job \
 description.
@@ -54,7 +65,7 @@ or shorter, rather than padding with "competitive salary" or \
 - Don't editorialise ("this is a great opportunity"). Stay neutral.
 - Don't echo the JD verbatim; paraphrase.
 
-{STYLE_RULES}
+{_STYLE_RULES}
 
 Return the JSON object now."""
 

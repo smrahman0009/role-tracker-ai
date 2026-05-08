@@ -76,19 +76,12 @@ FEATURE_COST_USD: dict[str, float] = {
     "why_interested_polish": 0.005,
     # URL-extract LLM refine — single Haiku call against the JD body.
     "url_extract_llm_refine": 0.005,
-    # Interactive cover letter, match analysis — Haiku call returning
-    # JSON over (resume + JD).
-    "cover_letter_analysis": 0.005,
-    # Interactive cover letter, single-paragraph draft (hook / fit /
-    # close). Defaults to Sonnet now; the dashboard cost is averaged
-    # across both model choices since the user can flip per call.
-    "cover_letter_draft": 0.020,
-    # Interactive cover letter, JD summary panel. Sonnet by default,
-    # ~80-120 tokens out.
+    # JD summary panel. Sonnet by default, ~80-120 tokens out.
     "cover_letter_summary": 0.020,
-    # Interactive cover letter, final smoothing pass at finalize time.
-    # Sonnet over the stitched 3-paragraph letter; ~200-300 tokens out.
-    "cover_letter_smooth": 0.025,
+    # Cover-letter generate with extended thinking enabled. Same agent
+    # loop as cover_letter_generate but with Anthropic's extended
+    # thinking budget; thinking tokens push the per-call cost up.
+    "cover_letter_generate_extended": 0.12,
 }
 
 
@@ -99,12 +92,10 @@ FEATURE_COST_USD: dict[str, float] = {
 
 ANTHROPIC_FEATURES = {
     "cover_letter_generate",
+    "cover_letter_generate_extended",
     "cover_letter_refine",
     "cover_letter_polish",
-    "cover_letter_analysis",
-    "cover_letter_draft",
     "cover_letter_summary",
-    "cover_letter_smooth",
     "why_interested_generate",
     "why_interested_polish",
     "url_extract_llm_refine",

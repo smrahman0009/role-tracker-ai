@@ -84,9 +84,9 @@ def test_multi_user_mode_still_exempts_health(
 
 
 def test_parse_tokens_rejects_malformed_json() -> None:
-    from role_tracker.api.middleware import parse_tokens
-
     import pytest
+
+    from role_tracker.api.middleware import parse_tokens
 
     with pytest.raises(Exception):
         parse_tokens("{not json")

@@ -358,14 +358,6 @@ export interface UsageResponse {
 /** API-level model alias. Maps to a concrete Anthropic model on the server. */
 export type ModelChoice = "haiku" | "sonnet";
 
-export interface CoverLetterAnalysisResponse {
-  strong: string[];
-  gaps: string[];
-  partial: string[];
-  excitement_hooks: string[];
-  model: string;
-}
-
 export interface CoverLetterSummaryRequest {
   model?: ModelChoice;
 }
@@ -380,31 +372,3 @@ export interface CoverLetterSummaryResponse {
   model: string;
 }
 
-export type ParagraphKey = "hook" | "fit" | "close";
-
-export interface CoverLetterCommitted {
-  hook: string | null;
-  fit: string | null;
-  close: string | null;
-}
-
-export interface CoverLetterDraftRequest {
-  paragraph: ParagraphKey;
-  analysis: CoverLetterAnalysisResponse;
-  committed: CoverLetterCommitted;
-  hint?: string | null;
-  alternative_to?: string | null;
-  model?: ModelChoice;
-}
-
-export interface CoverLetterDraftResponse {
-  paragraph: ParagraphKey;
-  text: string;
-  model: string;
-}
-
-export interface CoverLetterFinalizeRequest {
-  hook: string;
-  fit: string;
-  close: string;
-}

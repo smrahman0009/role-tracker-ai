@@ -17,22 +17,22 @@ def store(tmp_path: Path) -> FileUsageStore:
 
 
 def test_under_cap_does_not_raise(store: FileUsageStore) -> None:
-    enforce_daily_cap(store, "alice", "cover_letter_draft", cap_usd=1.50)
+    enforce_daily_cap(store, "alice", "cover_letter_summary", cap_usd=1.50)
 
 
 def test_zero_cap_disables_check(store: FileUsageStore) -> None:
     # Even with a huge spent amount, cap=0 is a bypass.
     for _ in range(10000):
-        store.record_feature("alice", "cover_letter_draft")
-    enforce_daily_cap(store, "alice", "cover_letter_draft", cap_usd=0)
+        store.record_feature("alice", "cover_letter_summary")
+    enforce_daily_cap(store, "alice", "cover_letter_summary", cap_usd=0)
 
 
 def test_exceeding_cap_raises_429(store: FileUsageStore) -> None:
     # 80 drafts × $0.020 = $1.60 > $1.50.
     for _ in range(80):
-        store.record_feature("alice", "cover_letter_draft")
+        store.record_feature("alice", "cover_letter_summary")
     with pytest.raises(HTTPException) as exc_info:
-        enforce_daily_cap(store, "alice", "cover_letter_draft", cap_usd=1.50)
+        enforce_daily_cap(store, "alice", "cover_letter_summary", cap_usd=1.50)
     assert exc_info.value.status_code == 429
     assert "00:00 utc" in exc_info.value.detail.lower()
 
@@ -40,12 +40,12 @@ def test_exceeding_cap_raises_429(store: FileUsageStore) -> None:
 def test_cap_per_user(store: FileUsageStore) -> None:
     """Alice burning her cap doesn't affect Bob."""
     for _ in range(80):
-        store.record_feature("alice", "cover_letter_draft")
+        store.record_feature("alice", "cover_letter_summary")
     # Alice over → 429.
     with pytest.raises(HTTPException):
-        enforce_daily_cap(store, "alice", "cover_letter_draft", cap_usd=1.50)
+        enforce_daily_cap(store, "alice", "cover_letter_summary", cap_usd=1.50)
     # Bob still under → no raise.
-    enforce_daily_cap(store, "bob", "cover_letter_draft", cap_usd=1.50)
+    enforce_daily_cap(store, "bob", "cover_letter_summary", cap_usd=1.50)
 
 
 def test_today_cost_resets_across_iso_days(
@@ -57,7 +57,7 @@ def test_today_cost_resets_across_iso_days(
     # Pretend yesterday: monkeypatch _today_iso to a fixed past date.
     monkeypatch.setattr(store_mod, "_today_iso", lambda: "2026-05-06")
     for _ in range(80):
-        store.record_feature("alice", "cover_letter_draft")
+        store.record_feature("alice", "cover_letter_summary")
     yesterday_cost = store.get_today_cost_usd("alice")
     assert yesterday_cost == pytest.approx(80 * 0.020)
 
@@ -66,7 +66,7 @@ def test_today_cost_resets_across_iso_days(
     today_cost = store.get_today_cost_usd("alice")
     assert today_cost == 0.0
     # Cap check passes again.
-    enforce_daily_cap(store, "alice", "cover_letter_draft", cap_usd=1.50)
+    enforce_daily_cap(store, "alice", "cover_letter_summary", cap_usd=1.50)
 
 
 def test_get_today_cost_zero_for_unknown_user(store: FileUsageStore) -> None:
