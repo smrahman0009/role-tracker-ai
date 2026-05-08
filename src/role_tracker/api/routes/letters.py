@@ -135,7 +135,7 @@ def get_anthropic_client() -> Anthropic:
 def generate_letter(
     user_id: str,
     job_id: str,
-    body: GenerateLetterRequest,  # noqa: ARG001 — reserved for future fields
+    body: GenerateLetterRequest,
     background_tasks: BackgroundTasks,
     seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
     resume_store: ResumeStore = Depends(get_resume_store),
@@ -157,6 +157,9 @@ def generate_letter(
         user_store=user_store,
         client=client,
         usage_store=usage_store,
+        instruction=body.instruction,
+        template=body.template,
+        extended_thinking=body.extended_thinking,
     )
 
 
@@ -332,7 +335,12 @@ def refine_letter(
             ),
         )
 
-    enforce_daily_cap(usage_store, user_id, "cover_letter_refine")
+    refine_feature = (
+        "cover_letter_generate_extended"
+        if body.extended_thinking
+        else "cover_letter_refine"
+    )
+    enforce_daily_cap(usage_store, user_id, refine_feature)
 
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
@@ -342,6 +350,7 @@ def refine_letter(
         job_id=job_id,
         source_version=version,
         feedback=body.feedback,
+        extended_thinking=body.extended_thinking,
         generation_id=generation_id,
         seen_store=seen_store,
         resume_store=resume_store,
@@ -705,8 +714,16 @@ def _start_generation(
     user_store: UserProfileStore,
     client: Anthropic,
     usage_store: UsageStore,
+    instruction: str | None = None,
+    template: str | None = None,
+    extended_thinking: bool = False,
 ) -> GenerateLetterResponse:
-    enforce_daily_cap(usage_store, user_id, "cover_letter_generate")
+    feature = (
+        "cover_letter_generate_extended"
+        if extended_thinking
+        else "cover_letter_generate"
+    )
+    enforce_daily_cap(usage_store, user_id, feature)
     generation_id = uuid.uuid4().hex[:12]
     generation_store.create(user_id, generation_id, job_id=job_id)
     background_tasks.add_task(
@@ -721,6 +738,9 @@ def _start_generation(
         user_store=user_store,
         client=client,
         usage_store=usage_store,
+        instruction=instruction,
+        template=template,
+        extended_thinking=extended_thinking,
     )
     return GenerateLetterResponse(generation_id=generation_id, status="pending")
 
@@ -798,6 +818,9 @@ def _run_generation_in_background(
     user_store: UserProfileStore,
     client: Anthropic,
     usage_store: UsageStore,
+    instruction: str | None = None,
+    template: str | None = None,
+    extended_thinking: bool = False,
 ) -> None:
     """The agent run, executed after the 202 response is sent."""
     try:
@@ -846,7 +869,7 @@ def _run_generation_in_background(
             )
             return
 
-        # 4. Run the Phase 4 agent. usage_tracker exposes strategy + critique.
+        # 4. Run the agent. usage_tracker exposes strategy + critique.
         usage_tracker: dict = {}
         letter_text = generate_cover_letter_agent(
             user=user_profile,
@@ -854,6 +877,9 @@ def _run_generation_in_background(
             job=job,
             client=client,
             usage_tracker=usage_tracker,
+            instruction=instruction,
+            template=template,
+            extended_thinking=extended_thinking,
         )
 
         # 5. Persist as a new version.
@@ -868,7 +894,12 @@ def _run_generation_in_background(
         generation_store.mark_done(
             user_id, generation_id, saved_version=saved.version
         )
-        UsageRecorder(usage_store, user_id).feature("cover_letter_generate")
+        feature = (
+            "cover_letter_generate_extended"
+            if extended_thinking
+            else "cover_letter_generate"
+        )
+        UsageRecorder(usage_store, user_id).feature(feature)
 
     except Exception as exc:  # noqa: BLE001
         generation_store.mark_failed(user_id, generation_id, error=str(exc))
@@ -896,6 +927,7 @@ def _run_refine_in_background(
     user_store: UserProfileStore,
     client: Anthropic,
     usage_store: UsageStore,
+    extended_thinking: bool = False,
 ) -> None:
     """Run a single Sonnet call to refine the existing letter."""
     try:
@@ -969,6 +1001,7 @@ def _run_refine_in_background(
             previous_strategy=source.strategy,
             feedback=feedback,
             client=client,
+            extended_thinking=extended_thinking,
         )
 
         # Persist as a new version. Strategy carries forward unchanged
@@ -988,7 +1021,12 @@ def _run_refine_in_background(
         generation_store.mark_done(
             user_id, generation_id, saved_version=saved.version
         )
-        UsageRecorder(usage_store, user_id).feature("cover_letter_refine")
+        refine_recorded_feature = (
+            "cover_letter_generate_extended"
+            if extended_thinking
+            else "cover_letter_refine"
+        )
+        UsageRecorder(usage_store, user_id).feature(refine_recorded_feature)
     except Exception as exc:  # noqa: BLE001
         generation_store.mark_failed(user_id, generation_id, error=str(exc))
 

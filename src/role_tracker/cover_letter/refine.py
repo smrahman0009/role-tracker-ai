@@ -92,6 +92,7 @@ def refine_cover_letter(
     feedback: str,
     client: Anthropic,
     model: str = MODEL,
+    extended_thinking: bool = False,
 ) -> str:
     """Run a single Sonnet call to revise the previous letter.
 
@@ -124,6 +125,13 @@ def refine_cover_letter(
         "Return the revised letter text only."
     )
 
+    extra_kwargs: dict = {}
+    if extended_thinking:
+        extra_kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": 10_000,
+        }
+
     response = client.messages.create(
         model=model,
         max_tokens=MAX_TOKENS,
@@ -135,6 +143,7 @@ def refine_cover_letter(
             }
         ],
         messages=[{"role": "user", "content": user_message}],
+        **extra_kwargs,
     )
     revised = "".join(
         b.text for b in response.content if b.type == "text"

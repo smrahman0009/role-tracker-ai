@@ -200,6 +200,139 @@ def test_generate_fails_when_job_not_in_snapshot(client: TestClient) -> None:
     assert "not in current snapshot" in body["error"].lower()
 
 
+# ----- generate dialog: instruction / template / extended_thinking -----
+#
+# These tests use a fixture that captures the kwargs the stubbed agent
+# was called with, so we can verify the route threaded the dialog
+# fields through correctly.
+
+
+@pytest.fixture
+def client_capturing_agent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[tuple[TestClient, dict]]:
+    captured: dict = {}
+
+    import role_tracker.api.routes.letters as letters_module
+
+    def capturing_agent(**kwargs: Any) -> str:
+        captured.update(kwargs)
+        usage_tracker = kwargs.get("usage_tracker")
+        if usage_tracker is not None:
+            usage_tracker["strategy"] = _FAKE_STRATEGY
+            usage_tracker["last_critique"] = _FAKE_CRITIQUE
+        return _FAKE_LETTER
+
+    monkeypatch.setattr(letters_module, "generate_cover_letter_agent", capturing_agent)
+    monkeypatch.setattr(letters_module, "parse_resume", lambda _: "fake resume text")
+
+    app = create_app()
+    seen_store = FileSeenJobsStore(root=tmp_path / "seen")
+    seen_store.upsert_many("alice", [ScoredJob(job=_job("j1"), score=0.9)])
+    app.dependency_overrides[get_resume_store] = lambda: FileResumeStore(
+        root=tmp_path / "resumes"
+    )
+    app.dependency_overrides[get_seen_jobs_store] = lambda: seen_store
+    app.dependency_overrides[get_letter_store] = lambda: FileLetterStore(
+        root=tmp_path / "letters"
+    )
+    app.dependency_overrides[get_letter_generation_store] = (
+        lambda: FileLetterGenerationStore(root=tmp_path / "letters")
+    )
+    app.dependency_overrides[get_user_profile_store] = lambda: _StubUserProfileStore()
+    app.dependency_overrides[get_anthropic_client] = lambda: object()
+    app.dependency_overrides[get_usage_store] = lambda: FileUsageStore(
+        root=tmp_path / "usage"
+    )
+    with TestClient(app) as c:
+        yield c, captured
+
+
+def test_generate_passes_instruction_to_agent(
+    client_capturing_agent: tuple[TestClient, dict],
+) -> None:
+    client, captured = client_capturing_agent
+    _seed_resume(client)
+    gen = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"instruction": "make it punchy, lead with the LLM project"},
+    )
+    # Drain the background task.
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+    assert (
+        captured["instruction"]
+        == "make it punchy, lead with the LLM project"
+    )
+    assert captured["template"] is None
+    assert captured["extended_thinking"] is False
+
+
+def test_generate_passes_template_to_agent(
+    client_capturing_agent: tuple[TestClient, dict],
+) -> None:
+    client, captured = client_capturing_agent
+    _seed_resume(client)
+    gen = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"template": "Dear hiring manager,\n\nMy mirror style."},
+    )
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+    assert captured["template"] == "Dear hiring manager,\n\nMy mirror style."
+
+
+def test_generate_passes_extended_thinking_flag(
+    client_capturing_agent: tuple[TestClient, dict],
+) -> None:
+    client, captured = client_capturing_agent
+    _seed_resume(client)
+    gen = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"extended_thinking": True},
+    )
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+    assert captured["extended_thinking"] is True
+
+
+def test_generate_records_extended_feature_when_thinking_enabled(
+    client_capturing_agent: tuple[TestClient, dict],
+) -> None:
+    """When extended_thinking=True the route should bump the
+    cover_letter_generate_extended counter, not the regular one,
+    so the daily-cap math sees the higher cost."""
+    client, _ = client_capturing_agent
+    _seed_resume(client)
+    gen = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"extended_thinking": True},
+    )
+    client.get(f"/users/alice/letter-jobs/{gen.json()['generation_id']}")
+    usage = client.get("/users/alice/usage").json()
+    feature_calls = {
+        f["feature"]: f["count"]
+        for f in usage["current"]["feature_calls"]
+    }
+    assert feature_calls.get("cover_letter_generate_extended") == 1
+    assert feature_calls.get("cover_letter_generate") in (None, 0)
+
+
+def test_generate_rejects_oversize_instruction(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"instruction": "x" * 1_000},
+    )
+    assert response.status_code == 422
+
+
+def test_generate_rejects_oversize_template(client: TestClient) -> None:
+    _seed_resume(client)
+    response = client.post(
+        "/users/alice/jobs/j1/letters",
+        json={"template": "x" * 5_000},
+    )
+    assert response.status_code == 422
+
+
 # ----- regenerate -----
 
 

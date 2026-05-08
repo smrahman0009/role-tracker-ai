@@ -339,11 +339,23 @@ class LetterVersionList(BaseModel):
 class GenerateLetterRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/{job_id}/letters.
 
-    Reserved for future fields. Currently empty — the job_id in the URL
-    plus the user's resume + queries is everything the agent needs.
+    All fields optional. Empty body = identical behaviour to the
+    one-click Generate button (the original contract). Filled fields
+    come from the GenerateLetterDialog (docs/cover_letter_dialog_plan.md).
     """
 
-    pass
+    # User-supplied steering ("make it punchy, mention my fintech work").
+    # Threaded into the agent's system prompt as high-priority guidance.
+    instruction: str | None = Field(default=None, max_length=500)
+
+    # An existing letter to mirror in voice, length, and structure.
+    # Content stays grounded in the user's resume + this JD; only the
+    # *style* is borrowed from the template.
+    template: str | None = Field(default=None, max_length=4_000)
+
+    # Anthropic's extended-thinking mode. Higher quality on non-obvious
+    # resume↔JD matches at ~2-3× cost and 2-3× latency. Off by default.
+    extended_thinking: bool = False
 
 
 class GenerateLetterResponse(BaseModel):
@@ -369,6 +381,11 @@ class RefineLetterRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/{job_id}/letters/{version}/refine."""
 
     feedback: str = Field(min_length=5, max_length=500)
+
+    # Same toggle as GenerateLetterRequest — extended thinking on the
+    # refine call instead of the generate call. Useful when the user
+    # wants the agent to think hard about a tricky correction.
+    extended_thinking: bool = False
 
 
 class ManualEditRequest(BaseModel):

@@ -182,8 +182,24 @@ def generate_cover_letter_agent(
     model: str = MODEL,
     max_iterations: int = MAX_ITERATIONS,
     usage_tracker: dict | None = None,
+    instruction: str | None = None,
+    template: str | None = None,
+    extended_thinking: bool = False,
 ) -> str:
     """Run the agent loop. Returns the final letter text.
+
+    Optional steering inputs from the GenerateLetterDialog
+    (docs/cover_letter_dialog_plan.md):
+
+    - `instruction`: free-text guidance from the user ("make it punchy,
+      lead with the LLM project"). Woven into the initial user
+      message as high-priority guidance.
+    - `template`: an existing letter to mirror in voice, length, and
+      structure. Content stays grounded in this resume + JD; only
+      style is borrowed.
+    - `extended_thinking`: when True, every Anthropic call gets a
+      thinking budget. ~2-3× cost and latency; better quality on
+      non-obvious resume↔JD matches.
 
     If `usage_tracker` is provided, it is populated with cache-read /
     cache-write / uncached-input token counts for the whole run. Useful for
@@ -202,15 +218,34 @@ def generate_cover_letter_agent(
         "final letter."
     )
 
+    # User-supplied template (from the Generate dialog) replaces the
+    # baked-in REFERENCE_LETTER style guide when present. Same
+    # contract: copy STYLE not facts.
+    style_sample = template if template else REFERENCE_LETTER
+
+    steering_block = ""
+    if instruction:
+        steering_block = (
+            "\n\n<user_instruction>\n"
+            "The candidate has provided high-priority steering for "
+            "this letter. Treat it as guidance, but do NOT invent "
+            "experience to satisfy it — if a request can't be honoured "
+            "with what's actually in the resume, push back politely "
+            "in the strategy commit step.\n\n"
+            f"{instruction.strip()}\n"
+            "</user_instruction>"
+        )
+
     initial_user_message = (
         f"<header_block>\n{user.contact_header()}\n</header_block>\n\n"
         "<reference_letter>\n"
         "The following is an example of this candidate's writing voice. "
         "Match the style but do NOT copy facts from it.\n\n"
-        f"{REFERENCE_LETTER}"
+        f"{style_sample}"
         "</reference_letter>\n\n"
         f"<candidate_name>{user.name}</candidate_name>\n\n"
         f"{goal}"
+        f"{steering_block}"
     )
 
     messages: list[dict] = [{"role": "user", "content": initial_user_message}]
@@ -223,6 +258,16 @@ def generate_cover_letter_agent(
     cache_writes = 0
     uncached_input = 0
 
+    # Anthropic's extended thinking burns thinking-tokens that are
+    # billed separately; budget chosen to give meaningful headroom
+    # without ballooning per-call cost. Only attached when requested.
+    extra_kwargs: dict = {}
+    if extended_thinking:
+        extra_kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": 10_000,
+        }
+
     for iteration in range(max_iterations):
         response = client.messages.create(
             model=model,
@@ -230,6 +275,7 @@ def generate_cover_letter_agent(
             system=system_blocks,
             tools=tools,
             messages=messages,
+            **extra_kwargs,
         )
         usage = getattr(response, "usage", None)
         if usage is not None:
