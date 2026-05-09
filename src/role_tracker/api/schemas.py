@@ -50,7 +50,7 @@ __all__ = [
     "PolishLetterRequest",
     "PolishLetterResponse",
     "PolishWhyInterestedRequest",
-    "WhyInterestedRequest",
+    "WhyInterestedHighlightsResponse",
     "WhyInterestedResponse",
 ]
 
@@ -454,18 +454,23 @@ class UpdateProfileRequest(BaseModel):
 # ----- Hidden lists -----
 
 
-class WhyInterestedRequest(BaseModel):
-    """Body of POST /jobs/{job_id}/why-interested.
+class WhyInterestedHighlightsResponse(BaseModel):
+    """Body of POST /jobs/{job_id}/why-interested/highlights.
 
-    Target word count drives length. 75 is roughly 3 sentences which
-    fits most apply-form text inputs without truncation.
+    Each entry is one short factual sentence about what's distinctive
+    in the JD. The user reads these as research material when writing
+    their own "why are you interested?" answer.
     """
 
-    target_words: int = Field(default=75, ge=20, le=200)
+    highlights: list[str] = Field(default_factory=list)
 
 
 class WhyInterestedResponse(BaseModel):
-    """Body of the why-interested generator response."""
+    """Body of the why-interested polish response.
+
+    Polish operates on user-typed text; the response is the cleaned
+    version of that text with the same meaning and length.
+    """
 
     text: str
     word_count: int

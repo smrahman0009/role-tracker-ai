@@ -48,7 +48,7 @@ from role_tracker.api.schemas import (
     PolishWhyInterestedRequest,
     RefineLetterRequest,
     Strategy,
-    WhyInterestedRequest,
+    WhyInterestedHighlightsResponse,
     WhyInterestedResponse,
 )
 from role_tracker.config import Settings
@@ -77,7 +77,8 @@ from role_tracker.letters.store import (
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
 from role_tracker.screening.why_interested import (
-    generate_why_interested,
+    HighlightsError,
+    generate_jd_highlights,
     polish_why_interested,
 )
 from role_tracker.usage import UsageRecorder, UsageStore
@@ -623,24 +624,33 @@ def _require_letter(
     return stored
 
 
-# ----- "Why interested?" generator -----
+# ----- "Why interested?" — JD highlights + polish -----
+#
+# The previous "generate full why-interested answer" route was removed
+# in May 2026. See docs/HANDBOOK.md for the design rationale: AI-
+# ghostwritten motivation can't pass a recruiter sniff test on the
+# one question specifically about authenticity.
+#
+# Replaced with /why-interested/highlights, which surfaces 4-5 short
+# factual bullets from the JD (no resume sent). The user reads them
+# as research material and writes their own answer; /polish still
+# fixes grammar in whatever the user typed.
 
 
 @router.post(
-    "/users/{user_id}/jobs/{job_id}/why-interested",
-    response_model=WhyInterestedResponse,
+    "/users/{user_id}/jobs/{job_id}/why-interested/highlights",
+    response_model=WhyInterestedHighlightsResponse,
 )
-def generate_why_interested_answer(
+def generate_why_interested_highlights(
     user_id: str,
     job_id: str,
-    body: WhyInterestedRequest,
     seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
-    resume_store: ResumeStore = Depends(get_resume_store),
     client: Anthropic = Depends(get_anthropic_client),
     usage_store: UsageStore = Depends(get_usage_store),
-) -> WhyInterestedResponse:
-    """Generate a 2-3 sentence answer to "Why are you interested?" for the
-    employer's apply form. Synchronous — single Claude Haiku call, ~5s.
+) -> WhyInterestedHighlightsResponse:
+    """Return 4-5 short factual bullets about what's distinctive in
+    the JD. Resume is NOT consulted — this is research about the
+    role, not a fit assessment. Single Haiku call, ~3-5s.
     """
     job = _find_job(seen_store, user_id, job_id)
     if job is None:
@@ -649,31 +659,21 @@ def generate_why_interested_answer(
             detail=f"Job '{job_id}' not found",
         )
 
-    resume_bytes = resume_store.get_file_bytes(user_id)
-    if resume_bytes is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No resume uploaded. Upload one before generating.",
-        )
+    enforce_daily_cap(usage_store, user_id, "why_interested_highlights")
 
-    enforce_daily_cap(usage_store, user_id, "why_interested_generate")
-
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(resume_bytes)
-        tmp_path = Path(tmp.name)
     try:
-        resume_text = parse_resume(tmp_path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+        highlights = generate_jd_highlights(job=job, client=client)
+    except HighlightsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "JD highlights failed to produce valid JSON. "
+                f"Try again. ({exc})"
+            ),
+        ) from exc
 
-    answer = generate_why_interested(
-        job=job,
-        resume_text=resume_text,
-        target_words=body.target_words,
-        client=client,
-    )
-    UsageRecorder(usage_store, user_id).feature("why_interested_generate")
-    return WhyInterestedResponse(text=answer, word_count=len(answer.split()))
+    UsageRecorder(usage_store, user_id).feature("why_interested_highlights")
+    return WhyInterestedHighlightsResponse(highlights=highlights)
 
 
 @router.post(

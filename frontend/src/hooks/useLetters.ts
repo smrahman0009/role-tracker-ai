@@ -19,7 +19,7 @@ import type {
   PolishLetterResponse,
   PolishWhyInterestedRequest,
   RefineLetterRequest,
-  WhyInterestedRequest,
+  WhyInterestedHighlightsResponse,
   WhyInterestedResponse,
 } from "@/lib/types";
 
@@ -97,13 +97,12 @@ export function useEditLetter(
   });
 }
 
-export function useWhyInterested(jobId: string | undefined) {
+export function useWhyInterestedHighlights(jobId: string | undefined) {
   const { userId } = useAuth();
   return useMutation({
-    mutationFn: (body: WhyInterestedRequest) =>
-      api.post<WhyInterestedResponse>(
-        `/users/${userId}/jobs/${jobId}/why-interested`,
-        body,
+    mutationFn: () =>
+      api.post<WhyInterestedHighlightsResponse>(
+        `/users/${userId}/jobs/${jobId}/why-interested/highlights`,
       ),
   });
 }

@@ -698,61 +698,69 @@ def test_manual_edit_does_not_count_toward_refinement_cap(
 # ----- "Why interested?" -----
 
 
-def test_why_interested_returns_text_and_word_count(
+def test_why_interested_highlights_returns_list(
     monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
-    _seed_resume(client)
     import role_tracker.api.routes.letters as letters_module
 
+    fake_highlights = [
+        "Risk team specifically builds fraud-detection ML",
+        "Production ML experience required — past prototype phase",
+        "Hybrid in Toronto, two days in office",
+    ]
     monkeypatch.setattr(
         letters_module,
-        "generate_why_interested",
-        lambda **_: "Three sentences about why I want this role.",
+        "generate_jd_highlights",
+        lambda **_: fake_highlights,
     )
     response = client.post(
-        "/users/alice/jobs/j1/why-interested",
-        json={"target_words": 50},
+        "/users/alice/jobs/j1/why-interested/highlights",
     )
     assert response.status_code == 200
     body = response.json()
-    assert "why I want this role" in body["text"]
-    assert body["word_count"] == 8
+    assert body["highlights"] == fake_highlights
 
 
-def test_why_interested_404_when_job_unknown(
+def test_why_interested_highlights_404_when_job_unknown(
     client: TestClient,
 ) -> None:
-    _seed_resume(client)
     response = client.post(
-        "/users/alice/jobs/nonexistent/why-interested",
-        json={"target_words": 50},
+        "/users/alice/jobs/nonexistent/why-interested/highlights",
     )
     assert response.status_code == 404
 
 
-def test_why_interested_400_when_no_resume(
-    client: TestClient,
+def test_why_interested_highlights_does_not_require_resume(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
+    """Resume is intentionally NOT consulted by the highlights call —
+    this is research about the JD, not a fit assessment."""
+    import role_tracker.api.routes.letters as letters_module
+
+    monkeypatch.setattr(
+        letters_module, "generate_jd_highlights", lambda **_: ["a", "b"]
+    )
+    # Do NOT seed a resume.
     response = client.post(
-        "/users/alice/jobs/j1/why-interested",
-        json={"target_words": 50},
+        "/users/alice/jobs/j1/why-interested/highlights",
     )
-    assert response.status_code == 400
-    assert "resume" in response.json()["detail"].lower()
+    assert response.status_code == 200
 
 
-def test_why_interested_validates_target_words(client: TestClient) -> None:
-    _seed_resume(client)
-    too_short = client.post(
-        "/users/alice/jobs/j1/why-interested",
-        json={"target_words": 5},
+def test_why_interested_highlights_502_when_model_returns_garbage(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    import role_tracker.api.routes.letters as letters_module
+    from role_tracker.screening.why_interested import HighlightsError
+
+    def _raise(**_: object) -> list[str]:
+        raise HighlightsError("model returned non-JSON")
+
+    monkeypatch.setattr(letters_module, "generate_jd_highlights", _raise)
+    response = client.post(
+        "/users/alice/jobs/j1/why-interested/highlights",
     )
-    assert too_short.status_code == 422
-    too_long = client.post(
-        "/users/alice/jobs/j1/why-interested",
-        json={"target_words": 500},
-    )
-    assert too_long.status_code == 422
+    assert response.status_code == 502
 
 
 def test_polish_why_interested_returns_polished_text(

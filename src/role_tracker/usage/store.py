@@ -70,9 +70,10 @@ FEATURE_COST_USD: dict[str, float] = {
     "cover_letter_refine": 0.025,
     # Cover-letter polish — single Haiku call (3-second grammar pass).
     "cover_letter_polish": 0.005,
-    # Why-interested generate — single Haiku call.
-    "why_interested_generate": 0.005,
-    # Why-interested polish — same.
+    # Why-interested JD highlights — single Haiku call returning JSON
+    # over the JD only (no resume).
+    "why_interested_highlights": 0.005,
+    # Why-interested polish — single Haiku call.
     "why_interested_polish": 0.005,
     # URL-extract LLM refine — single Haiku call against the JD body.
     "url_extract_llm_refine": 0.005,
@@ -96,7 +97,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_refine",
     "cover_letter_polish",
     "cover_letter_summary",
-    "why_interested_generate",
+    "why_interested_highlights",
     "why_interested_polish",
     "url_extract_llm_refine",
 }

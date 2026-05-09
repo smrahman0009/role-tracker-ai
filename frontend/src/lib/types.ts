@@ -262,12 +262,14 @@ export interface ManualEditRequest {
   text: string;
 }
 
-export interface WhyInterestedRequest {
-  target_words: number;
-}
-
 export interface PolishWhyInterestedRequest {
   text: string;
+}
+
+export interface WhyInterestedHighlightsResponse {
+  /** 4-5 short factual bullets about what's distinctive in the JD.
+   *  Used as research material; the user writes their own answer. */
+  highlights: string[];
 }
 
 export interface PolishLetterRequest {
@@ -280,6 +282,8 @@ export interface PolishLetterResponse {
 }
 
 export interface WhyInterestedResponse {
+  /** Polish response — same shape as the cover-letter polish: the
+   *  user-typed text after grammar / clarity cleanup. */
   text: string;
   word_count: number;
 }
