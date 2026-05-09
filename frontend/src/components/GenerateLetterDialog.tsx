@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/Dialog";
 import { Label } from "@/components/ui/Input";
+import { isDemoMode } from "@/lib/demoMode";
 import { cn } from "@/lib/utils";
 
 export interface GenerateDialogResult {
@@ -95,6 +96,8 @@ export function GenerateLetterDialog({
   const submitDisabled =
     isPending || (mode === "edit" && !instruction.trim());
 
+  const inDemo = isDemoMode();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -105,6 +108,15 @@ export function GenerateLetterDialog({
             steer the agent with instructions and a style template.
           </DialogDescription>
         </DialogHeader>
+        {inDemo && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <strong className="font-medium">Demo mode:</strong> instructions
+            and template fields work for demonstration but aren't sent to
+            an AI. Clicking Generate returns a pre-written sample letter so
+            you can see the flow. In live mode, your instructions steer
+            the agent.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-slate-900">

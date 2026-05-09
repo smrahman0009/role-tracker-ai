@@ -9,6 +9,7 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 
 import { useAuth } from "@/auth/AuthContext";
+import { DemoBanner } from "@/components/DemoBanner";
 
 export function Layout() {
   const { userId, signOut } = useAuth();
@@ -21,6 +22,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <DemoBanner />
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">

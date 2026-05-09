@@ -1,16 +1,17 @@
 /**
- * LoginPage — placeholder authentication that just stores user_id +
- * app_token in localStorage.
+ * LoginPage — two paths:
  *
- * Real OAuth/OIDC auth lands when the app goes multi-user (deferred to
- * a later phase per the locked plan). For now: paste your user_id and
- * the bearer token (or leave blank if backend's APP_TOKEN env var is
- * unset).
+ *   - "Try Demo": no token, public, fictional data, all backend
+ *     calls intercepted client-side. For recruiters / the curious.
  *
- * After sign-in, redirects to wherever the user was trying to go before
- * being bounced here, falling back to "/".
+ *   - "Sign in": existing private-beta flow — paste user_id + bearer
+ *     token, hits the real backend.
+ *
+ * After either action, redirects to wherever the user was trying to
+ * go before being bounced here, falling back to "/".
  */
 
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import { useHealth } from "@/hooks/useHealth";
+import { DEMO_USER_ID, enterDemoMode } from "@/lib/demoMode";
 
 interface LocationState {
   from?: string;
@@ -50,22 +52,63 @@ export default function LoginPage() {
     navigate(from, { replace: true });
   };
 
+  const handleTryDemo = () => {
+    enterDemoMode();
+    // Auth context still wants a user_id + token so the rest of the
+    // app's URL building works. Use the synthetic demo user_id and
+    // a placeholder token; the api.ts interceptor short-circuits
+    // every request before either is sent over the wire.
+    signIn(DEMO_USER_ID, "demo-token");
+    navigate("/", { replace: true });
+  };
+
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
+      <Card className="w-full max-w-md">
         <CardHeader className="border-b-0 pb-2">
-          <div>
-            <CardTitle className="text-base">Role Tracker</CardTitle>
-            <CardDescription>Sign in to continue</CardDescription>
+          <div className="space-y-1.5">
+            <CardTitle className="text-lg">Role Tracker</CardTitle>
+            <CardDescription>
+              Job-search assistant: ranked listings + AI-tailored cover
+              letters.
+            </CardDescription>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-5">
+          {/* ---- Try Demo (primary CTA for visitors) ---- */}
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-600" />
+              <p className="text-sm font-medium text-indigo-900">
+                New here?
+              </p>
+            </div>
+            <p className="text-xs text-indigo-900/80">
+              Explore with sample data — no sign-up required. Actions
+              return pre-built results; nothing is saved or sent to AI.
+            </p>
+            <Button
+              type="button"
+              variant="primary"
+              className="w-full"
+              onClick={handleTryDemo}
+            >
+              Try the demo
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span>or sign in</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+
+          {/* ---- Sign-in form (private beta) ---- */}
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
               <Label htmlFor="user_id">User ID</Label>
               <Input
                 id="user_id"
-                autoFocus
                 autoComplete="username"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
@@ -76,7 +119,7 @@ export default function LoginPage() {
               <Label htmlFor="app_token">
                 API token{" "}
                 <span className="font-normal text-slate-400">
-                  (optional in dev)
+                  (private beta)
                 </span>
               </Label>
               <Input
@@ -85,15 +128,15 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 value={appToken}
                 onChange={(e) => setAppToken(e.target.value)}
-                placeholder="leave blank if APP_TOKEN unset on backend"
+                placeholder="paste your token"
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" variant="secondary" className="w-full">
               Sign in
             </Button>
             <p className="text-xs text-slate-500 text-center pt-1">
-              Private beta. Your token is bound to one user_id; cross-user
-              access is rejected by the backend.
+              Private beta. Your token is bound to one user_id;
+              cross-user access is rejected by the backend.
             </p>
             <BackendStatus
               isLoading={health.isLoading}
@@ -127,8 +170,7 @@ function BackendStatus({
   if (isError) {
     return (
       <p className="text-xs text-rose-600 text-center">
-        Backend unreachable. Is <code>scripts/run_api.py</code> running on
-        port 8000?
+        Backend unreachable.
       </p>
     );
   }
