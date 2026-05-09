@@ -82,7 +82,6 @@ from role_tracker.usage import UsageRecorder, UsageStore
 from role_tracker.usage.caps import enforce_daily_cap
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
-from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(tags=["letters"])
 
@@ -108,8 +107,11 @@ def get_letter_generation_store() -> LetterGenerationStore:
 
 
 def get_user_profile_store() -> UserProfileStore:
-    """Tests override this with a stub or a tmp-rooted YAML store."""
-    return YamlUserProfileStore()
+    """YAML in dev, DynamoDB in prod (STORAGE_BACKEND=aws). Tests
+    override with a stub or a tmp-rooted YAML store."""
+    from role_tracker.users.factory import make_user_profile_store
+
+    return make_user_profile_store()
 
 
 def get_anthropic_client() -> Anthropic:

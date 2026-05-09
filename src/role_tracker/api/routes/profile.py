@@ -24,14 +24,16 @@ from role_tracker.api.schemas import (
 )
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.models import UserProfile
-from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(tags=["profile"])
 
 
 def get_profile_store() -> UserProfileStore:
-    """Tests override this with a tmp-rooted YAML store or a stub."""
-    return YamlUserProfileStore()
+    """YAML in dev, DynamoDB in prod (STORAGE_BACKEND=aws). Tests
+    override with a tmp-rooted YAML store or a stub."""
+    from role_tracker.users.factory import make_user_profile_store
+
+    return make_user_profile_store()
 
 
 # ============================================================

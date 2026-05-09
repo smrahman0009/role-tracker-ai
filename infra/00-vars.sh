@@ -48,6 +48,7 @@ export DDB_LETTERS_TABLE="${PROJECT}-letters"
 export DDB_USAGE_TABLE="${PROJECT}-usage"
 export DDB_QUERIES_TABLE="${PROJECT}-queries"
 export DDB_SEEN_JOBS_TABLE="${PROJECT}-seen-jobs"
+export DDB_USERS_TABLE="${PROJECT}-users"
 
 # SSM Parameter Store path prefix — secrets live under /role-tracker/.
 export SSM_PREFIX="/${PROJECT}"

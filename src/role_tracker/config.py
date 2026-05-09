@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     ddb_usage_table: str = "role-tracker-usage"
     ddb_queries_table: str = "role-tracker-queries"
     ddb_seen_jobs_table: str = "role-tracker-seen-jobs"
+    ddb_users_table: str = "role-tracker-users"
     ssm_prefix: str = "/role-tracker"
 
 

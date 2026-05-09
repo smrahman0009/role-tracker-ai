@@ -92,7 +92,8 @@ PERMISSIONS_POLICY=$(cat <<EOF
                 "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_LETTERS_TABLE}",
                 "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_USAGE_TABLE}",
                 "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_QUERIES_TABLE}",
-                "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_SEEN_JOBS_TABLE}"
+                "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_SEEN_JOBS_TABLE}",
+                "arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DDB_USERS_TABLE}"
             ]
         },
         {

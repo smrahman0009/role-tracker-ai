@@ -77,7 +77,6 @@ from role_tracker.queries.models import SavedQuery
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
 from role_tracker.usage import FileUsageStore, UsageRecorder, UsageStore
-from role_tracker.users.yaml_store import YamlUserProfileStore
 
 router = APIRouter(
     prefix="/users/{user_id}/jobs",
@@ -87,9 +86,14 @@ router = APIRouter(
 
 def _user_top_n(user_id: str, *, default: int = 50) -> int:
     """Read the user's top_n_jobs preference, with a safe default."""
+    from role_tracker.aws.dynamodb_user_profile_store import (
+        UserProfileNotFoundError,
+    )
+    from role_tracker.users.factory import make_user_profile_store
+
     try:
-        return YamlUserProfileStore().get_user(user_id).top_n_jobs
-    except FileNotFoundError:
+        return make_user_profile_store().get_user(user_id).top_n_jobs
+    except (FileNotFoundError, UserProfileNotFoundError):
         return default
 
 
@@ -186,7 +190,9 @@ def get_pipeline_runner() -> PipelineRunner:
         rapidapi_key=settings.jsearch_rapidapi_key,
         country="ca",
     )
-    user_store = YamlUserProfileStore()
+    from role_tracker.users.factory import make_user_profile_store
+
+    user_store = make_user_profile_store()
     usage_store = get_usage_store()
 
     def run(

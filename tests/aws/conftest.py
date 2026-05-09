@@ -54,3 +54,20 @@ def make_table(
     )
     table.wait_until_exists()
     return table
+
+
+def make_users_table(dynamodb_resource: object, table_name: str) -> object:
+    """Create the user-profile table — partition key only, no sort
+    key (one item per user). Used by DynamoDBUserProfileStore."""
+    table = dynamodb_resource.create_table(  # type: ignore[attr-defined]
+        TableName=table_name,
+        AttributeDefinitions=[
+            {"AttributeName": "user_id", "AttributeType": "S"},
+        ],
+        KeySchema=[
+            {"AttributeName": "user_id", "KeyType": "HASH"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table.wait_until_exists()
+    return table

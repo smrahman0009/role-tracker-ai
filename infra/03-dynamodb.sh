@@ -50,6 +50,31 @@ create_table() {
     ok "Created ${table_name}"
 }
 
+# Variant: partition-key-only (no sort key). Used by the user-profile
+# table where one user maps to one item.
+create_pk_only_table() {
+    local table_name="$1"
+    local description="$2"
+
+    section "Creating table: ${table_name}  (${description})"
+
+    if aws dynamodb describe-table --table-name "${table_name}" >/dev/null 2>&1; then
+        note "Table already exists — skipping creation."
+        return
+    fi
+
+    aws dynamodb create-table \
+        --table-name "${table_name}" \
+        --attribute-definitions "AttributeName=user_id,AttributeType=S" \
+        --key-schema "AttributeName=user_id,KeyType=HASH" \
+        --billing-mode PAY_PER_REQUEST \
+        --tags "Key=Project,Value=${PROJECT}" \
+        >/dev/null
+
+    aws dynamodb wait table-exists --table-name "${table_name}"
+    ok "Created ${table_name}"
+}
+
 # -----------------------------------------------------------------------------
 # applied — every job a user has marked as applied, with the rich record
 # captured at apply time (applied_at, resume snapshot, letter version).
@@ -105,6 +130,17 @@ create_table "${DDB_QUERIES_TABLE}"   "query_id"   "user → query → saved sea
 # -----------------------------------------------------------------------------
 create_table "${DDB_SEEN_JOBS_TABLE}" "job_id"     "user → job → seen-job entry"
 
+# -----------------------------------------------------------------------------
+# users — per-user profile (name, contact, queries, hidden lists, etc.).
+# One item per user. The whole UserProfile is JSON-serialised under
+# `profile_json` so schema changes don't require a DDB migration.
+#
+# Item shape:
+#   user_id (S)         — partition key
+#   profile_json (S)    — JSON-serialised UserProfile
+# -----------------------------------------------------------------------------
+create_pk_only_table "${DDB_USERS_TABLE}" "user → profile (single item)"
+
 section "Done"
 
 cat <<EOF
@@ -114,6 +150,7 @@ DynamoDB tables created in ${AWS_REGION}:
   · ${DDB_USAGE_TABLE}
   · ${DDB_QUERIES_TABLE}
   · ${DDB_SEEN_JOBS_TABLE}
+  · ${DDB_USERS_TABLE}
 
 All using on-demand billing — no minimum charge, scales to zero,
 covered by the always-free DynamoDB tier (25 GB / 25 RCU / 25 WCU).
