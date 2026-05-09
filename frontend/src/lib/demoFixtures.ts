@@ -332,6 +332,107 @@ const ALL_JOBS: JobDetailResponse[] = [
   J_NORTHWIND,
 ];
 
+// ---------------- Manually-added jobs (3 fictional URL-paste entries) ----------------
+//
+// The "Added jobs" page shows postings the user found themselves and
+// pasted in by URL — independent of the daily ranked snapshot. These
+// three are styled to look like things a candidate might paste from
+// a friend's referral or a careers page they bookmarked.
+
+const M_HELIX: JobDetailResponse = {
+  job_id: "demo-manual-helix-mle",
+  title: "ML Engineer — Generative Models",
+  company: "Helix Visual",
+  location: "Remote (Worldwide)",
+  posted_at: "2026-05-03",
+  salary_min: 150_000,
+  salary_max: 200_000,
+  publisher: "Helix Visual Careers",
+  url: "https://example.com/helix/ml-engineer-generative",
+  description: `Helix Visual is building generative-image tools for indie game studios. We've shipped to about 200 studios in beta and are scaling to public launch this year. We're hiring an ML Engineer to focus on inference performance and customer-facing model behaviour.
+
+You'll work on:
+- Latency optimisation for our diffusion-based pipeline (currently 4-8 seconds per generation; target sub-2s).
+- Prompt-handling and safety filters that work for game-asset generation specifically.
+- Deployment infrastructure for our inference fleet (GPU spot instances, queue management, autoscaling).
+
+Looking for someone with:
+- 3+ years shipping ML in production. Inference-time performance work is a strong plus.
+- Deep PyTorch comfort. Diffusion-model architecture knowledge helpful.
+- Practical experience with GPU serving (Triton, vLLM, or equivalent).
+
+Comp: $150-200k base + early-stage equity. Fully remote, async-first culture, quarterly team meetups.`,
+  match_score: 0.66,
+  fit_assessment: "MEDIUM",
+  applied: false,
+};
+
+const M_PARALLAX: JobDetailResponse = {
+  job_id: "demo-manual-parallax-ds",
+  title: "Senior Data Scientist, Growth",
+  company: "Parallax",
+  location: "New York, NY (Hybrid)",
+  posted_at: "2026-05-01",
+  salary_min: 175_000,
+  salary_max: 220_000,
+  publisher: "Parallax Careers",
+  url: "https://example.com/parallax/senior-ds-growth",
+  description: `Parallax is a B2B SaaS company building project-management software for creative agencies. We have 1,200 paying customers, $20M ARR, and we're hiring our second senior data scientist on the Growth team.
+
+The role is a mix of analytics and applied ML:
+- Funnel analysis: figure out where users drop off in onboarding and what to do about it.
+- Pricing experiments: design and run pricing-page A/B tests with the GTM team.
+- Lifetime-value modelling: build a churn-and-LTV model that the sales team can act on.
+
+What we're looking for:
+- 5+ years applied data science, ideally in B2B SaaS.
+- Strong Python + SQL. Comfortable with our data warehouse (Snowflake) and our experimentation platform (Statsig).
+- Ability to communicate with non-technical stakeholders. Most of your influence comes from how you frame results, not from the model itself.
+
+Comp: $175-220k base + equity. Hybrid in NYC (3 days a week in office, on-site Tuesday + Thursday + one floating).`,
+  match_score: 0.52,
+  fit_assessment: "MEDIUM",
+  applied: false,
+};
+
+const M_TIDEWATER: JobDetailResponse = {
+  job_id: "demo-manual-tidewater-mlops",
+  title: "MLOps Engineer",
+  company: "Tidewater Climate",
+  location: "Vancouver, BC",
+  posted_at: "2026-04-28",
+  salary_min: 130_000,
+  salary_max: 165_000,
+  publisher: "Tidewater Climate",
+  url: "https://example.com/tidewater/mlops-engineer",
+  description: `Tidewater Climate builds satellite-imagery analysis tools for shipping companies tracking ocean and weather conditions. Series-B stage, 80 employees, mission-driven (we offset our compute use plus 1.5×).
+
+We're hiring an MLOps Engineer to take over a stack that's grown organically from prototype scripts to production. Your first six months:
+- Migrate the model-training pipeline from ad-hoc scripts to a managed orchestrator (likely Prefect or Argo).
+- Build the model registry + CI workflow our DS team needs to deploy without engineering bottleneck.
+- Replace our current "deploy by SSH" inference layer with a proper container-based platform.
+
+Required:
+- 3+ years ops or DevOps with significant ML exposure.
+- Strong Python, comfortable with one of: Argo, Prefect, Kubeflow, Airflow.
+- Cloud experience — we're on AWS.
+
+Nice to have:
+- Geospatial / satellite-imagery domain.
+- Climate or ocean-modelling background.
+
+CAD 130-165k + equity + stock-based bonuses. Vancouver office (Mount Pleasant), 3 days/week. Strong work-life balance — we don't believe in evening incidents unless something's literally on fire.`,
+  match_score: 0.61,
+  fit_assessment: "MEDIUM",
+  applied: false,
+};
+
+const ALL_MANUAL_JOBS: JobDetailResponse[] = [
+  M_HELIX,
+  M_PARALLAX,
+  M_TIDEWATER,
+];
+
 // ---------------- API response shapes built from the jobs ----------------
 
 function toSummary(job: JobDetailResponse): JobSummary {
@@ -367,7 +468,37 @@ export function demoJobList(): JobListResponse {
 }
 
 export function demoJobDetail(jobId: string): JobDetailResponse | null {
-  return ALL_JOBS.find((j) => j.job_id === jobId) ?? null;
+  return (
+    ALL_JOBS.find((j) => j.job_id === jobId) ??
+    ALL_MANUAL_JOBS.find((j) => j.job_id === jobId) ??
+    null
+  );
+}
+
+/** List of manually-added jobs (the /added-jobs page).
+ *  Returned as a JobListResponse like the main jobs list. */
+export function demoManualJobsList(): JobListResponse {
+  return {
+    jobs: ALL_MANUAL_JOBS.map(toSummary),
+    total: ALL_MANUAL_JOBS.length,
+    total_unfiltered: ALL_MANUAL_JOBS.length,
+    hidden_by_filters: 0,
+    last_refreshed_at: null,
+    next_refresh_allowed_at: null,
+    candidates_seen: 0,
+    queries_run: 0,
+    top_n_cap: 0,
+  };
+}
+
+/** Returned by POST /jobs/manual/fetch when the user pastes a URL.
+ *  In demo mode we return one of the canned manual jobs so the
+ *  full "paste URL → preview → save" interaction works. */
+export function demoFetchedJob(): JobDetailResponse {
+  // Pick one of the manual entries; rotating so a recruiter who
+  // pastes multiple URLs sees variety.
+  const idx = Math.floor(Math.random() * ALL_MANUAL_JOBS.length);
+  return ALL_MANUAL_JOBS[idx];
 }
 
 // ---------------- JD summary (one canned per job) ----------------

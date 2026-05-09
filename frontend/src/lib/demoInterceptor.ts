@@ -22,11 +22,13 @@ import {
   DEMO_RESUME,
   DEMO_USAGE,
   demoAnalysis,
+  demoFetchedJob,
   demoGenerationStatus,
   demoJobDetail,
   demoJobList,
   demoLetter,
   demoLetterVersions,
+  demoManualJobsList,
   demoPolish,
   demoStartGeneration,
   demoSummary,
@@ -126,6 +128,32 @@ export async function tryDemoIntercept<T>(
   if (subpath === "jobs" && options.method === "GET") {
     await sleep(SLEEP_NORMAL);
     return demoJobList() as unknown as T;
+  }
+
+  // ----- Manually-added jobs (/added-jobs page) -----
+  if (subpath === "jobs/manual" && options.method === "GET") {
+    await sleep(SLEEP_NORMAL);
+    return demoManualJobsList() as unknown as T;
+  }
+  if (subpath === "jobs/manual/fetch" && options.method === "POST") {
+    // "Fetch from URL" — preview before saving. In demo we return one
+    // of the canned manual jobs regardless of the URL the user pasted.
+    await sleep(SLEEP_SLOW);
+    return demoFetchedJob() as unknown as T;
+  }
+  if (subpath === "jobs/manual" && options.method === "POST") {
+    // "Save the manually-pasted job". Echo back the body as if it
+    // were saved; the list won't actually grow on next GET (demo
+    // state is read-only) but the UX completes cleanly.
+    await sleep(SLEEP_NORMAL);
+    return (options.json ?? demoFetchedJob()) as unknown as T;
+  }
+  if (
+    subpath.startsWith("jobs/manual/") &&
+    options.method === "DELETE"
+  ) {
+    await sleep(SLEEP_NORMAL);
+    return undefined as unknown as T;
   }
 
   // ----- Jobs/refresh -----
