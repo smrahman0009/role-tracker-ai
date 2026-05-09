@@ -24,11 +24,21 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import * as React from "react";
 
+import { usePortalContainer } from "@/lib/portalContainer";
 import { cn } from "@/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogPortal = DialogPrimitive.Portal;
+/** Wraps Radix's Portal so the dialog renders into the
+ *  PortalContainerContext target when set (e.g. the Picture-in-
+ *  Picture window's body). Without this, dialogs opened from
+ *  inside the PiP would render invisibly in the main window. */
+export const DialogPortal = (
+  props: React.ComponentProps<typeof DialogPrimitive.Portal>,
+) => {
+  const container = usePortalContainer();
+  return <DialogPrimitive.Portal container={container} {...props} />;
+};
 export const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<

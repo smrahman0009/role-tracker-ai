@@ -27,6 +27,8 @@ import {
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
+import { Toaster as SonnerToaster } from "sonner";
+
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { toast } from "@/components/ui/Toaster";
@@ -37,6 +39,7 @@ import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
 import { letterToPlainText } from "@/lib/format";
+import { PortalContainerProvider } from "@/lib/portalContainer";
 import { cn } from "@/lib/utils";
 import type { Letter, ProfileResponse } from "@/lib/types";
 
@@ -109,18 +112,35 @@ export function ApplyKitPanel({ userId, jobId, jobUrl }: ApplyKitPanelProps) {
   );
 
   if (pip.pipWindow) {
+    // Inside the PiP window:
+    //   - Wrap content in PortalContainerProvider so Radix Dialogs /
+    //     Popovers open in the PiP document, not the main one.
+    //   - Render the WhyInterestedDialog INSIDE the portal so the
+    //     mount itself is in the right document tree.
+    //   - Mount a second SonnerToaster inside the PiP — Sonner
+    //     supports multiple Toaster instances and broadcasts
+    //     toast() calls to all of them, so notifications appear in
+    //     whichever window the user is looking at.
     return (
       <>
         <FloatingPlaceholder onBringBack={pip.close} />
         {createPortal(
-          <div className="p-4 max-w-md mx-auto">{body}</div>,
+          <PortalContainerProvider container={pip.pipWindow.document.body}>
+            <div className="p-4 max-w-md mx-auto">{body}</div>
+            <WhyInterestedDialog
+              open={whyOpen}
+              onOpenChange={setWhyOpen}
+              jobId={jobId}
+            />
+            <SonnerToaster
+              position="bottom-right"
+              duration={4000}
+              closeButton
+              richColors
+            />
+          </PortalContainerProvider>,
           pip.pipWindow.document.body,
         )}
-        <WhyInterestedDialog
-          open={whyOpen}
-          onOpenChange={setWhyOpen}
-          jobId={jobId}
-        />
       </>
     );
   }

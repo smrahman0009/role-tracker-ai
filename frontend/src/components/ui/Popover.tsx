@@ -6,6 +6,7 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as React from "react";
 
+import { usePortalContainer } from "@/lib/portalContainer";
 import { cn } from "@/lib/utils";
 
 export const Popover = PopoverPrimitive.Root;
@@ -14,8 +15,11 @@ export const PopoverTrigger = PopoverPrimitive.Trigger;
 export const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "start", sideOffset = 6, ...props }, ref) => (
-  <PopoverPrimitive.Portal>
+>(({ className, align = "start", sideOffset = 6, ...props }, ref) => {
+  // Same PiP-aware portal trick as Dialog — see lib/portalContainer.tsx.
+  const container = usePortalContainer();
+  return (
+    <PopoverPrimitive.Portal container={container}>
     <PopoverPrimitive.Content
       ref={ref}
       align={align}
@@ -29,6 +33,7 @@ export const PopoverContent = React.forwardRef<
       )}
       {...props}
     />
-  </PopoverPrimitive.Portal>
-));
+    </PopoverPrimitive.Portal>
+  );
+});
 PopoverContent.displayName = "PopoverContent";
