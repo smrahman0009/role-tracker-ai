@@ -46,3 +46,42 @@ export function PortalContainerProvider({ container, children }: ProviderProps) 
 export function usePortalContainer(): HTMLElement | undefined {
   return useContext(PortalContainerContext);
 }
+
+/** Write text to the clipboard from the right window context.
+ *
+ * Browsers require the calling document to be **focused** for the
+ * clipboard API to work. When the user clicks a button inside a PiP
+ * window, the *PiP* window has focus — but `navigator.clipboard`
+ * resolved from the main window's globals isn't focused, so the
+ * call is rejected with NotAllowedError.
+ *
+ * Fix: use the clipboard API of the document the calling element
+ * belongs to (the portal container's owner document). When no
+ * container is set, fall back to the global navigator (main window
+ * default).
+ */
+export async function writeToClipboard(
+  text: string,
+  container?: HTMLElement | undefined,
+): Promise<void> {
+  const targetWindow =
+    container?.ownerDocument?.defaultView ?? window;
+  if (targetWindow.navigator?.clipboard?.writeText) {
+    await targetWindow.navigator.clipboard.writeText(text);
+    return;
+  }
+  // Last-resort fallback for very old browsers — execCommand is
+  // deprecated but still works on document.body in most engines.
+  const doc = container?.ownerDocument ?? document;
+  const ta = doc.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  doc.body.appendChild(ta);
+  ta.select();
+  try {
+    doc.execCommand("copy");
+  } finally {
+    ta.remove();
+  }
+}

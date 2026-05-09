@@ -39,7 +39,11 @@ import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
 import { letterToPlainText } from "@/lib/format";
-import { PortalContainerProvider } from "@/lib/portalContainer";
+import {
+  PortalContainerProvider,
+  usePortalContainer,
+  writeToClipboard,
+} from "@/lib/portalContainer";
 import { cn } from "@/lib/utils";
 import type { Letter, ProfileResponse } from "@/lib/types";
 
@@ -510,10 +514,15 @@ function CopyButton({
   size?: "icon" | "full";
 }) {
   const [copied, setCopied] = useState(false);
+  const portalContainer = usePortalContainer();
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      // writeToClipboard targets the PiP window's clipboard when
+      // we're rendered in PiP; otherwise the main window's. The
+      // main window's clipboard rejects writes when the PiP has
+      // focus (which it does whenever the user clicks here).
+      await writeToClipboard(value, portalContainer);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
