@@ -31,9 +31,15 @@ import boto3
 from role_tracker.users.models import UserProfile
 
 
-class UserProfileNotFoundError(LookupError):
-    """Raised by get_user when no row exists for a user_id. Mirrors the
-    FileNotFoundError that YamlUserProfileStore raises."""
+class UserProfileNotFoundError(FileNotFoundError):
+    """Raised by get_user when no row exists for a user_id.
+
+    Inherits from FileNotFoundError on purpose: every existing caller
+    in the codebase already catches FileNotFoundError (because the
+    YAML store has always raised that). Subclassing keeps all those
+    catches working when the store swaps to DynamoDB. New code that
+    wants to be specific can catch UserProfileNotFoundError directly.
+    """
 
 
 class DynamoDBUserProfileStore:
