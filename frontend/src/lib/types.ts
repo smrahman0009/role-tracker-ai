@@ -262,10 +262,6 @@ export interface ManualEditRequest {
   text: string;
 }
 
-export interface WhyInterestedRequest {
-  target_words: number;
-}
-
 export interface PolishWhyInterestedRequest {
   text: string;
 }

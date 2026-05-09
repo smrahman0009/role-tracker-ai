@@ -48,7 +48,6 @@ from role_tracker.api.schemas import (
     PolishWhyInterestedRequest,
     RefineLetterRequest,
     Strategy,
-    WhyInterestedRequest,
     WhyInterestedResponse,
 )
 from role_tracker.config import Settings
@@ -76,10 +75,7 @@ from role_tracker.letters.store import (
 )
 from role_tracker.resume.parser import parse_resume
 from role_tracker.resume.store import ResumeStore
-from role_tracker.screening.why_interested import (
-    generate_why_interested,
-    polish_why_interested,
-)
+from role_tracker.screening.why_interested import polish_why_interested
 from role_tracker.usage import UsageRecorder, UsageStore
 from role_tracker.usage.caps import enforce_daily_cap
 from role_tracker.users.base import UserProfileStore
@@ -623,57 +619,12 @@ def _require_letter(
     return stored
 
 
-# ----- "Why interested?" generator -----
-
-
-@router.post(
-    "/users/{user_id}/jobs/{job_id}/why-interested",
-    response_model=WhyInterestedResponse,
-)
-def generate_why_interested_answer(
-    user_id: str,
-    job_id: str,
-    body: WhyInterestedRequest,
-    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
-    resume_store: ResumeStore = Depends(get_resume_store),
-    client: Anthropic = Depends(get_anthropic_client),
-    usage_store: UsageStore = Depends(get_usage_store),
-) -> WhyInterestedResponse:
-    """Generate a 2-3 sentence answer to "Why are you interested?" for the
-    employer's apply form. Synchronous — single Claude Haiku call, ~5s.
-    """
-    job = _find_job(seen_store, user_id, job_id)
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job '{job_id}' not found",
-        )
-
-    resume_bytes = resume_store.get_file_bytes(user_id)
-    if resume_bytes is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No resume uploaded. Upload one before generating.",
-        )
-
-    enforce_daily_cap(usage_store, user_id, "why_interested_generate")
-
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(resume_bytes)
-        tmp_path = Path(tmp.name)
-    try:
-        resume_text = parse_resume(tmp_path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    answer = generate_why_interested(
-        job=job,
-        resume_text=resume_text,
-        target_words=body.target_words,
-        client=client,
-    )
-    UsageRecorder(usage_store, user_id).feature("why_interested_generate")
-    return WhyInterestedResponse(text=answer, word_count=len(answer.split()))
+# ----- "Why interested?" — polish only -----
+#
+# The motivation generator was removed in May 2026 — see
+# docs/HANDBOOK.md and src/role_tracker/screening/why_interested.py.
+# All that remains is a grammar-fix pass over text the user typed
+# themselves.
 
 
 @router.post(
