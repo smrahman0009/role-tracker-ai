@@ -38,6 +38,7 @@ import {
   GenerateLetterDialog,
   type GenerateDialogResult,
 } from "@/components/GenerateLetterDialog";
+import { CoverLetterAnalysisPanel } from "@/components/CoverLetterAnalysisPanel";
 import { JobSummaryPanel } from "@/components/JobSummaryPanel";
 import { LetterDownloadButton } from "@/components/LetterDownloadButton";
 import { LetterRenderer } from "@/components/LetterRenderer";
@@ -237,6 +238,7 @@ export default function JobDetailPage() {
             <div className="lg:col-span-2 space-y-4">
               <JobDescription description={job.description} />
               <JobSummaryPanel jobId={job.job_id} />
+              <CoverLetterAnalysisPanel jobId={job.job_id} />
               <LetterWorkspace
                 userId={userId ?? ""}
                 jobId={job.job_id}

@@ -368,6 +368,20 @@ export interface UsageResponse {
 /** API-level model alias. Maps to a concrete Anthropic model on the server. */
 export type ModelChoice = "haiku" | "sonnet";
 
+export interface CoverLetterAnalysisRequest {
+  model?: ModelChoice;
+}
+
+export interface CoverLetterAnalysisResponse {
+  strong: string[];
+  gaps: string[];
+  partial: string[];
+  excitement_hooks: string[];
+  /** Concrete Anthropic model ID that produced the analysis
+   *  (e.g. "claude-sonnet-4-6"). Surfaced as a faint footer. */
+  model: string;
+}
+
 export interface CoverLetterSummaryRequest {
   model?: ModelChoice;
 }

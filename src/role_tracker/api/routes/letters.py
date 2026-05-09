@@ -34,6 +34,8 @@ from fastapi.responses import Response
 from role_tracker.api.routes.jobs import get_seen_jobs_store, get_usage_store
 from role_tracker.api.routes.resume import get_resume_store
 from role_tracker.api.schemas import (
+    CoverLetterAnalysisRequest,
+    CoverLetterAnalysisResponse,
     CoverLetterSummaryRequest,
     CoverLetterSummaryResponse,
     CritiqueScore,
@@ -448,6 +450,89 @@ def polish_letter(
     UsageRecorder(usage_store, user_id).feature("cover_letter_polish")
     return PolishLetterResponse(
         text=polished, word_count=len(polished.split())
+    )
+
+
+@router.post(
+    "/users/{user_id}/jobs/{job_id}/cover-letter/analysis",
+    response_model=CoverLetterAnalysisResponse,
+)
+def analyze_cover_letter_match(
+    user_id: str,
+    job_id: str,
+    body: CoverLetterAnalysisRequest,
+    seen_store: SeenJobsStore = Depends(get_seen_jobs_store),
+    resume_store: ResumeStore = Depends(get_resume_store),
+    client: Anthropic = Depends(get_anthropic_client),
+    usage_store: UsageStore = Depends(get_usage_store),
+) -> CoverLetterAnalysisResponse:
+    """Resume↔JD match analysis: four lists (Strong / Gaps / Partial /
+    excitement hooks) inspectable on the job-detail page.
+
+    The user reads the lists and can mention specific gaps or
+    excitement hooks in the Generate dialog's instruction field
+    ("address the distributed-systems gap", "lead with the fraud-
+    detection angle"). The agent never reads the analysis directly.
+
+    Sonnet by default — better judgment than Haiku at picking what's
+    distinctive about the overlap. Haiku is selectable per call for
+    a cheaper run.
+    """
+    from role_tracker.cover_letter.interactive import (
+        _ANALYSIS_MODEL_DEFAULT,
+        AnalysisError,
+        analyze,
+    )
+
+    job = _find_job(seen_store, user_id, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    resume_bytes = resume_store.get_file_bytes(user_id)
+    if resume_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No resume uploaded. Upload one before running analysis.",
+        )
+
+    enforce_daily_cap(usage_store, user_id, "cover_letter_analysis")
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resume_bytes)
+        tmp_path = Path(tmp.name)
+    try:
+        resume_text = parse_resume(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    model_id = resolve_model(body.model, default=_ANALYSIS_MODEL_DEFAULT)
+
+    try:
+        analysis = analyze(
+            resume_text=resume_text,
+            jd_text=job.description,
+            client=client,
+            model=model_id,
+        )
+    except AnalysisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Match analysis failed to produce valid JSON. "
+                f"Try again. ({exc})"
+            ),
+        ) from exc
+
+    UsageRecorder(usage_store, user_id).feature("cover_letter_analysis")
+    return CoverLetterAnalysisResponse(
+        strong=analysis.strong,
+        gaps=analysis.gaps,
+        partial=analysis.partial,
+        excitement_hooks=analysis.excitement_hooks,
+        model=model_id,
     )
 
 

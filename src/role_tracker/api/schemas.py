@@ -538,6 +538,30 @@ class UsageResponse(BaseModel):
 ModelChoice = Literal["haiku", "sonnet"]
 
 
+class CoverLetterAnalysisRequest(BaseModel):
+    """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/analysis.
+
+    Sonnet by default. Haiku selectable per call for a cheaper run.
+    """
+
+    model: ModelChoice = "sonnet"
+
+
+class CoverLetterAnalysisResponse(BaseModel):
+    """Body returned by the match-analysis route.
+
+    Four short bullet lists comparing the user's resume to the JD,
+    plus the model that produced them (so the UI can show "Analysis
+    by claude-sonnet-4-6" etc.).
+    """
+
+    strong: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    partial: list[str] = Field(default_factory=list)
+    excitement_hooks: list[str] = Field(default_factory=list)
+    model: str
+
+
 class CoverLetterSummaryRequest(BaseModel):
     """Body of POST /users/{user_id}/jobs/{job_id}/cover-letter/summary.
 

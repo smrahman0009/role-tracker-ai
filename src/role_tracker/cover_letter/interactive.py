@@ -1,14 +1,18 @@
-"""JD summary helpers — the surviving slice of the old interactive
-cover-letter flow.
+"""JD summary + match analysis helpers.
 
-Everything else (analyze, draft, finalize, smooth_letter) was removed
-when the Generate dialog (`docs/cover_letter_dialog_plan.md`) replaced
-the per-paragraph card flow. The JD summary panel still uses these
-helpers because a plain "what is this job?" digest is useful even
-without the dialog.
+The "card-flow" drafting code (draft / finalize / smooth_letter) was
+removed in May 2026 when the GenerateLetterDialog replaced the
+per-paragraph cards. What stays in this module:
+
+- summarize_job: 3-section JD digest used by the JobSummaryPanel
+- analyze: 4-list resume↔JD match analysis used by the
+  CoverLetterAnalysisPanel (restored May 2026 after a misguided
+  bundle-deletion)
+
+Both are single Anthropic calls returning structured JSON.
 
 Module name kept for now so existing imports resolve; rename to
-`cover_letter/summary.py` is a future cleanup.
+`cover_letter/analysis.py` is a future cleanup.
 """
 
 from __future__ import annotations
@@ -17,9 +21,9 @@ import json
 from typing import Protocol
 
 from anthropic import Anthropic
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
-from role_tracker.cover_letter.style_validator import clean
+from role_tracker.cover_letter.style_validator import clean, clean_list
 
 # Concrete Anthropic model IDs. Aliased to "haiku" / "sonnet" at the
 # API surface so the route accepts a stable enum even if Anthropic
@@ -31,6 +35,13 @@ SONNET_MODEL = "claude-sonnet-4-6"
 # selectable so the user can A/B compare cheaply.
 _SUMMARY_MODEL_DEFAULT = SONNET_MODEL
 _SUMMARY_MAX_TOKENS = 384
+
+# Match analysis defaults to Sonnet too. Haiku produces valid JSON
+# but Sonnet is meaningfully better at picking what's *worth* flagging
+# vs what's just keyword-shaped overlap. The toggle on the panel lets
+# the user downgrade to Haiku for the cheaper run.
+_ANALYSIS_MODEL_DEFAULT = SONNET_MODEL
+_ANALYSIS_MAX_TOKENS = 1024
 
 
 def resolve_model(choice: str | None, *, default: str) -> str:
@@ -179,3 +190,119 @@ def _parse_summary(text: str) -> JobSummary:
         return JobSummary.model_validate(payload)
     except ValidationError as exc:
         raise SummaryError(f"JSON did not match schema: {exc}") from exc
+
+
+# ----- Match analysis ----------------------------------------------------
+
+
+class MatchAnalysis(BaseModel):
+    """Output of `analyze()`: four lists comparing resume to JD.
+
+    Drives the CoverLetterAnalysisPanel on the job detail page. The
+    user reads them as input to the Generate dialog ("address the
+    distributed-systems gap"); the agent doesn't read them directly.
+    """
+
+    strong: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    partial: list[str] = Field(default_factory=list)
+    excitement_hooks: list[str] = Field(default_factory=list)
+
+
+class AnalysisError(Exception):
+    """Raised when the model returns text that isn't valid JSON in the
+    expected schema. Routes translate to HTTP 502."""
+
+
+def analyze(
+    resume_text: str,
+    jd_text: str,
+    *,
+    client: Anthropic | _AnthropicClientLike,
+    model: str = _ANALYSIS_MODEL_DEFAULT,
+) -> MatchAnalysis:
+    """Run the match-analysis call and return a structured MatchAnalysis.
+
+    Default model is Sonnet — better judgment than Haiku at picking
+    what's distinctive about the resume↔JD overlap (vs surface keyword
+    matches). The route layer accepts a model alias so the user can
+    flip to Haiku for the cheaper run via the panel's model toggle.
+
+    Raises AnalysisError when the model's response can't be parsed.
+    Network/API errors propagate from the Anthropic client unchanged.
+    """
+    # Imported lazily so the module stays import-cheap when callers
+    # only use summarize_job.
+    from role_tracker.cover_letter.prompts.interactive_analysis import (
+        SYSTEM_PROMPT,
+        USER_TEMPLATE,
+    )
+
+    user_message = USER_TEMPLATE.format(
+        resume_text=resume_text.strip(),
+        jd_text=jd_text.strip(),
+    )
+
+    response = client.messages.create(  # type: ignore[union-attr]
+        model=model,
+        max_tokens=_ANALYSIS_MAX_TOKENS,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    text = _extract_text_for_analysis(response)
+    parsed = _parse_analysis(text)
+
+    # Run every bullet through the style validator so em-dashes and
+    # banned LLM tics don't leak through to the UI.
+    return MatchAnalysis(
+        strong=clean_list(parsed.strong),
+        gaps=clean_list(parsed.gaps),
+        partial=clean_list(parsed.partial),
+        excitement_hooks=clean_list(parsed.excitement_hooks),
+    )
+
+
+def _extract_text_for_analysis(response: object) -> str:
+    """Same shape as _extract_text but raises AnalysisError instead of
+    SummaryError so the route can translate to the right HTTP code."""
+    content = getattr(response, "content", None)
+    if content is None and isinstance(response, dict):
+        content = response.get("content")
+    if not content:
+        raise AnalysisError("empty response from model")
+
+    parts: list[str] = []
+    for block in content:
+        block_type = getattr(block, "type", None)
+        text_attr = getattr(block, "text", None)
+        if block_type is None and isinstance(block, dict):
+            block_type = block.get("type")
+            text_attr = block.get("text")
+        if block_type == "text" and isinstance(text_attr, str):
+            parts.append(text_attr)
+    if not parts:
+        raise AnalysisError("response had no text blocks")
+    return "".join(parts).strip()
+
+
+def _parse_analysis(text: str) -> MatchAnalysis:
+    """Coerce the model's reply into a MatchAnalysis. Tolerates code fences."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        first_newline = cleaned.find("\n")
+        if first_newline != -1:
+            cleaned = cleaned[first_newline + 1:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[: -len("```")]
+        cleaned = cleaned.strip()
+
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise AnalysisError(f"model did not return JSON: {exc}") from exc
+
+    try:
+        return MatchAnalysis.model_validate(payload)
+    except ValidationError as exc:
+        raise AnalysisError(f"JSON did not match schema: {exc}") from exc

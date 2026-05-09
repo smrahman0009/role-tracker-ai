@@ -78,6 +78,11 @@ FEATURE_COST_USD: dict[str, float] = {
     "url_extract_llm_refine": 0.005,
     # JD summary panel. Sonnet by default, ~80-120 tokens out.
     "cover_letter_summary": 0.020,
+    # Match analysis (Strong / Gaps / Partial / Excitement). Sonnet by
+    # default for better judgment of what's worth flagging; the panel
+    # also exposes a Haiku option ($0.005-equivalent) but we tag the
+    # average. ~$0.020 effective.
+    "cover_letter_analysis": 0.020,
     # Cover-letter generate with extended thinking enabled. Same agent
     # loop as cover_letter_generate but with Anthropic's extended
     # thinking budget; thinking tokens push the per-call cost up.
@@ -96,6 +101,7 @@ ANTHROPIC_FEATURES = {
     "cover_letter_refine",
     "cover_letter_polish",
     "cover_letter_summary",
+    "cover_letter_analysis",
     "why_interested_polish",
     "url_extract_llm_refine",
 }
