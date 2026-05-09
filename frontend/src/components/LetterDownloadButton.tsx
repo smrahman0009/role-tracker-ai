@@ -14,7 +14,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/Popover";
 import { toast } from "@/components/ui/Toaster";
-import { letterDownloadUrl } from "@/hooks/useLetters";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -32,9 +31,11 @@ export function LetterDownloadButton({
   version,
   iconOnly = false,
 }: Props) {
-  // PDF download goes through fetch so we can read X-Letter-Pages and
-  // toast a warning if the letter spilled past one page. The bytes are
-  // saved to disk via a blob URL + dynamic anchor click.
+  // Both formats go through fetch (api.raw injects the bearer token);
+  // a plain <a href> would navigate without the Authorization header
+  // and the middleware would 401. The bytes land on disk via a blob
+  // URL + dynamic anchor click — same trick the browser would do
+  // natively if downloads were public.
   const downloadPdf = async () => {
     try {
       const path = `/users/${userId}/jobs/${jobId}/letters/${version}/download.pdf`;
@@ -48,6 +49,17 @@ export function LetterDownloadButton({
           { duration: 8000 },
         );
       }
+    } catch (err) {
+      toast.error(`Download failed: ${(err as Error).message}`);
+    }
+  };
+
+  const downloadDocx = async () => {
+    try {
+      const path = `/users/${userId}/jobs/${jobId}/letters/${version}/download.docx`;
+      const response = await api.raw(path);
+      const blob = await response.blob();
+      saveBlob(blob, `cover_letter_v${version}.docx`);
     } catch (err) {
       toast.error(`Download failed: ${(err as Error).message}`);
     }
@@ -87,7 +99,7 @@ export function LetterDownloadButton({
           <span className="text-[10px] text-slate-500">Universal</span>
         </button>
         <DownloadOption
-          href={letterDownloadUrl(userId, jobId, version, "docx")}
+          onClick={downloadDocx}
           label="Word (.docx)"
           hint="Best for ATS"
         />
@@ -110,22 +122,21 @@ function saveBlob(blob: Blob, filename: string): void {
 }
 
 function DownloadOption({
-  href,
+  onClick,
   label,
   hint,
 }: {
-  href: string;
+  onClick: () => void;
   label: string;
   hint: string;
 }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
+      onClick={onClick}
       className={cn(
-        "flex items-center justify-between gap-2 rounded px-2 py-1.5",
-        "text-xs text-slate-700 hover:bg-slate-100",
+        "flex items-center justify-between gap-2 rounded px-2 py-1.5 w-full",
+        "text-xs text-slate-700 hover:bg-slate-100 text-left",
         "focus:outline-none focus:bg-slate-100",
       )}
     >
@@ -134,6 +145,6 @@ function DownloadOption({
         {label}
       </span>
       <span className="text-[10px] text-slate-500">{hint}</span>
-    </a>
+    </button>
   );
 }

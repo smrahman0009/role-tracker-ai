@@ -38,6 +38,7 @@ import { useLetterVersions } from "@/hooks/useLetters";
 import { usePictureInPictureWindow } from "@/hooks/usePictureInPictureWindow";
 import { useProfile } from "@/hooks/useProfile";
 import { useResume } from "@/hooks/useResume";
+import { api } from "@/lib/api";
 import { letterToPlainText } from "@/lib/format";
 import {
   PortalContainerProvider,
@@ -332,16 +333,7 @@ function ResumeBlock({
           <p className="text-xs font-medium text-slate-900 truncate flex-1">
             {resume.filename}
           </p>
-          <Button asChild size="sm" variant="ghost">
-            <a
-              href={`/api/users/${encodeURIComponent(userId)}/resume/file`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open resume"
-            >
-              <Download />
-            </a>
-          </Button>
+          <ResumeDownloadButton userId={userId} filename={resume.filename} />
         </div>
       )}
     </Section>
@@ -503,6 +495,46 @@ function Section({
     </div>
   );
 }
+
+function ResumeDownloadButton({
+  userId,
+  filename,
+}: {
+  userId: string;
+  filename: string;
+}) {
+  // Plain <a href="/api/.../resume/file"> would navigate without the
+  // bearer token and the middleware would 401. Fetching via api.raw
+  // injects Authorization, then we save to disk via a blob URL.
+  const download = async () => {
+    try {
+      const path = `/users/${encodeURIComponent(userId)}/resume/file`;
+      const response = await api.raw(path);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "resume.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toast.error(`Download failed: ${(err as Error).message}`);
+    }
+  };
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={download}
+      title="Download resume"
+    >
+      <Download />
+    </Button>
+  );
+}
+
 
 function CopyButton({
   value,
