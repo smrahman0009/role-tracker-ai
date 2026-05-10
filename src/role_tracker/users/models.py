@@ -39,13 +39,18 @@ class UserProfile(BaseModel):
     show_github_in_header: bool = True
     show_portfolio_in_header: bool = True
 
+    # Admin flag — when true, the user can edit the global hidden-publishers
+    # list. Defaults False; flipped via the manage_users CLI. Not surfaced
+    # to non-admin users; their UI is unchanged.
+    is_admin: bool = False
+
     queries: list[JobQuery]
     exclude_companies: list[str] = []
     exclude_title_keywords: list[str] = []
-    # Downstream publisher names the user has chosen to filter out of their
-    # results. Passed to JSearch as a server-side filter AND re-checked
-    # locally. Personal preference list — no implied judgment about the
-    # named publishers.
+    # DEPRECATED: replaced by the global hidden-publishers list. Kept on the
+    # model temporarily so the migration step can read existing personal
+    # entries before unioning them into the global list. Removed after the
+    # data migration completes.
     exclude_publishers: list[str] = []
 
     @property
