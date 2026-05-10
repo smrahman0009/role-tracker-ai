@@ -75,7 +75,11 @@ async function request<T>(
   // endpoint, return synthetic data without ever hitting the
   // network. See lib/demoInterceptor.ts.
   try {
-    const intercepted = await tryDemoIntercept<T>(path, { method, json });
+    const intercepted = await tryDemoIntercept<T>(path, {
+      method,
+      json,
+      formData,
+    });
     if (intercepted !== null) return intercepted;
   } catch (err) {
     const e = err as { status?: number; message?: string };

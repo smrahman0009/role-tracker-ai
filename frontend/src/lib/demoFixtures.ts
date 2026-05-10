@@ -24,21 +24,56 @@ import type {
   ProfileResponse,
   QueryListResponse,
   ResumeMetadata,
+  ResumeUploadResponse,
+  SavedQuery,
   UsageMonth,
   UsageResponse,
   WhyInterestedResponse,
 } from "@/lib/types";
 
+// ---------------- Mutable in-memory mirror ----------------
+//
+// Per-tab state so recruiter actions (apply, hide a company, add a
+// saved query, replace the resume) appear to "stick" within a
+// session. Dies on page reload, which is fine — demo state isn't
+// meant to persist.
+
+const appliedJobIds = new Set<string>();
+const appliedAt = new Map<string, string>();
+const appliedLetterVersion = new Map<string, number | null>();
+
+let hiddenListsState: HiddenListsResponse | null = null;
+let queriesState: SavedQuery[] | null = null;
+let resumeOverride: ResumeMetadata | null = null;
+
+function getHiddenListsState(): HiddenListsResponse {
+  if (hiddenListsState === null) {
+    hiddenListsState = {
+      companies: [...DEMO_HIDDEN_LISTS.companies],
+      title_keywords: [...DEMO_HIDDEN_LISTS.title_keywords],
+      publishers: [...DEMO_HIDDEN_LISTS.publishers],
+    };
+  }
+  return hiddenListsState;
+}
+
+function getQueriesState(): SavedQuery[] {
+  if (queriesState === null) {
+    queriesState = [...DEMO_QUERIES.queries];
+  }
+  return queriesState;
+}
+
 // ---------------- Profile (fictional candidate) ----------------
 
 export const DEMO_PROFILE: ProfileResponse = {
-  name: "Avery Patel",
-  email: "avery.patel@example.com",
+  name: "Mahmud Karim",
+  email: "mahmud.karim@example.com",
   phone: "+1 416 555 0142",
   city: "Toronto, ON",
-  linkedin_url: "https://linkedin.com/in/avery-patel-demo",
-  github_url: "https://github.com/avery-patel-demo",
-  portfolio_url: "https://averypatel.example.com",
+  linkedin_url: "https://linkedin.com/in/mahmud-karim-demo",
+  github_url: "https://github.com/mahmud-karim-demo",
+  portfolio_url: "https://mahmudkarim.example.com",
   show_phone_in_header: true,
   show_email_in_header: true,
   show_city_in_header: true,
@@ -51,7 +86,7 @@ export const DEMO_PROFILE: ProfileResponse = {
 // ---------------- Resume metadata (fictional) ----------------
 
 export const DEMO_RESUME: ResumeMetadata = {
-  filename: "avery_patel_resume.pdf",
+  filename: "mahmud_karim_resume.pdf",
   size_bytes: 187_412,
   uploaded_at: "2026-04-18T14:22:08Z",
   sha256:
@@ -448,9 +483,15 @@ function toSummary(job: JobDetailResponse): JobSummary {
     url: job.url,
     match_score: job.match_score,
     fit_assessment: job.fit_assessment,
-    applied: job.applied,
+    applied: appliedJobIds.has(job.job_id) || job.applied,
     description_preview: job.description.slice(0, 220) + "…",
   };
+}
+
+function withAppliedFlag(job: JobDetailResponse): JobDetailResponse {
+  return appliedJobIds.has(job.job_id)
+    ? { ...job, applied: true }
+    : job;
 }
 
 export function demoJobList(): JobListResponse {
@@ -468,20 +509,43 @@ export function demoJobList(): JobListResponse {
 }
 
 export function demoJobDetail(jobId: string): JobDetailResponse | null {
-  return (
+  const found =
     ALL_JOBS.find((j) => j.job_id === jobId) ??
     ALL_MANUAL_JOBS.find((j) => j.job_id === jobId) ??
-    null
-  );
+    userAddedManualJobs.find((j) => j.job_id === jobId) ??
+    null;
+  return found ? withAppliedFlag(found) : null;
+}
+
+/** Manually-added jobs added by the recruiter at runtime via the
+ *  paste-URL flow. Persisted in-memory so they show up on the list
+ *  page. */
+const userAddedManualJobs: JobDetailResponse[] = [];
+
+export function demoDeleteManualJob(jobId: string): void {
+  const idx = userAddedManualJobs.findIndex((j) => j.job_id === jobId);
+  if (idx !== -1) userAddedManualJobs.splice(idx, 1);
+}
+
+export function demoAppendManualJob(job: JobDetailResponse): void {
+  // Avoid dupes if the same job_id is saved twice.
+  if (
+    userAddedManualJobs.some((j) => j.job_id === job.job_id) ||
+    ALL_MANUAL_JOBS.some((j) => j.job_id === job.job_id)
+  ) {
+    return;
+  }
+  userAddedManualJobs.unshift(job);
 }
 
 /** List of manually-added jobs (the /added-jobs page).
  *  Returned as a JobListResponse like the main jobs list. */
 export function demoManualJobsList(): JobListResponse {
+  const jobs = [...userAddedManualJobs, ...ALL_MANUAL_JOBS];
   return {
-    jobs: ALL_MANUAL_JOBS.map(toSummary),
-    total: ALL_MANUAL_JOBS.length,
-    total_unfiltered: ALL_MANUAL_JOBS.length,
+    jobs: jobs.map(toSummary),
+    total: jobs.length,
+    total_unfiltered: jobs.length,
     hidden_by_filters: 0,
     last_refreshed_at: null,
     next_refresh_allowed_at: null,
@@ -557,63 +621,63 @@ export function demoSummary(jobId: string): CoverLetterSummaryResponse | null {
 const ANALYSES: Record<string, CoverLetterAnalysisResponse> = {
   "demo-blueocean-mle": {
     strong: [
-      "Production ML experience matches their 'past prototype phase' requirement — Avery shipped two large fraud-adjacent models at SafeStream Financial",
+      "Production ML experience matches their 'past prototype phase' requirement — Mahmud shipped two large fraud-adjacent models at SafeStream Financial",
       "Strong PyTorch background, including the on-call cycle for the FraudGuard project",
       "Spark experience from the SafeStream batch features pipeline",
     ],
     gaps: [
-      "JD mentions sub-100ms online inference; Avery's resume is heavier on batch + near-real-time, not strict sub-100ms",
+      "JD mentions sub-100ms online inference; Mahmud's resume is heavier on batch + near-real-time, not strict sub-100ms",
     ],
     partial: [
-      "Online inference platform work — Avery built one on Kubernetes, BlueOcean's is custom-built",
+      "Online inference platform work — Mahmud built one on Kubernetes, BlueOcean's is custom-built",
     ],
     excitement_hooks: [
       "Risk team specifically builds fraud-detection ML — direct domain match",
-      "40M transactions/day is an order of magnitude bigger than Avery's last system",
-      "Hybrid Toronto matches Avery's stated city",
+      "40M transactions/day is an order of magnitude bigger than Mahmud's last system",
+      "Hybrid Toronto matches Mahmud's stated city",
     ],
     model: "claude-sonnet-4-6",
   },
   "demo-helio-staff-ds": {
     strong: [
-      "Two-tower recommender experience from Avery's Lumen Media project (4M MAU)",
+      "Two-tower recommender experience from Mahmud's Lumen Media project (4M MAU)",
       "A/B testing platform ownership at SafeStream — built the experimentation framework currently used by 9 ML teams",
     ],
     gaps: [
-      "JD asks for 7+ years; Avery's resume shows 5",
+      "JD asks for 7+ years; Mahmud's resume shows 5",
       "Causal inference is mentioned briefly but not as a core strength",
     ],
     partial: [
       "Mentoring experience — informal lead of 1 junior, not 2-3 mid-levels",
     ],
     excitement_hooks: [
-      "Independent-media discovery problem is genuinely interesting (mentioned in cover letters Avery has written)",
-      "Staff IC + tech lead is the next career step for Avery",
-      "Fully remote North America matches Avery's stated remote preference",
+      "Independent-media discovery problem is genuinely interesting (mentioned in cover letters Mahmud has written)",
+      "Staff IC + tech lead is the next career step for Mahmud",
+      "Fully remote North America matches Mahmud's stated remote preference",
     ],
     model: "claude-sonnet-4-6",
   },
   "demo-ridge-mlplatform": {
     strong: [
-      "Platform-team experience at SafeStream — Avery owned the feature-store rollout to 6 of 14 ML teams",
+      "Platform-team experience at SafeStream — Mahmud owned the feature-store rollout to 6 of 14 ML teams",
       "Strong Kubernetes and AWS",
     ],
     gaps: [
-      "JD asks for Go or Rust; Avery's resume shows Python and a little C++ only",
+      "JD asks for Go or Rust; Mahmud's resume shows Python and a little C++ only",
       "European banking domain is unfamiliar territory",
     ],
     partial: [
-      "ML CI/CD work — Avery built a notebook-to-prod pipeline at Lumen, less polished than what Ridge needs",
+      "ML CI/CD work — Mahmud built a notebook-to-prod pipeline at Lumen, less polished than what Ridge needs",
     ],
     excitement_hooks: [
-      "Solving the 'notebook-to-production' problem at scale is what Avery did at Lumen and wants to keep doing",
+      "Solving the 'notebook-to-production' problem at scale is what Mahmud did at Lumen and wants to keep doing",
       "Smaller team (12 model teams) sized for high impact per platform engineer",
     ],
     model: "claude-sonnet-4-6",
   },
   "demo-quanta-aiml": {
     strong: [
-      "LLM evaluation work from the FraudGuard explanation project — Avery designed the rubric for hallucination + grounding scoring",
+      "LLM evaluation work from the FraudGuard explanation project — Mahmud designed the rubric for hallucination + grounding scoring",
       "Production LLM deploys including a HIPAA-adjacent project at Lumen Media",
       "NLP fundamentals from undergrad and the medical-record extraction prototype",
     ],
@@ -624,9 +688,9 @@ const ANALYSES: Record<string, CoverLetterAnalysisResponse> = {
       "Fine-tuning experience — instruction-tuning Llama-2 for FraudGuard, not parameter-efficient methods",
     ],
     excitement_hooks: [
-      "LLM eval at clinical accuracy levels is exactly the work Avery wants to do next",
+      "LLM eval at clinical accuracy levels is exactly the work Mahmud wants to do next",
       "Working with physicians on rubric design is unusually concrete for an ML role",
-      "Cambridge MA hybrid is workable for Avery (open to relocation per profile)",
+      "Cambridge MA hybrid is workable for Mahmud (open to relocation per profile)",
     ],
     model: "claude-sonnet-4-6",
   },
@@ -644,13 +708,13 @@ const ANALYSES: Record<string, CoverLetterAnalysisResponse> = {
     ],
     excitement_hooks: [
       "Real-time perception problem is technically meaty",
-      "On-edge inference is an unusual constraint Avery hasn't worked under",
+      "On-edge inference is an unusual constraint Mahmud hasn't worked under",
     ],
     model: "claude-sonnet-4-6",
   },
   "demo-tessera-founding": {
     strong: [
-      "Full-stack engineering experience — Avery shipped product features end-to-end at Lumen (UI through serving)",
+      "Full-stack engineering experience — Mahmud shipped product features end-to-end at Lumen (UI through serving)",
       "ML evaluation work directly — designed and maintained the FraudGuard rubric scorer",
       "Polyglot mindset matches founding-engineer expectation",
     ],
@@ -658,22 +722,22 @@ const ANALYSES: Record<string, CoverLetterAnalysisResponse> = {
       "Customer-engineering specifically (sitting in design-partner calls) is light on the resume",
     ],
     partial: [
-      "Startup experience — Avery has worked at scale-ups (SafeStream, Lumen) but not 6-person seed",
+      "Startup experience — Mahmud has worked at scale-ups (SafeStream, Lumen) but not 6-person seed",
     ],
     excitement_hooks: [
-      "Building the eval product Avery wishes existed at SafeStream is direct dogfood",
-      "Founding-engineer ownership and equity match Avery's career-stage instincts",
+      "Building the eval product Mahmud wishes existed at SafeStream is direct dogfood",
+      "Founding-engineer ownership and equity match Mahmud's career-stage instincts",
       "0.5-1.5% equity at a $4M seed is meaningful upside",
     ],
     model: "claude-sonnet-4-6",
   },
   "demo-northwind-sds": {
     strong: [
-      "Forecasting experience — Avery built the demand-volume forecaster for SafeStream's reconciliation team",
+      "Forecasting experience — Mahmud built the demand-volume forecaster for SafeStream's reconciliation team",
       "Strong Python + SQL",
     ],
     gaps: [
-      "Operations research / optimisation specifically — Avery has touched LP via convex-optimisation coursework, not shipped MIP solutions",
+      "Operations research / optimisation specifically — Mahmud has touched LP via convex-optimisation coursework, not shipped MIP solutions",
       "Vehicle-routing-style problems are not on the resume",
     ],
     partial: [
@@ -694,9 +758,9 @@ export function demoAnalysis(jobId: string): CoverLetterAnalysisResponse | null 
 
 // ---------------- Pre-baked letter (BlueOcean v1) ----------------
 
-const BLUEOCEAN_LETTER_V1_TEXT = `**Avery Patel**
-+1 416 555 0142 | avery.patel@example.com | Toronto, ON
-https://linkedin.com/in/avery-patel-demo | https://github.com/avery-patel-demo
+const BLUEOCEAN_LETTER_V1_TEXT = `**Mahmud Karim**
++1 416 555 0142 | mahmud.karim@example.com | Toronto, ON
+https://linkedin.com/in/mahmud-karim-demo | https://github.com/mahmud-karim-demo
 
 Dear BlueOcean Data Team,
 
@@ -707,7 +771,7 @@ At SafeStream, I led the rebuild of FraudGuard's online inference layer after we
 What I'd bring to BlueOcean specifically is the on-call discipline. The hardest part of the FraudGuard work wasn't building the system — it was the months after launch, when the team rotated through 24x7 on-call and we surfaced (and fixed) the long tail of failure modes the offline tests missed. Production ML at this scale is a sustained operational effort, and I'd want to be on that rotation from day one.
 
 Best,
-Avery Patel`;
+Mahmud Karim`;
 
 const BLUEOCEAN_LETTER_V1: Letter = {
   version: 1,
@@ -770,9 +834,9 @@ export function demoFakeLetter(jobId: string): Letter {
   const job = demoJobDetail(jobId);
   const company = job?.company ?? "the company";
   const title = job?.title ?? "the role";
-  const text = `**Avery Patel**
-+1 416 555 0142 | avery.patel@example.com | Toronto, ON
-https://linkedin.com/in/avery-patel-demo | https://github.com/avery-patel-demo
+  const text = `**Mahmud Karim**
++1 416 555 0142 | mahmud.karim@example.com | Toronto, ON
+https://linkedin.com/in/mahmud-karim-demo | https://github.com/mahmud-karim-demo
 
 Dear ${company} Team,
 
@@ -783,7 +847,7 @@ At SafeStream, I led a rebuild of an online inference system serving roughly 12 
 The piece that I'd carry into ${company} specifically is the discipline that comes from owning the production lifecycle — the failure modes you only see months after launch, the cost-vs-recall trade-offs that don't show up in offline metrics, the patience to keep iterating after the launch announcement is over.
 
 Best,
-Avery Patel`;
+Mahmud Karim`;
   const newVersion =
     (LETTERS[jobId]?.length ?? 0) + 1;
   return {
@@ -890,19 +954,118 @@ for (const m of [DEMO_USAGE.current, ...DEMO_USAGE.history]) {
     m.estimated_anthropic_cost_usd + m.estimated_openai_cost_usd;
 }
 
-export const DEMO_APPLICATIONS: ApplicationListResponse = {
-  applications: [
-    {
-      job: toSummary({ ...J_BLUEOCEAN, applied: true }),
-      applied_at: "2026-05-06T16:42:00Z",
-      resume_filename: "avery_patel_resume.pdf",
-      resume_sha256: DEMO_RESUME.sha256,
-      letter_version_used: 1,
+// Seed: BlueOcean is pre-applied so the Applications page isn't
+// empty on first visit.
+appliedJobIds.add(J_BLUEOCEAN.job_id);
+appliedAt.set(J_BLUEOCEAN.job_id, "2026-05-06T16:42:00Z");
+appliedLetterVersion.set(J_BLUEOCEAN.job_id, 1);
+
+export function demoApplications(): ApplicationListResponse {
+  const all = [...ALL_JOBS, ...ALL_MANUAL_JOBS];
+  const apps = [...appliedJobIds]
+    .map((id) => all.find((j) => j.job_id === id))
+    .filter((j): j is JobDetailResponse => j !== undefined)
+    .map((job) => ({
+      job: toSummary({ ...job, applied: true }),
+      applied_at: appliedAt.get(job.job_id) ?? new Date().toISOString(),
+      resume_filename: (resumeOverride ?? DEMO_RESUME).filename,
+      resume_sha256: (resumeOverride ?? DEMO_RESUME).sha256,
+      letter_version_used: appliedLetterVersion.get(job.job_id) ?? null,
       resume_replaced_since: false,
-    },
-  ],
-  total: 1,
-};
+    }));
+  return { applications: apps, total: apps.length };
+}
+
+export function demoMarkApplied(
+  jobId: string,
+  letterVersion: number | null,
+): void {
+  appliedJobIds.add(jobId);
+  appliedAt.set(jobId, new Date().toISOString());
+  appliedLetterVersion.set(jobId, letterVersion);
+}
+
+export function demoUnmarkApplied(jobId: string): void {
+  appliedJobIds.delete(jobId);
+  appliedAt.delete(jobId);
+  appliedLetterVersion.delete(jobId);
+}
+
+// ---------------- Hidden lists / queries / resume mirror writers ----------------
+
+export function demoHiddenLists(): HiddenListsResponse {
+  return getHiddenListsState();
+}
+
+export function demoSetHiddenList(
+  kind: "companies" | "title_keywords" | "publishers",
+  items: string[],
+): string[] {
+  const state = getHiddenListsState();
+  state[kind] = items;
+  return items;
+}
+
+export function demoQueriesList(): QueryListResponse {
+  return {
+    queries: getQueriesState(),
+    next_refresh_allowed_at: null,
+  };
+}
+
+export function demoCreateQuery(body: {
+  what?: string;
+  where?: string;
+}): SavedQuery {
+  const q: SavedQuery = {
+    query_id: `q-demo-${Math.random().toString(36).slice(2, 8)}`,
+    what: body.what ?? "",
+    where: body.where ?? "",
+    enabled: true,
+    created_at: new Date().toISOString(),
+  };
+  getQueriesState().push(q);
+  return q;
+}
+
+export function demoUpdateQuery(
+  id: string,
+  body: { what?: string; where?: string; enabled?: boolean },
+): SavedQuery | null {
+  const state = getQueriesState();
+  const idx = state.findIndex((q) => q.query_id === id);
+  if (idx === -1) return null;
+  state[idx] = {
+    ...state[idx],
+    ...(body.what !== undefined && { what: body.what }),
+    ...(body.where !== undefined && { where: body.where }),
+    ...(body.enabled !== undefined && { enabled: body.enabled }),
+  };
+  return state[idx];
+}
+
+export function demoDeleteQuery(id: string): void {
+  const state = getQueriesState();
+  const idx = state.findIndex((q) => q.query_id === id);
+  if (idx !== -1) state.splice(idx, 1);
+}
+
+export function demoResume(): ResumeMetadata {
+  return resumeOverride ?? DEMO_RESUME;
+}
+
+export function demoReplaceResume(
+  filename: string | null,
+  sizeBytes: number | null,
+): ResumeUploadResponse {
+  resumeOverride = {
+    filename: filename ?? DEMO_RESUME.filename,
+    size_bytes: sizeBytes ?? DEMO_RESUME.size_bytes,
+    uploaded_at: new Date().toISOString(),
+    sha256: DEMO_RESUME.sha256,
+  };
+  return { ...resumeOverride, prefilled_fields: [] };
+}
 
 // ---------------- Small synthetic generator for fake polling ----------------
 

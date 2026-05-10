@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/Card";
 import { Input, Label } from "@/components/ui/Input";
 import { useHealth } from "@/hooks/useHealth";
-import { DEMO_USER_ID, enterDemoMode } from "@/lib/demoMode";
+import { DEMO_USER_ID, enterDemoMode, exitDemoMode } from "@/lib/demoMode";
 
 interface LocationState {
   from?: string;
@@ -48,6 +48,10 @@ export default function LoginPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId.trim()) return;
+    // Clear any leftover demo flag from a prior session — otherwise
+    // the api.ts interceptor keeps short-circuiting requests with
+    // canned data instead of hitting the backend with the real token.
+    exitDemoMode();
     signIn(userId.trim(), appToken.trim());
     navigate(from, { replace: true });
   };

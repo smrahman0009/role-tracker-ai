@@ -7,37 +7,52 @@
  * (with a small artificial delay so the UI feels real). Otherwise
  * it returns null and api.ts proceeds with the normal fetch.
  *
- * Endpoints not handled here (Settings save, manual edit, resume
- * upload, JSearch refresh, etc.) fall through and hit the backend
- * — but the visitor is unauthenticated, so those will 401. The
- * frontend gates those buttons with "Sign in to enable" affordances
- * before that ever happens.
+ * Coverage: every endpoint the frontend can reach in the recruiter
+ * tour is handled here — jobs list/detail, manual paste flow, saved
+ * queries CRUD, hidden lists, profile, resume metadata + upload,
+ * cover-letter generate/refine/polish/edit, polling, downloads,
+ * applications, usage, ad-hoc search, snapshot clear. Anything that
+ * falls through hits the backend and 401s, which is the signal that
+ * a new endpoint was added without a demo handler.
  */
 
+import type { JobDetailResponse } from "@/lib/types";
+
 import {
-  DEMO_APPLICATIONS,
-  DEMO_HIDDEN_LISTS,
   DEMO_PROFILE,
-  DEMO_QUERIES,
-  DEMO_RESUME,
   DEMO_USAGE,
   demoAnalysis,
+  demoApplications,
+  demoAppendLetter,
+  demoAppendManualJob,
+  demoCreateQuery,
+  demoDeleteManualJob,
+  demoDeleteQuery,
   demoFetchedJob,
   demoGenerationStatus,
+  demoHiddenLists,
   demoJobDetail,
   demoJobList,
   demoLetter,
   demoLetterVersions,
   demoManualJobsList,
+  demoMarkApplied,
   demoPolish,
+  demoQueriesList,
+  demoReplaceResume,
+  demoResume,
+  demoSetHiddenList,
   demoStartGeneration,
   demoSummary,
+  demoUnmarkApplied,
+  demoUpdateQuery,
 } from "@/lib/demoFixtures";
 import { isDemoMode } from "@/lib/demoMode";
 
 interface InterceptOptions {
   method: string;
   json?: unknown;
+  formData?: FormData;
 }
 
 /** Tracks active fake generation jobs so the polling endpoint can
@@ -81,7 +96,19 @@ export async function tryDemoIntercept<T>(
   // ----- Resume metadata -----
   if (subpath === "resume" && options.method === "GET") {
     await sleep(SLEEP_NORMAL);
-    return DEMO_RESUME as unknown as T;
+    return demoResume() as unknown as T;
+  }
+  if (subpath === "resume" && options.method === "POST") {
+    // Resume upload (FormData). Read the file's name + size so the
+    // settings UI reflects what the recruiter actually picked, then
+    // mirror it for subsequent GETs. prefilled_fields stays empty so
+    // the profile doesn't get bulk-overwritten.
+    await sleep(SLEEP_SLOW);
+    const file = options.formData?.get("file");
+    const filename =
+      file instanceof File ? file.name : null;
+    const sizeBytes = file instanceof File ? file.size : null;
+    return demoReplaceResume(filename, sizeBytes) as unknown as T;
   }
 
   // ----- Profile -----
@@ -98,18 +125,47 @@ export async function tryDemoIntercept<T>(
   // ----- Hidden lists -----
   if (subpath === "hidden" && options.method === "GET") {
     await sleep(SLEEP_NORMAL);
-    return DEMO_HIDDEN_LISTS as unknown as T;
+    return demoHiddenLists() as unknown as T;
   }
-  if (subpath.startsWith("hidden/") && options.method === "PUT") {
+  const hiddenPutMatch = subpath.match(
+    /^hidden\/(companies|title_keywords|publishers)$/,
+  );
+  if (hiddenPutMatch && options.method === "PUT") {
     await sleep(SLEEP_NORMAL);
     const body = options.json as { items?: string[] };
-    return (body?.items ?? []) as unknown as T;
+    const kind = hiddenPutMatch[1] as
+      | "companies"
+      | "title_keywords"
+      | "publishers";
+    return demoSetHiddenList(kind, body?.items ?? []) as unknown as T;
   }
 
   // ----- Saved queries -----
   if (subpath === "queries" && options.method === "GET") {
     await sleep(SLEEP_NORMAL);
-    return DEMO_QUERIES as unknown as T;
+    return demoQueriesList() as unknown as T;
+  }
+  if (subpath === "queries" && options.method === "POST") {
+    await sleep(SLEEP_NORMAL);
+    const body = (options.json ?? {}) as { what?: string; where?: string };
+    return demoCreateQuery(body) as unknown as T;
+  }
+  const queryUpdateMatch = subpath.match(/^queries\/([^/]+)$/);
+  if (queryUpdateMatch && options.method === "PUT") {
+    await sleep(SLEEP_NORMAL);
+    const body = (options.json ?? {}) as {
+      what?: string;
+      where?: string;
+      enabled?: boolean;
+    };
+    const updated = demoUpdateQuery(queryUpdateMatch[1], body);
+    if (!updated) throw makeError(404, "Query not found");
+    return updated as unknown as T;
+  }
+  if (queryUpdateMatch && options.method === "DELETE") {
+    await sleep(SLEEP_NORMAL);
+    demoDeleteQuery(queryUpdateMatch[1]);
+    return undefined as unknown as T;
   }
 
   // ----- Usage dashboard -----
@@ -121,7 +177,7 @@ export async function tryDemoIntercept<T>(
   // ----- Applications list -----
   if (subpath === "applications" && options.method === "GET") {
     await sleep(SLEEP_NORMAL);
-    return DEMO_APPLICATIONS as unknown as T;
+    return demoApplications() as unknown as T;
   }
 
   // ----- Jobs list -----
@@ -136,24 +192,85 @@ export async function tryDemoIntercept<T>(
     return demoManualJobsList() as unknown as T;
   }
   if (subpath === "jobs/manual/fetch" && options.method === "POST") {
-    // "Fetch from URL" — preview before saving. In demo we return one
-    // of the canned manual jobs regardless of the URL the user pasted.
+    // "Fetch from URL" — preview before saving. The endpoint returns
+    // FetchJobUrlResponse (title/company/location/description), not a
+    // full JobDetailResponse, so we project from one of the canned
+    // manual jobs.
     await sleep(SLEEP_SLOW);
-    return demoFetchedJob() as unknown as T;
+    const j = demoFetchedJob();
+    return {
+      title: j.title,
+      company: j.company,
+      location: j.location ?? "",
+      description: j.description,
+    } as unknown as T;
   }
   if (subpath === "jobs/manual" && options.method === "POST") {
-    // "Save the manually-pasted job". Echo back the body as if it
-    // were saved; the list won't actually grow on next GET (demo
-    // state is read-only) but the UX completes cleanly.
+    // "Save the manually-pasted job". Construct a JobDetailResponse
+    // from the request body and append it so the list grows on
+    // next GET (in-memory only — dies on reload).
     await sleep(SLEEP_NORMAL);
-    return (options.json ?? demoFetchedJob()) as unknown as T;
+    const body = (options.json ?? {}) as {
+      title?: string;
+      company?: string;
+      description?: string;
+      location?: string;
+      url?: string;
+      salary_min?: number | null;
+      salary_max?: number | null;
+    };
+    const newJob: JobDetailResponse = {
+      job_id: `demo-user-manual-${Math.random().toString(36).slice(2, 8)}`,
+      title: body.title ?? "Manual job",
+      company: body.company ?? "Unknown company",
+      location: body.location ?? "",
+      posted_at: new Date().toISOString().slice(0, 10),
+      salary_min: body.salary_min ?? null,
+      salary_max: body.salary_max ?? null,
+      publisher: "Manual",
+      url: body.url ?? "",
+      description: body.description ?? "",
+      match_score: null,
+      fit_assessment: null,
+      applied: false,
+    };
+    demoAppendManualJob(newJob);
+    return newJob as unknown as T;
   }
-  if (
-    subpath.startsWith("jobs/manual/") &&
-    options.method === "DELETE"
-  ) {
+  const manualDeleteMatch = subpath.match(/^jobs\/manual\/([^/]+)$/);
+  if (manualDeleteMatch && options.method === "DELETE") {
+    await sleep(SLEEP_NORMAL);
+    demoDeleteManualJob(manualDeleteMatch[1]);
+    return undefined as unknown as T;
+  }
+
+  // ----- Clear snapshot -----
+  if (subpath === "jobs" && options.method === "DELETE") {
     await sleep(SLEEP_NORMAL);
     return undefined as unknown as T;
+  }
+
+  // ----- Ad-hoc search (Search now button) -----
+  if (subpath === "jobs/search" && options.method === "POST") {
+    await sleep(SLEEP_NORMAL);
+    return {
+      search_id: "demo-search",
+      status: "pending",
+    } as unknown as T;
+  }
+  const searchStatusMatch = subpath.match(/^jobs\/search\/[^/]+$/);
+  if (searchStatusMatch && options.method === "GET") {
+    await sleep(SLEEP_NORMAL);
+    return {
+      refresh_id: subpath.split("/").pop(),
+      status: "done",
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      jobs_added: 7,
+      candidates_seen: 42,
+      queries_run: 1,
+      error: null,
+    } as unknown as T;
   }
 
   // ----- Jobs/refresh -----
@@ -172,8 +289,8 @@ export async function tryDemoIntercept<T>(
       status: "done",
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
-      jobs_added: 0,
-      candidates_seen: 7,
+      jobs_added: 7,
+      candidates_seen: 247,
       queries_run: 3,
       error: null,
     } as unknown as T;
@@ -289,6 +406,32 @@ export async function tryDemoIntercept<T>(
     ) as unknown as T;
   }
 
+  // ----- Manual letter edit (Save edit button) -----
+  const editMatch = subpath.match(
+    /^jobs\/([^/]+)\/letters\/(\d+)\/edit$/,
+  );
+  if (editMatch && options.method === "POST") {
+    await sleep(SLEEP_NORMAL);
+    const jobId = editMatch[1];
+    const baseVersion = Number(editMatch[2]);
+    const body = (options.json ?? {}) as { text?: string };
+    const base = demoLetter(jobId, baseVersion);
+    const versions = demoLetterVersions(jobId);
+    const newVersion = versions.total + 1;
+    const text = body.text ?? base?.text ?? "";
+    const edited = {
+      ...(base ?? ({} as Record<string, unknown>)),
+      version: newVersion,
+      text,
+      word_count: text.split(/\s+/).filter(Boolean).length,
+      edited_by_user: true,
+      refinement_index: (base?.refinement_index ?? 0) + 1,
+      created_at: new Date().toISOString(),
+    } as ReturnType<typeof demoLetter>;
+    if (edited) demoAppendLetter(jobId, edited);
+    return edited as unknown as T;
+  }
+
   // ----- Polish (letter or why-interested) — pass through user text -----
   const polishMatch = subpath.match(
     /^jobs\/[^/]+\/(letters\/\d+\/polish|why-interested\/polish)$/,
@@ -303,10 +446,15 @@ export async function tryDemoIntercept<T>(
   const appliedMatch = subpath.match(/^jobs\/([^/]+)\/applied$/);
   if (appliedMatch && options.method === "POST") {
     await sleep(SLEEP_NORMAL);
+    const body = (options.json ?? {}) as {
+      letter_version_used?: number | null;
+    };
+    demoMarkApplied(appliedMatch[1], body.letter_version_used ?? null);
     return { ok: true } as unknown as T;
   }
   if (appliedMatch && options.method === "DELETE") {
     await sleep(SLEEP_NORMAL);
+    demoUnmarkApplied(appliedMatch[1]);
     return { ok: true } as unknown as T;
   }
 
