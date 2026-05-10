@@ -51,7 +51,6 @@ function getHiddenListsState(): HiddenListsResponse {
     hiddenListsState = {
       companies: [...DEMO_HIDDEN_LISTS.companies],
       title_keywords: [...DEMO_HIDDEN_LISTS.title_keywords],
-      publishers: [...DEMO_HIDDEN_LISTS.publishers],
     };
   }
   return hiddenListsState;
@@ -81,6 +80,7 @@ export const DEMO_PROFILE: ProfileResponse = {
   show_github_in_header: true,
   show_portfolio_in_header: false,
   top_n_jobs: 50,
+  is_admin: false,
 };
 
 // ---------------- Resume metadata (fictional) ----------------
@@ -127,7 +127,15 @@ export const DEMO_QUERIES: QueryListResponse = {
 export const DEMO_HIDDEN_LISTS: HiddenListsResponse = {
   companies: ["Stealth Mode Co", "Acme Outsourcing"],
   title_keywords: ["intern", "junior", "phd required"],
+};
+
+// Global hidden publishers (admin-managed). Demo users are not admin
+// so the Settings card is hidden, but the canned list is still
+// returned by GET /global/hidden-publishers for completeness.
+export const DEMO_GLOBAL_HIDDEN_PUBLISHERS = {
   publishers: ["ZipRecruiter", "Indeed Aggregator"],
+  updated_at: "2026-05-01T12:00:00Z",
+  updated_by: "admin",
 };
 
 // ---------------- Jobs (7 fictional postings) ----------------
@@ -998,7 +1006,7 @@ export function demoHiddenLists(): HiddenListsResponse {
 }
 
 export function demoSetHiddenList(
-  kind: "companies" | "title_keywords" | "publishers",
+  kind: "companies" | "title_keywords",
   items: string[],
 ): string[] {
   const state = getHiddenListsState();

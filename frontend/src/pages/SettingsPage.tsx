@@ -31,6 +31,10 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toaster";
 import { formatBytes, formatDateTime } from "@/lib/format";
+import {
+  useGlobalHiddenPublishers,
+  useUpdateGlobalHiddenPublishers,
+} from "@/hooks/useGlobalHiddenPublishers";
 import { useHiddenLists, useUpdateHiddenList } from "@/hooks/useHiddenLists";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfile";
 import {
@@ -63,6 +67,7 @@ export default function SettingsPage() {
         <ProfileSection />
         <SavedSearchesSection />
         <HiddenListsSection />
+        <GlobalHiddenPublishersSection />
       </div>
     </div>
   );
@@ -622,14 +627,6 @@ const HIDDEN_SECTIONS: Array<{
       "Jobs whose title contains any of these substrings are excluded.",
     placeholder: "e.g. senior, lead",
   },
-  {
-    kind: "publishers",
-    field: "publishers",
-    title: "Hidden publishers",
-    description:
-      "Jobs from these listing sources are excluded.",
-    placeholder: "e.g. some-board.com",
-  },
 ];
 
 function HiddenListsSection() {
@@ -743,6 +740,113 @@ function HiddenListEditor({
         </p>
       )}
     </div>
+  );
+}
+
+// ---------- Global hidden publishers (admin only) ----------
+
+/** Renders a card for the admin-only global hidden-publishers list.
+ *  Returns null for non-admin users so the card doesn't appear.
+ *  Profile may be loading — render nothing in that case rather than
+ *  flashing an empty card. */
+function GlobalHiddenPublishersSection() {
+  const profileQuery = useProfile();
+  if (!profileQuery.data?.is_admin) return null;
+  return <GlobalHiddenPublishersCard />;
+}
+
+function GlobalHiddenPublishersCard() {
+  const query = useGlobalHiddenPublishers();
+  const updater = useUpdateGlobalHiddenPublishers();
+  const initial = query.data?.publishers ?? [];
+  const [items, setItems] = useState<string[]>(initial);
+
+  useEffect(() => {
+    setItems(initial);
+    // Stable string identity is fine here — the array is small.
+  }, [initial.join("\n")]);
+
+  const dirty = JSON.stringify(items) !== JSON.stringify(initial);
+
+  const save = () => {
+    updater.mutate(items, {
+      onSuccess: () =>
+        toast.success("Global hidden publishers saved"),
+      onError: (err) => toast.error(`Save failed: ${err.message}`),
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>Global hidden publishers</CardTitle>
+          <CardDescription>
+            Admin-managed. Applies to every user's job snapshots —
+            edit carefully. Personal company / title-keyword filters
+            remain per-user.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {query.isLoading ? (
+          <p className="text-xs text-slate-500">Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between">
+              <div className="text-xs text-slate-500">
+                {query.data?.updated_at && (
+                  <>
+                    Last edit by{" "}
+                    <span className="font-medium text-slate-700">
+                      {query.data.updated_by || "(dev)"}
+                    </span>{" "}
+                    on {formatDateTime(query.data.updated_at)}
+                  </>
+                )}
+              </div>
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setItems([])}
+                  className="text-xs text-slate-500 hover:text-slate-900 underline underline-offset-2"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <TagListEditor
+              items={items}
+              onChange={setItems}
+              placeholder="e.g. some-board.com"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setItems(initial)}
+                disabled={!dirty || updater.isPending}
+              >
+                Reset
+              </Button>
+              <Button
+                size="sm"
+                onClick={save}
+                disabled={!dirty || updater.isPending}
+              >
+                {updater.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+            {updater.isError && (
+              <p className="text-xs text-rose-700 inline-flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {updater.error.message}
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

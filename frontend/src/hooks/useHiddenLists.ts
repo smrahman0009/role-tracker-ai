@@ -1,6 +1,9 @@
 /**
- * useHiddenLists — GET + per-list PUT for the three Hidden filter
- * lists (companies, title keywords, publishers). Used by Settings.
+ * useHiddenLists — GET + per-list PUT for the per-user Hidden
+ * filter lists (companies, title keywords). Used by Settings.
+ *
+ * Hidden publishers are NOT here: that's now an admin-managed
+ * global list, see useGlobalHiddenPublishers.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +19,6 @@ import type {
 const EMPTY_HIDDEN: HiddenListsResponse = {
   companies: [],
   title_keywords: [],
-  publishers: [],
 };
 
 export function useHiddenLists() {

@@ -428,6 +428,11 @@ class ProfileResponse(BaseModel):
     # prevent accidental huge refreshes.
     top_n_jobs: int = Field(default=50, ge=1, le=200)
 
+    # Read-only — flipped by the manage_users CLI, not the Settings UI.
+    # The frontend uses this to gate visibility of the admin global
+    # hidden-publishers card.
+    is_admin: bool = False
+
 
 class UpdateProfileRequest(BaseModel):
     """Body of PUT /users/{user_id}/profile. All fields optional."""
