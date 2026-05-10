@@ -145,8 +145,16 @@ export default function LoginPage() {
               Sign in
             </Button>
             <p className="text-xs text-slate-500 text-center pt-1">
-              Private beta. Your token is bound to one user_id;
-              cross-user access is rejected by the backend.
+              Private beta. If you have a token, you're in the right
+              place. No token?{" "}
+              <button
+                type="button"
+                onClick={handleTryDemo}
+                className="text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
+              >
+                Try the demo
+              </button>{" "}
+              instead.
             </p>
             <BackendStatus
               isLoading={health.isLoading}
