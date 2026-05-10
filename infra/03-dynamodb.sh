@@ -141,6 +141,41 @@ create_table "${DDB_SEEN_JOBS_TABLE}" "job_id"     "user → job → seen-job en
 # -----------------------------------------------------------------------------
 create_pk_only_table "${DDB_USERS_TABLE}" "user → profile (single item)"
 
+# -----------------------------------------------------------------------------
+# global-settings — admin-managed cross-tenant settings
+#
+# One item per setting (today: hidden_publishers). Tiny table; the
+# whole document is JSON-serialised under `value_json` so adding new
+# settings doesn't require a schema change.
+#
+# Item shape:
+#   setting_name (S)    — partition key (e.g. "hidden_publishers")
+#   value_json   (S)    — JSON-serialised setting body
+# -----------------------------------------------------------------------------
+create_global_settings_table() {
+    local table_name="${DDB_GLOBAL_SETTINGS_TABLE:-role-tracker-global-settings}"
+
+    section "Creating table: ${table_name}  (admin global settings)"
+
+    if aws dynamodb describe-table --table-name "${table_name}" >/dev/null 2>&1; then
+        note "Table already exists — skipping creation."
+        return
+    fi
+
+    aws dynamodb create-table \
+        --table-name "${table_name}" \
+        --attribute-definitions "AttributeName=setting_name,AttributeType=S" \
+        --key-schema "AttributeName=setting_name,KeyType=HASH" \
+        --billing-mode PAY_PER_REQUEST \
+        --tags "Key=Project,Value=${PROJECT}" \
+        >/dev/null
+
+    aws dynamodb wait table-exists --table-name "${table_name}"
+    ok "Created ${table_name}"
+}
+
+create_global_settings_table
+
 section "Done"
 
 cat <<EOF
@@ -151,6 +186,7 @@ DynamoDB tables created in ${AWS_REGION}:
   · ${DDB_QUERIES_TABLE}
   · ${DDB_SEEN_JOBS_TABLE}
   · ${DDB_USERS_TABLE}
+  · ${DDB_GLOBAL_SETTINGS_TABLE:-role-tracker-global-settings}
 
 All using on-demand billing — no minimum charge, scales to zero,
 covered by the always-free DynamoDB tier (25 GB / 25 RCU / 25 WCU).

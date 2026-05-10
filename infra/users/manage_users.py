@@ -165,6 +165,41 @@ def cmd_remove(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_make_admin(args: argparse.Namespace) -> int:
+    """Flip is_admin=True on the user's profile so they can edit
+    the global hidden-publishers list. Reads the configured profile
+    store (DynamoDB in prod, YAML in dev — same as the API uses).
+    """
+    return _set_admin_flag(args.user_id, True)
+
+
+def cmd_revoke_admin(args: argparse.Namespace) -> int:
+    """Flip is_admin=False on the user's profile."""
+    return _set_admin_flag(args.user_id, False)
+
+
+def _set_admin_flag(user_id: str, value: bool) -> int:
+    # Local import — keeps this CLI usable without the full app's
+    # boto3 chain when only --region/SSM commands are run.
+    from role_tracker.users.factory import make_user_profile_store
+
+    store = make_user_profile_store()
+    try:
+        profile = store.get_user(user_id)
+    except FileNotFoundError:
+        sys.stderr.write(f"User profile {user_id!r} not found.\n")
+        return 1
+    if profile.is_admin == value:
+        verb = "already" if value else "already not"
+        print(f"User {user_id!r} is {verb} an admin. No change.")
+        return 0
+    updated = profile.model_copy(update={"is_admin": value})
+    store.save_user(updated)
+    verb = "granted" if value else "revoked"
+    print(f"Admin privileges {verb} for: {user_id}")
+    return 0
+
+
 # ----- argparse plumbing --------------------------------------------------
 
 
@@ -193,6 +228,21 @@ def main(argv: list[str] | None = None) -> int:
 
     p_ls = sub.add_parser("list", help="List registered users + token prefixes")
     p_ls.set_defaults(func=cmd_list)
+
+    p_admin = sub.add_parser(
+        "make-admin",
+        help="Flip is_admin=True on the user's profile (lets them edit "
+        "the global hidden-publishers list)",
+    )
+    p_admin.add_argument("user_id")
+    p_admin.set_defaults(func=cmd_make_admin)
+
+    p_revoke = sub.add_parser(
+        "revoke-admin",
+        help="Flip is_admin=False on the user's profile",
+    )
+    p_revoke.add_argument("user_id")
+    p_revoke.set_defaults(func=cmd_revoke_admin)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
