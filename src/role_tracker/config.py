@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     ddb_queries_table: str = "role-tracker-queries"
     ddb_seen_jobs_table: str = "role-tracker-seen-jobs"
     ddb_users_table: str = "role-tracker-users"
+    # Single-row DDB table holding cross-tenant settings the admin
+    # controls (currently just the global hidden-publishers list).
+    ddb_global_settings_table: str = "role-tracker-global-settings"
     ssm_prefix: str = "/role-tracker"
 
 

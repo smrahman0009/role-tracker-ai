@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from role_tracker.api.middleware import BearerTokenMiddleware, parse_tokens
 from role_tracker.api.routes import (
+    admin,
     health,
     jobs,
     letters,
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(letters.router)
     app.include_router(profile.router)
     app.include_router(usage.router)
+    app.include_router(admin.router)
 
     return app
 
