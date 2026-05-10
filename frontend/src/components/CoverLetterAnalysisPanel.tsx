@@ -30,6 +30,7 @@ import {
   useCoverLetterAnalysis,
   useRunCoverLetterAnalysis,
 } from "@/hooks/useCoverLetterAnalysis";
+import { isDemoMode } from "@/lib/demoMode";
 import type { ModelChoice } from "@/lib/types";
 
 interface Props {
@@ -83,6 +84,14 @@ export function CoverLetterAnalysisPanel({ jobId }: Props) {
           </Button>
         </div>
       </div>
+
+      {isDemoMode() && (
+        <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <strong className="font-medium">Demo mode:</strong> shows a
+          sample analysis on a fictional resume + JD. In live mode,
+          your real resume gets compared to the JD.
+        </p>
+      )}
 
       {errorMessage && (
         <p className="mt-3 text-xs text-rose-600">

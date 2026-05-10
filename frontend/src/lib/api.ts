@@ -16,6 +16,10 @@
  */
 
 import { getAuth } from "@/lib/auth";
+import {
+  tryDemoIntercept,
+  tryDemoInterceptRaw,
+} from "@/lib/demoInterceptor";
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -67,6 +71,24 @@ async function request<T>(
 ): Promise<T> {
   const { method = "GET", json, formData, query, withAuth = true } = options;
 
+  // Demo-mode short-circuit — if the path matches a known demo
+  // endpoint, return synthetic data without ever hitting the
+  // network. See lib/demoInterceptor.ts.
+  try {
+    const intercepted = await tryDemoIntercept<T>(path, {
+      method,
+      json,
+      formData,
+    });
+    if (intercepted !== null) return intercepted;
+  } catch (err) {
+    const e = err as { status?: number; message?: string };
+    if (typeof e.status === "number") {
+      throw new ApiClientError(e.status, e.message ?? `HTTP ${e.status}`);
+    }
+    throw err;
+  }
+
   const headers: Record<string, string> = {};
   if (json !== undefined) headers["Content-Type"] = "application/json";
 
@@ -110,6 +132,11 @@ async function requestRaw(
   options: RequestOptions = {},
 ): Promise<Response> {
   const { method = "GET", query, withAuth = true } = options;
+
+  // Demo-mode short-circuit for downloads (PDF/DOCX/resume).
+  const intercepted = await tryDemoInterceptRaw(path);
+  if (intercepted !== null) return intercepted;
+
   const headers: Record<string, string> = {};
   if (withAuth) {
     const { appToken } = getAuth();
