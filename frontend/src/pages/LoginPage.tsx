@@ -91,6 +91,12 @@ export default function LoginPage() {
               Explore with sample data — no sign-up required. Actions
               return pre-built results; nothing is saved or sent to AI.
             </p>
+            <p className="text-xs text-indigo-900/70">
+              Heads up: not every feature behaves identically to the
+              real app. Some buttons return canned output and a few
+              flows are simplified — the demo is meant to show the
+              shape of the product, not be a perfect replica.
+            </p>
             <Button
               type="button"
               variant="primary"
