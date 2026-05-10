@@ -19,6 +19,7 @@
 import type { JobDetailResponse } from "@/lib/types";
 
 import {
+  DEMO_GLOBAL_HIDDEN_PUBLISHERS,
   DEMO_PROFILE,
   DEMO_USAGE,
   demoAnalysis,
@@ -87,9 +88,22 @@ export async function tryDemoIntercept<T>(
     return { status: "ok", version: "demo" } as unknown as T;
   }
 
+  // ----- Global hidden publishers (admin-managed) -----
+  if (path === "/global/hidden-publishers") {
+    if (options.method === "GET") {
+      await sleep(SLEEP_NORMAL);
+      return DEMO_GLOBAL_HIDDEN_PUBLISHERS as unknown as T;
+    }
+    if (options.method === "PUT") {
+      // Demo user is non-admin → 403, matching what the live
+      // backend returns. The Settings card is also hidden in demo
+      // (is_admin: false on the profile), so this only fires if a
+      // recruiter pokes the URL directly.
+      throw makeError(403, "Admin privileges required");
+    }
+  }
+
   if (subpath === null) {
-    // Anything under /jobs/refresh/{id} that doesn't have user_id —
-    // none in this app. Falling through.
     return null;
   }
 
@@ -128,15 +142,12 @@ export async function tryDemoIntercept<T>(
     return demoHiddenLists() as unknown as T;
   }
   const hiddenPutMatch = subpath.match(
-    /^hidden\/(companies|title_keywords|publishers)$/,
+    /^hidden\/(companies|title_keywords)$/,
   );
   if (hiddenPutMatch && options.method === "PUT") {
     await sleep(SLEEP_NORMAL);
     const body = options.json as { items?: string[] };
-    const kind = hiddenPutMatch[1] as
-      | "companies"
-      | "title_keywords"
-      | "publishers";
+    const kind = hiddenPutMatch[1] as "companies" | "title_keywords";
     return demoSetHiddenList(kind, body?.items ?? []) as unknown as T;
   }
 

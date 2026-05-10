@@ -428,6 +428,11 @@ class ProfileResponse(BaseModel):
     # prevent accidental huge refreshes.
     top_n_jobs: int = Field(default=50, ge=1, le=200)
 
+    # Read-only — flipped by the manage_users CLI, not the Settings UI.
+    # The frontend uses this to gate visibility of the admin global
+    # hidden-publishers card.
+    is_admin: bool = False
+
 
 class UpdateProfileRequest(BaseModel):
     """Body of PUT /users/{user_id}/profile. All fields optional."""
@@ -489,11 +494,15 @@ class PolishWhyInterestedRequest(BaseModel):
 
 
 class HiddenListsResponse(BaseModel):
-    """Body of GET /users/{user_id}/hidden."""
+    """Body of GET /users/{user_id}/hidden.
+
+    Publishers were dropped from the per-user response when the
+    hidden-publishers list became a single admin-managed global —
+    fetch via GET /global/hidden-publishers instead.
+    """
 
     companies: list[str]
     title_keywords: list[str]
-    publishers: list[str]
 
 
 class UpdateHiddenListRequest(BaseModel):

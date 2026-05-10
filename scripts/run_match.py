@@ -31,6 +31,7 @@ from role_tracker.config import (
     load_pipeline_defaults,
 )
 from role_tracker.cover_letter.agent import generate_cover_letter_agent
+from role_tracker.global_settings.factory import make_global_settings_store
 from role_tracker.cover_letter.storage import build_letter_dir, save_letter_bundle
 from role_tracker.jobs.base import JobSource
 from role_tracker.jobs.filters import apply_exclusions, apply_title_relevance
@@ -209,7 +210,7 @@ def run_for_user(
         jobs,
         exclude_companies=user.exclude_companies,
         exclude_title_keywords=user.exclude_title_keywords,
-        exclude_publishers=user.exclude_publishers,
+        exclude_publishers=exclude_publishers_global,
     )
     print(f"Filtered out {len(excluded)} jobs (per user's exclusion list).")
 
@@ -309,13 +310,21 @@ def main() -> None:
         model=settings.openai_embedding_model,
     )
 
+    # Hidden publishers are now a single global list (admin-managed).
+    # Pulled once per CLI invocation; same list applies to every user.
+    global_settings_store = make_global_settings_store()
+    exclude_publishers_global = (
+        global_settings_store.get_hidden_publishers().publishers
+    )
+
     for user in users:
-        # Per-user sources so each user's exclude_publishers is honoured
-        # server-side (JSearch filters before we ever see the bad listing).
+        # Same global exclude list for every user, but per-user `sources`
+        # so the JSearch client gets the publisher filter applied at
+        # request time.
         sources = build_sources(
             settings,
             country=defaults.country,
-            exclude_publishers=user.exclude_publishers,
+            exclude_publishers=exclude_publishers_global,
         )
         run_for_user(
             user,

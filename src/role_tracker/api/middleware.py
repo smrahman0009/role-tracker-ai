@@ -107,6 +107,10 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
                     {"detail": "Token not authorized for this user"},
                     status_code=403,
                 )
+            # Attach the bound user_id to request state so downstream
+            # dependencies (e.g. require_admin on /global/* routes)
+            # know who is calling without re-parsing the header.
+            request.state.user_id = bound_user
             return await call_next(request)
 
         # Legacy single-token mode: no path enforcement.

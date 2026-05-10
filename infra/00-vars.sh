@@ -49,6 +49,9 @@ export DDB_USAGE_TABLE="${PROJECT}-usage"
 export DDB_QUERIES_TABLE="${PROJECT}-queries"
 export DDB_SEEN_JOBS_TABLE="${PROJECT}-seen-jobs"
 export DDB_USERS_TABLE="${PROJECT}-users"
+# Single-row table holding admin-managed cross-tenant settings
+# (currently just the global hidden-publishers list).
+export DDB_GLOBAL_SETTINGS_TABLE="${PROJECT}-global-settings"
 
 # SSM Parameter Store path prefix — secrets live under /role-tracker/.
 export SSM_PREFIX="/${PROJECT}"

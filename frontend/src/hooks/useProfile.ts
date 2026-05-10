@@ -30,6 +30,7 @@ const EMPTY_PROFILE: ProfileResponse = {
   show_github_in_header: true,
   show_portfolio_in_header: false,
   top_n_jobs: 50,
+  is_admin: false,
 };
 
 export function useProfile() {

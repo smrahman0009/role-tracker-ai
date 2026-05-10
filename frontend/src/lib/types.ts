@@ -323,6 +323,10 @@ export interface ProfileResponse {
   show_github_in_header: boolean;
   show_portfolio_in_header: boolean;
   top_n_jobs: number;
+  /** Read-only on this endpoint — flipped via the manage_users CLI.
+   *  Used by the frontend to gate the admin global hidden-publishers
+   *  card. */
+  is_admin: boolean;
 }
 
 export type UpdateProfileRequest = Partial<ProfileResponse>;
@@ -332,12 +336,25 @@ export type UpdateProfileRequest = Partial<ProfileResponse>;
 export interface HiddenListsResponse {
   companies: string[];
   title_keywords: string[];
-  publishers: string[];
 }
 
-export type HiddenListKind = "companies" | "title-keywords" | "publishers";
+export type HiddenListKind = "companies" | "title-keywords";
 
 export interface UpdateHiddenListRequest {
+  items: string[];
+}
+
+// ---------- Global hidden publishers (admin-managed) ----------
+
+export interface GlobalHiddenPublishersResponse {
+  publishers: string[];
+  /** ISO datetime string. */
+  updated_at: string;
+  /** user_id of the last admin who edited the list (empty in dev). */
+  updated_by: string;
+}
+
+export interface UpdateGlobalHiddenPublishersRequest {
   items: string[];
 }
 

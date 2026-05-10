@@ -66,6 +66,7 @@ def get_profile(
         show_github_in_header=profile.show_github_in_header,
         show_portfolio_in_header=profile.show_portfolio_in_header,
         top_n_jobs=profile.top_n_jobs,
+        is_admin=profile.is_admin,
     )
 
 
@@ -98,7 +99,7 @@ def update_profile(
 # ============================================================
 
 
-HiddenKind = Literal["companies", "title-keywords", "publishers"]
+HiddenKind = Literal["companies", "title-keywords"]
 
 
 @router.get(
@@ -109,12 +110,15 @@ def get_hidden_lists(
     user_id: str,
     store: UserProfileStore = Depends(get_profile_store),
 ) -> HiddenListsResponse:
-    """Return all three hidden lists in one response."""
+    """Return per-user hidden lists.
+
+    Publishers are now a global admin-managed list — fetch separately
+    via GET /global/hidden-publishers.
+    """
     profile = _load_or_404(store, user_id)
     return HiddenListsResponse(
         companies=profile.exclude_companies,
         title_keywords=profile.exclude_title_keywords,
-        publishers=profile.exclude_publishers,
     )
 
 
@@ -152,21 +156,8 @@ def update_hidden_title_keywords(
     return cleaned
 
 
-@router.put(
-    "/users/{user_id}/hidden/publishers",
-    response_model=list[str],
-)
-def update_hidden_publishers(
-    user_id: str,
-    body: UpdateHiddenListRequest,
-    store: UserProfileStore = Depends(get_profile_store),
-) -> list[str]:
-    """Replace the entire publishers list."""
-    profile = _load_or_create(store, user_id, UpdateProfileRequest())
-    cleaned = _clean_items(body.items)
-    updated = profile.model_copy(update={"exclude_publishers": cleaned})
-    store.save_user(updated)
-    return cleaned
+# Per-user hidden-publishers PUT removed — replaced by the global
+# admin-managed list at PUT /global/hidden-publishers.
 
 
 # ----- Helpers -----
