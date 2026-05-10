@@ -11,7 +11,7 @@ needs to read it during job-snapshot building. PUT is admin-only.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -21,7 +21,6 @@ from role_tracker.global_settings.factory import make_global_settings_store
 from role_tracker.global_settings.models import GlobalHiddenPublishers
 from role_tracker.users.base import UserProfileStore
 from role_tracker.users.factory import make_user_profile_store
-
 
 router = APIRouter()
 
@@ -122,7 +121,7 @@ def update_global_hidden_publishers(
     cleaned = _clean_items(body.items)
     value = GlobalHiddenPublishers(
         publishers=cleaned,
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
         updated_by=user_id or "dev",
     )
     store.set_hidden_publishers(value)
