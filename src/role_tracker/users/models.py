@@ -47,11 +47,6 @@ class UserProfile(BaseModel):
     queries: list[JobQuery]
     exclude_companies: list[str] = []
     exclude_title_keywords: list[str] = []
-    # DEPRECATED: replaced by the global hidden-publishers list. Kept on the
-    # model temporarily so the migration step can read existing personal
-    # entries before unioning them into the global list. Removed after the
-    # data migration completes.
-    exclude_publishers: list[str] = []
 
     @property
     def resume_embedding_cache_path(self) -> Path:

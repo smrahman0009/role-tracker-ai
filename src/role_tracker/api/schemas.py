@@ -489,11 +489,15 @@ class PolishWhyInterestedRequest(BaseModel):
 
 
 class HiddenListsResponse(BaseModel):
-    """Body of GET /users/{user_id}/hidden."""
+    """Body of GET /users/{user_id}/hidden.
+
+    Publishers were dropped from the per-user response when the
+    hidden-publishers list became a single admin-managed global —
+    fetch via GET /global/hidden-publishers instead.
+    """
 
     companies: list[str]
     title_keywords: list[str]
-    publishers: list[str]
 
 
 class UpdateHiddenListRequest(BaseModel):

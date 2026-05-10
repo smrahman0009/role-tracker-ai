@@ -99,13 +99,11 @@ def test_save_preserves_exclude_lists(
             "alice",
             exclude_companies=["Foo Inc", "Bar LLC"],
             exclude_title_keywords=["intern"],
-            exclude_publishers=["LinkedIn"],
         )
     )
     fetched = store.get_user("alice")
     assert fetched.exclude_companies == ["Foo Inc", "Bar LLC"]
     assert fetched.exclude_title_keywords == ["intern"]
-    assert fetched.exclude_publishers == ["LinkedIn"]
 
 
 # ----- list_users ----------------------------------------------------------

@@ -39,9 +39,6 @@ def client(
               - insurance
             exclude_title_keywords:
               - banking
-            exclude_publishers:
-              - Foo
-              - Bar
             """
         ).strip()
         + "\n"
@@ -122,13 +119,17 @@ def test_update_profile_upserts_for_missing_user(client: TestClient) -> None:
 # ----- GET /hidden -----
 
 
-def test_get_hidden_lists_returns_all_three(client: TestClient) -> None:
+def test_get_hidden_lists_returns_companies_and_title_keywords(
+    client: TestClient,
+) -> None:
     response = client.get("/users/alice/hidden")
     assert response.status_code == 200
     body = response.json()
     assert "bank" in body["companies"]
     assert "banking" in body["title_keywords"]
-    assert "Foo" in body["publishers"]
+    # publishers field intentionally absent — replaced by the global
+    # admin-managed list at /global/hidden-publishers.
+    assert "publishers" not in body
 
 
 # ----- PUT /hidden/{kind} -----
@@ -149,11 +150,11 @@ def test_replace_hidden_companies(client: TestClient) -> None:
 def test_clear_all_via_empty_items(client: TestClient) -> None:
     """Clear-all button = PUT empty items."""
     response = client.put(
-        "/users/alice/hidden/publishers", json={"items": []}
+        "/users/alice/hidden/companies", json={"items": []}
     )
     assert response.status_code == 200
     assert response.json() == []
-    assert client.get("/users/alice/hidden").json()["publishers"] == []
+    assert client.get("/users/alice/hidden").json()["companies"] == []
 
 
 def test_replace_dedupes_and_strips_whitespace(client: TestClient) -> None:

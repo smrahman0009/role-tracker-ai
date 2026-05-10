@@ -47,6 +47,7 @@ from role_tracker.api.schemas import (
 )
 from role_tracker.applied.store import AppliedStore, FileAppliedStore
 from role_tracker.config import Settings
+from role_tracker.global_settings.factory import make_global_settings_store
 from role_tracker.jobs.cache import (
     FileJobsCache,
     JobsCache,
@@ -214,13 +215,17 @@ def get_pipeline_runner() -> PipelineRunner:
             user = user_store.get_user(user_id)
             exclude_companies = user.exclude_companies
             exclude_title_keywords = user.exclude_title_keywords
-            exclude_publishers = user.exclude_publishers
             if top_n_override is None:
                 top_n = user.top_n_jobs
         except FileNotFoundError:
             exclude_companies = []
             exclude_title_keywords = []
-            exclude_publishers = []
+        # Hidden publishers are global (admin-managed) now, not
+        # per-user. Pull on every refresh so admin edits take effect
+        # the next time anyone runs the pipeline — no restart needed.
+        exclude_publishers = (
+            make_global_settings_store().get_hidden_publishers().publishers
+        )
 
         cache_path = Path(f"data/resumes/{user_id}.embedding.json")
         recorder = UsageRecorder(usage_store, user_id)
