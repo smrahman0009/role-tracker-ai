@@ -230,7 +230,7 @@ export async function tryDemoIntercept<T>(
       publisher: "Manual",
       url: body.url ?? "",
       description: body.description ?? "",
-      match_score: null,
+      match_score: 0,
       fit_assessment: null,
       applied: false,
     };
