@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     ddb_usage_table: str = "role-tracker-usage"
     ddb_queries_table: str = "role-tracker-queries"
     ddb_seen_jobs_table: str = "role-tracker-seen-jobs"
+    # One snapshot item per user — the latest ranked-jobs result.
+    # Persisted in DDB so the list survives container restarts.
+    ddb_jobs_table: str = "role-tracker-jobs"
     ddb_users_table: str = "role-tracker-users"
     # Single-row DDB table holding cross-tenant settings the admin
     # controls (currently just the global hidden-publishers list).
