@@ -142,6 +142,20 @@ create_table "${DDB_SEEN_JOBS_TABLE}" "job_id"     "user → job → seen-job en
 create_pk_only_table "${DDB_USERS_TABLE}" "user → profile (single item)"
 
 # -----------------------------------------------------------------------------
+# jobs — the latest ranked-jobs snapshot per user
+#
+# One item per user. The whole JobsSnapshot is JSON-serialised under
+# `snapshot_json` so schema changes don't require a DDB migration.
+# Persisted here (vs the old container-filesystem cache) so the job
+# list survives deploys / restarts.
+#
+# Item shape:
+#   user_id (S)         — partition key
+#   snapshot_json (S)   — JSON-serialised JobsSnapshot
+# -----------------------------------------------------------------------------
+create_pk_only_table "${DDB_JOBS_TABLE}" "user → ranked-jobs snapshot (single item)"
+
+# -----------------------------------------------------------------------------
 # global-settings — admin-managed cross-tenant settings
 #
 # One item per setting (today: hidden_publishers). Tiny table; the
@@ -185,6 +199,7 @@ DynamoDB tables created in ${AWS_REGION}:
   · ${DDB_USAGE_TABLE}
   · ${DDB_QUERIES_TABLE}
   · ${DDB_SEEN_JOBS_TABLE}
+  · ${DDB_JOBS_TABLE}
   · ${DDB_USERS_TABLE}
   · ${DDB_GLOBAL_SETTINGS_TABLE:-role-tracker-global-settings}
 

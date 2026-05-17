@@ -48,6 +48,9 @@ export DDB_LETTERS_TABLE="${PROJECT}-letters"
 export DDB_USAGE_TABLE="${PROJECT}-usage"
 export DDB_QUERIES_TABLE="${PROJECT}-queries"
 export DDB_SEEN_JOBS_TABLE="${PROJECT}-seen-jobs"
+# One snapshot item per user — the latest ranked-jobs result.
+# Persisted so the list survives container restarts / deploys.
+export DDB_JOBS_TABLE="${PROJECT}-jobs"
 export DDB_USERS_TABLE="${PROJECT}-users"
 # Single-row table holding admin-managed cross-tenant settings
 # (currently just the global hidden-publishers list).

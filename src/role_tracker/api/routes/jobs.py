@@ -49,10 +49,10 @@ from role_tracker.applied.store import AppliedStore, FileAppliedStore
 from role_tracker.config import Settings
 from role_tracker.global_settings.factory import make_global_settings_store
 from role_tracker.jobs.cache import (
-    FileJobsCache,
     JobsCache,
     StoredScoredJob,
 )
+from role_tracker.jobs.cache_factory import make_jobs_cache
 from role_tracker.jobs.filters import apply_list_filters
 from role_tracker.jobs.jsearch import JSearchClient
 from role_tracker.jobs.models import JobPosting
@@ -102,7 +102,7 @@ def _user_top_n(user_id: str, *, default: int = 50) -> int:
 
 
 def get_jobs_cache() -> JobsCache:
-    return FileJobsCache()
+    return make_jobs_cache()
 
 
 def get_refresh_store() -> RefreshTaskStore:
